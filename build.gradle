@@ -1,0 +1,169 @@
+buildscript {
+    repositories {
+        jcenter()
+    }
+    dependencies {
+        classpath 'com.github.jengelman.gradle.plugins:shadow:4.0.0'
+    }
+}
+
+allprojects {
+    apply plugin: 'idea'
+    apply plugin: 'java'
+    apply plugin: 'maven-publish'
+    apply plugin: 'signing'
+
+    group = "com.linecorp.decaton"
+    version = "${version}" + (snapshot.toBoolean() ? "-SNAPSHOT": "")
+
+    sourceCompatibility = '1.8'
+    targetCompatibility = '1.8'
+
+    repositories {
+        mavenCentral()
+    }
+
+    ext {
+        protobufVersion = "3.3.0"
+        kafkaVersion = "2.4.0"
+        prometheusVersion = "0.6.0"
+        micrometerVersion = "1.3.1"
+        lombokVersion = "1.18.4"
+
+        isReleaseVersion = !version.endsWith('-SNAPSHOT')
+    }
+
+    gradle.projectsEvaluated {
+        tasks.withType(JavaCompile) {
+            options.compilerArgs << "-Xlint:unchecked" << "-Xlint:deprecation"
+        }
+    }
+}
+
+subprojects {
+    apply plugin: 'com.github.johnrengelman.shadow'
+
+    ext {
+        shadeAllDependencies = false // Whether this project should results uber jar or not
+        noPublish = false // Whether to publish this artifact to maven or not
+        relocatePb = true // Whether to relocate package name of protocol buffers classes
+    }
+
+    dependencies {
+        compileOnly "org.projectlombok:lombok:$lombokVersion"
+        annotationProcessor "org.projectlombok:lombok:$lombokVersion"
+
+        // Likely be used for most modules
+        testImplementation "junit:junit:4.12"
+        testImplementation "org.mockito:mockito-core:2.23.4"
+        testImplementation "org.mockito:mockito-inline:2.23.4"
+    }
+
+    configurations {
+        shade
+        compile.extendsFrom(shade)
+    }
+
+    afterEvaluate {
+        if (!noPublish) {
+            publishing {
+                repositories {
+                    maven {
+                        if (isReleaseVersion) {
+                            url("https://oss.sonatype.org/service/local/staging/deploy/maven2/")
+                        } else {
+                            url("https://oss.sonatype.org/content/repositories/snapshots/")
+                        }
+                        credentials {
+                            username findProperty("sonatypeUsername")
+                            password findProperty("sonatypePassword")
+                        }
+                    }
+                }
+                publications {
+                    mavenJava(MavenPublication) {
+                        afterEvaluate {
+                            artifactId = rootProject.name + '-' + project.name
+
+                            // Overwrite `artifacts` to clear previously added artifact XX-shadow.jar by `from components.shadow`
+                            artifacts = [artifact(source: shadowJar, classifier: null), artifact(source: sourcesJar)]
+                            // Rewrite all runtime dependencies to require them at compile time
+                            pom.withXml {
+                                def rootNode = asNode()
+                                def depListNode = null
+                                if (rootNode.dependencies) {
+                                    depListNode = rootNode.dependencies.get(0)
+                                } else {
+                                    depListNode = new Node(rootNode, 'dependencies')
+                                }
+                                project.configurations.shadow.allDependencies.each { dep ->
+                                    if (project.configurations.compile.allDependencies.find { compileDep -> compileDep.name == dep.name }) {
+                                        def depNode = new Node(depListNode, 'dependency')
+                                        depNode.appendNode('groupId', dep.group)
+                                        def prefix = dep.group == 'com.linecorp.decaton' && !dep.name.startsWith('decaton-') ? 'decaton-' : ''
+                                        depNode.appendNode('artifactId', prefix + dep.name)
+                                        depNode.appendNode('version', dep.version)
+                                        depNode.appendNode('scope', 'compile')
+                                    }
+                                }
+                            }
+                            pom {
+                                name = 'Decaton'
+                                url = 'https://github.com/line/decaton'
+
+                                scm {
+                                    url = 'git@github.com:line/decaton.git'
+                                    connection = 'scm:git:git@github.com:line/decaton.git'
+                                    developerConnection = 'scm:git:git@github.com:line/decaton.git'
+                                }
+
+                                licenses {
+                                    license {
+                                        name = 'The Apache License, Version 2.0'
+                                        url = 'https://www.apache.org/licenses/LICENSE-2.0'
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            signing {
+                required { isReleaseVersion && gradle.taskGraph.hasTask("publish") }
+                sign publishing.publications.mavenJava
+            }
+        }
+
+        if (!shadeAllDependencies) {
+            // Copy all dependencies declared with `runtime`(and so `compile`) configuration to `shadow`
+            // configuration unless they declared as `shade` dependency.
+            // This copy is necessary because we're making `compile` configuration to extend `shade`
+            // configuration in order to add `shade` dependencies to compilation classpath as well.
+            project.configurations.runtime.allDependencies.each { dep ->
+                if (!project.configurations.shade.allDependencies.contains(dep)) {
+                    project.dependencies.add("shadow", dep)
+                }
+            }
+        }
+
+        shadowJar {
+            if (!shadeAllDependencies) {
+                // Shade only dependencies which are declared to be shaded explicitly.
+                // By this line, all dependencies declared with `compile` or `runtime` will be added as
+                // external dependencies and their classes aren't be merged into resulting shadow jar.
+                configurations = [project.configurations.shade]
+            }
+
+            classifier = 'shadow'
+            if (relocatePb) {
+                // Relocate protobuf package prefixing unique identifier `com.linecorp.decaton`
+                relocate "com.google.protobuf.", "com.linecorp.decaton.com.google.protobuf."
+            }
+        }
+
+        task sourcesJar(type: Jar, dependsOn: classes) {
+            archiveClassifier = 'sources'
+            from sourceSets.main.allSource
+        }
+    }
+}

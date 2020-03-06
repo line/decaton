@@ -1,0 +1,97 @@
+Dynamic Property Configuration
+=============================
+:base_version: 0.0.31-SNAPSHOT
+:modules: centraldogma,processor
+
+== Property Supplier
+Decaton provides some properties for you to configure how it processes tasks. These properties don't need to be hard-coded. Decaton lets you configure some of the properties so they can be loaded dynamically.
+
+To externalize property, you need to implement link:../processor/src/main/java/com/linecorp/decaton/processor/PropertySupplier.java[PropertySupplier] and configure it for Decaton processor.
+
+== Central Dogma Property Supplier
+
+https://line.github.io/centraldogma/[Central Dogma] is a highly-available version-controlled service configuration repository. Decaton supports it as a
+property supplier out-of-the-box. If you already have a Central Dogma server,
+you only need to configure appropriate `CentralDogmaPropertySupplier` for the Decaton processor to use it.
+
+Add the `decaton-centraldogma` dependency to your project. And we will use https://line.github.io/centraldogma/client-java.html[Central Dogma Java Client library] to access Central Dogma here.
+[source,groovy]
+.build.gradle
+----
+dependencies {
+    implementation "com.linecorp.decaton:decaton-centraldogma:$DECATON_VERSION"
+    implementation "com.linecorp.centraldogma:centraldogma-client-armeria:$CENTRALDOGMA_VERSION"
+}
+----
+
+There are two ways to instantiate Central Dogma property supplier:
+[source,java]
+----
+CentralDogmaPropertySupplier supplier = CentralDogmaPropertySupplier
+                .register(centralDogma, PROJECT_NAME, REPOSITORY_NAME, "/properties.json"); // <1>
+
+CentralDogmaPropertySupplier supplier = new CentralDogmaPropertySupplier(
+                centralDogma, PROJECT_NAME, REPOSITORY_NAME, "/properties.json"); // <2>
+----
+<1> `CentralDogmaPropertySupplier.register` will create a property file with default values if it doesn't exist on Central Dogma.
+<2>  If you already have your property file on Central Dogma, or don't want it to be created automatically, you can instantiate it with `new CentralDogmaPropertySupplier`.
+
+After creating a instance of `CentralDogmaPropertySupplier`, you have to configure it for Decaton processor:
+[source,java]
+.CentralDogmaSupplierMain.java
+----
+ProcessorSubscription testProcessor =
+        SubscriptionBuilder.newBuilder("testProcessor")
+                           /* ... */
+                           .properties(supplier)
+                           .consumerConfig(consumerConfig)
+                           .buildAndStart();
+----
+<1> When you instantiate the `ProcessorSubscription`, use `props.setBySupplier()` to set your property supplier.
+
+The following is the full example that demonstrates how to use `CentralDogmaPropertySupplier`:
+[source,java]
+.CentralDogmaSupplierMain.java
+----
+public class CentralDogmaSupplierMain {
+    public static void main(String[] args) throws Exception {
+        final CentralDogma centralDogma = new ArmeriaCentralDogmaBuilder()
+                .host("127.0.0.1")
+                .accessToken("accesstoken")
+                .build();
+
+        CentralDogmaPropertySupplier supplier = CentralDogmaPropertySupplier
+                .register(centralDogma, "project", "repository", "/testProcessor.json");
+
+        // ...
+
+        ProcessorSubscription testProcessor =
+                SubscriptionBuilder.newBuilder("testProcessor")
+                                   .processorsBuilder(
+                                           ProcessorsBuilder.consuming(
+                                                   "my-decaton-topic",
+                                                   new ProtocolBuffersDeserializer<>(PrintMessageTask.parser()))
+                                                            .thenProcess(new PrintMessageTaskProcessor())
+                                   )
+                                   .properties(supplier)
+                                   .consumerConfig(consumerConfig)
+                                   .buildAndStart();
+    }
+}
+----
+
+== Multiple Property Suppliers
+
+You can specify multiple property suppliers including one provides hardcoded properties.
+Suppliers are evaluated from the first to the last in given order where the first occurrence of a property for one definition is adopted.
+Hence you should put supplier with higher priority before others.
+
+[source,java]
+----
+    .properties(
+        StaticPropertySupplier.of(
+            // This one is adopted even if below centralDogmaPropertySupplier contains the same property
+            Property.ofStatic(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY, 100),
+            Property.ofStatic(...)),
+        centralDogmaPropertySupplier);
+----

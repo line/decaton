@@ -1,0 +1,108 @@
+Consuming Arbitrary Topic
+=========================
+:base_version: 0.0.31-SNAPSHOT
+:modules: common,protocol,processor
+
+This document guides you how to consume and process topics containing records not consists of Decaton's protocol (not produced by DecatonClient) using Decaton processors.
+
+By default, Decaton assumes messages are serialized as `DecatonTaskRequest` defined in link:../protocol/src/main/proto/Decaton.proto[Decaton.proto], and `DecatonProcessor` extracts the task from its `serialized_task` field.
+But Decaton has the capability to consume arbitrary topics other than topics consisting records of Decaton protocol.
+
+This means you can use Decaton as a drop-in replacement for a vanilla KafkaConsumer to leverage powerful features like deferred completion, delayed processing and so on.
+
+Through this guide, we assume the topic is JSON-serialized and use link:https://github.com/FasterXML/jackson-databind[jackson-databind] for deserialization, but it's trivial to consume arbitrary formats other than JSON.
+
+== TaskExtractor
+
+First, you need to start by implementing your own link:../processor/src/main/java/com/linecorp/decaton/processor/TaskExtractor.java[TaskExtractor] to deserialize a task from raw message bytes.
+
+[source,java]
+.JSONUserEventExtractor.java
+----
+public class JSONUserEventExtractor implements TaskExtractor<UserEvent> {
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+
+    @Override
+    public DecatonTask<UserEvent> extract(byte[] bytes) {
+        try {
+            UserEvent event = MAPPER.readValue(bytes, UserEvent.class);
+            TaskMetadata metadata = TaskMetadata.builder()
+                                                // Filling timestampMillis is not mandatory, but it would be useful
+                                                // when you monitor delivery latency between event production time and event processing time.
+                                                .timestampMillis(event.getEventTimestampMillis())
+                                                // This field is not mandatory too, but you can track which application produced the task by filling this.
+                                                .sourceApplicationId("event-tracker")
+                                                // You can set other TaskMetadata fields as you needed
+                                                .build();
+
+            return new DecatonTask<>(metadata, event, bytes);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+}
+----
+
+[CAUTION]
+====
+If `TaskExtractor#extract` throws an exception, an error will be logged and the task which was being processed will be discarded.
+However the processor will continue to process subsequent tasks.
+====
+
+== DecatonProcessor
+
+Second, let's implement a link:../processor/src/main/java/com/linecorp/decaton/processor/DecatonProcessor.java[DecatonProcessor] to process a UserEvent task.
+
+[source,java]
+.UserEventProcessor.java
+----
+public class UserEventProcessor implements DecatonProcessor<UserEvent> {
+    @Override
+    public void process(ProcessingContext<UserEvent> context, UserEvent task) throws InterruptedException {
+        System.out.printf("Noticed %s is %d years old\n",
+                          task.getName(),
+                          task.getAge());
+    }
+}
+----
+
+As you can see, once you implement TaskExtractor, the implementation of the DecatonProcessor can be done as when you consume a regular Decaton topic.
+
+Lastly, you need to instantiate link:../processor/src/main/java/com/linecorp/decaton/processor/runtime/ProcessorSubscription.java[ProcessorSubscription] as follows.
+
+[source,java]
+.UserEventProcessorMain.java
+----
+...
+
+ProcessorsBuilder.consuming(
+        "my-decaton-json-topic",
+        // This line is the only difference from regular Decaton processor.
+        new JSONUserEventExtractor())
+                 .thenProcess(new UserEventProcessor())
+
+...
+----
+
+You have to pass TaskExtractor which you implemented above instead of link:../common/src/main/java/com/linecorp/decaton/common/Deserializer.java[Deseiralizer].
+
+== Run Example
+
+Now we are ready to process a JSON topic.
+
+Before trying out, let's download and extract the kafka binary from https://kafka.apache.org/downloads to use `kafka-console-producer.sh`.
+
+After that, let's create `my-decaton-json-topic` then run the example processor and produce a JSON message.
+
+[source,sh]
+----
+$ ./gradlew shadowJar
+
+$ java -cp build/libs/example-*-all.jar -Dbootstrap.servers=$KAFKA_BOOTSTRAP_SERVERS example.UserEventProcessorMain &
+
+$ /path/to/kafka_dir/bin/kafka-console-producer.sh --broker-list $KAFKA_BOOTSTRAP_SERVERS --topic my-decaton-json-topic
+
+> {"eventTimestampMillis":1571368115079,"name": "daisuke","age": 52}
+
+Noticed daisuke is 52 years old
+----
