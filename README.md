@@ -1,6 +1,8 @@
 Decaton
 =======
 
+[![Build Status](https://travis-ci.com/line/decaton.svg?branch=master)](https://travis-ci.com/line/decaton)
+
 Decaton is a streaming task processing framework built on top of [Apache Kafka](https://kafka.apache.org/).
 It is designed to enable "concurrent processing of records consumed from one partition" which isn't possible in many Kafka consumer frameworks.
 
