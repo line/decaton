@@ -25,6 +25,7 @@ set -eu
 cd $(dirname $0)/..
 
 # Ensure current branch is master and up-to-date
+# Also checks there is no local modification to avoid it's included in build for making release artfiact
 validate_git_status() {
     if [ $(git rev-parse --abbrev-ref HEAD) != "master" ]; then
         echo "git branch must be set to master"
@@ -52,11 +53,6 @@ bump_version() {
     sed -i "" -e "s/^version=$version/version=$new_version/" gradle.properties
 
     git add gradle.properties
-
-    if [ "$(git diff --name-only --staged)" != "gradle.properties" ]; then
-          echo "unnecessary file is staged"
-          exit 1
-    fi
     git commit -m "Release $version"
 
     git push origin master
