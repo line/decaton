@@ -15,11 +15,11 @@
 # under the License.
 #
 
-# A script to publish new version of Decaton.
+# A script to publish maven artifacts of Decaton.
 #
 # Usage: ./publish.sh [--release]
-#   *  --relese: publish artifacts to Maven Central and create new git tag
-#   * otherwise: publish artifacts to Sonatype snapshot repository without tagging
+#   *  --relese: publish new version of artifacts to Maven Central
+#   * otherwise: publish (or overwrite if exists) current SNAPSHOT version without changing version
 set -eu
 
 cd $(dirname $0)/..
@@ -52,6 +52,11 @@ bump_version() {
     sed -i "" -e "s/^version=$version/version=$new_version/" gradle.properties
 
     git add gradle.properties
+
+    if [ "$(git diff --name-only --staged)" != "gradle.properties" ]; then
+          echo "unnecessary file is staged"
+          exit 1
+    fi
     git commit -m "Release $version"
 
     git push origin master
@@ -80,7 +85,7 @@ fi
 
 echo "Publishing Decaton $version"
 
-./gradlew -P snapshot=$is_snapshot clean test publish
+./gradlew -P snapshot=$is_snapshot clean build publish
 
 if [ $is_snapshot = false ]; then
     bump_version $version
