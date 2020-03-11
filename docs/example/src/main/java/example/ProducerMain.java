@@ -19,7 +19,6 @@ package example;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
 
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 
 import com.linecorp.decaton.client.DecatonClient;
@@ -50,7 +49,7 @@ public final class ProducerMain {
     private static DecatonClient<PrintMessageTask> newClient() {
         Properties producerConfig = new Properties();
         producerConfig.setProperty(ProducerConfig.CLIENT_ID_CONFIG, "my-decaton-client");
-        producerConfig.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,
+        producerConfig.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG,
                                    System.getProperty("bootstrap.servers"));
 
         return DecatonClient.producing("my-decaton-topic",
