@@ -81,7 +81,7 @@ if [ $is_snapshot = true ]; then
     ./gradlew clean build publish
 else
     # prevent double publishing
-    if [ $(git ls-remote --tags origin | cut -f 2 | grep "^refs/tags/v$version\$" | wc -l) -ne 0 ]; then
+    if [ $(git tag | grep "^v$version\$" | wc -l) -ne 0 ]; then
         echo "$version already released"
         exit 1
     fi
