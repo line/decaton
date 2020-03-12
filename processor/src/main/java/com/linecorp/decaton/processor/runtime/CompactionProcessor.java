@@ -37,7 +37,7 @@ import lombok.Getter;
 import lombok.experimental.Accessors;
 
 /**
- * A {@link DecatonProcessor<T>} to apply pre-processing on tasks to compact multiple tasks into one.
+ * A {@link DecatonProcessor} to apply pre-processing on tasks to compact multiple tasks into one.
  * This processor can be used to compact multiple tasks which are arrived within configured window.
  * Given the window W=5, if tasks having same key {@code [(1, T1), (2, T4), (3, T6)} are fed to this processor,
  * only the successor of 1 or 2 and 3 are processed by the downstream processor.
@@ -133,9 +133,9 @@ public class CompactionProcessor<T> implements DecatonProcessor<T> {
     }
 
     /**
-     * Instantiate {@link CompactionProcessor<T>}.
-     * @param lingerMillis time to window tasks fed to this processor. On every {@param lingerMs} milliseconds,
-     * succeeded tasks of eacy keys fed in past {@param lingerMs} milliseconds are pushed to downstream
+     * Instantiate {@link CompactionProcessor}.
+     * @param lingerMillis time to window tasks fed to this processor. On every lingerMillis milliseconds,
+     * succeeded tasks of eacy keys fed in past lingerMillis milliseconds are pushed to downstream
      * processor.
      * @param compactor function which takes two tasks of type {@link T} and returns a value tells the decision
      * which one of tasks should be preserved.

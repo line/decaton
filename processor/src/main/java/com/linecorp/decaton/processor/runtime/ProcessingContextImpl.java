@@ -115,11 +115,11 @@ public class ProcessingContextImpl<T> implements ProcessingContext<T> {
 
     /**
      * This method must be synchronized, as it can call downstream's
-     * {@link DecatonProcessor#process(ProcessingContext, T)} directly but upstream might call this
-     * method from a thread other than {@link PartitionProcessor}'s internal threads.
+     * {@link DecatonProcessor#process} directly but upstream might call this method from a thread other than
+     * {@link PartitionProcessor}'s internal threads.
      * In such case, since we don't know if the downstream processor is implemented taking account
      * thread-safety, we have to guarantee that the only one invocation of
-     * {@link DecatonProcessor#process(ProcessingContext, T)} occurs at the time from this context.
+     * {@link DecatonProcessor#process} occurs at the time from this context.
      */
     @Override
     public synchronized CompletableFuture<Void> push(T task) throws InterruptedException {

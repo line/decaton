@@ -22,7 +22,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * A {@link Property<T>} implementation which holds dynamically changeable value.
+ * A {@link Property} implementation which holds dynamically changeable value.
  * @param <T> type of the property value.
  */
 public class DynamicProperty<T> extends AbstractProperty<T> {
@@ -83,9 +83,9 @@ public class DynamicProperty<T> extends AbstractProperty<T> {
     /**
      * Update the value of this property, taking untyped object as an argument.
      *
-     * This is a slightly different version of {@link #set(T)}.
-     * Before calling {@link #set(T)}, this method check if the passed value's runtime class is matching to the
-     * type configured as {@link PropertyDefinition#runtimeType}.
+     * This is a slightly different version of {@link #set}.
+     * Before calling {@link #set}, this method check if the passed value's runtime class is matching to the
+     * type configured as {@link PropertyDefinition#runtimeType()}.
 
      * @param value new value to set to this property.
      * @return old value which was set to this property. null if there was no update because the new value was

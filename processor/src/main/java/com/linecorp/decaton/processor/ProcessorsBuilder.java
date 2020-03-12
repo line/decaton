@@ -54,8 +54,8 @@ public class ProcessorsBuilder<T> {
     }
 
     /**
-     * Create new {@link ProcessorsBuilder} that consumes message from {@param topic} expecting tasks of type
-     * which can be parsed by {@param valueParser}.
+     * Create new {@link ProcessorsBuilder} that consumes message from topic expecting tasks of type
+     * which can be parsed by valueParser.
      * @param topic the name of topic to consume.
      * @param deserializer the deserializer to instantiate task of type {@link T} from serialized bytes.
      * @param <T> the type of instantiated tasks.
@@ -67,8 +67,8 @@ public class ProcessorsBuilder<T> {
     }
 
     /**
-     * Create new {@link ProcessorsBuilder} that consumes message from {@param topic} expecting tasks of type
-     * which can be parsed by {@param valueParser}.
+     * Create new {@link ProcessorsBuilder} that consumes message from topic expecting tasks of type
+     * which can be parsed by valueParser.
      * @param topic the name of topic to consume.
      * @param taskExtractor the extractor to extract task of type {@link T} from message bytes.
      * @param <T> the type of instantiated tasks.

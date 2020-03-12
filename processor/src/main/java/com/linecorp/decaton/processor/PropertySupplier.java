@@ -25,12 +25,12 @@ import java.util.Optional;
 @FunctionalInterface
 public interface PropertySupplier {
     /**
-     * Returns a {@link Property<T>} associated to the given {@link PropertyDefinition<T>} in underlying system.
+     * Returns a {@link Property} associated to the given {@link PropertyDefinition} in underlying system.
      *
-     * @param definition the {@link PropertyDefinition<T>} of the property wants to bind to the returned
-     * {@link Property<T>}.
+     * @param definition the {@link PropertyDefinition} of the property wants to bind to the returned
+     * {@link Property}.
      * @param <T> the type of the property
-     * @return a {@link Property<T>} associated to the value provided by underlying system.
+     * @return a {@link Property} associated to the value provided by underlying system.
      */
     <T> Optional<Property<T>> getProperty(PropertyDefinition<T> definition);
 }

@@ -108,7 +108,7 @@ public class SubscriptionBuilder {
      *
      * The number of attempts to retry processing is controlled by {@link DecatonProcessor}, by deciding
      * whether to call {@link ProcessingContext#retry()}, maybe accordingly to
-     * {@link TaskMetadata#getRetryCount()} for reference how many times did the task attempted to be processed.
+     * {@link TaskMetadata#retryCount()} for reference how many times did the task attempted to be processed.
      *
      * @param config a {@link RetryConfig} instance representing configs for retry.
      * @return updated instance of {@link SubscriptionBuilder}.

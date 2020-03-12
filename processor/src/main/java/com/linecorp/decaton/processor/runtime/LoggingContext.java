@@ -23,7 +23,7 @@ import com.linecorp.decaton.processor.TaskMetadata;
 
 /**
  * The {@link LoggingContext} class allows users to write logs lines
- * without explicitly needing to access the details within a {@link ProcessingContext<?>}
+ * without explicitly needing to access the details within a {@link ProcessingContext}
  *
  * How to use:
  *

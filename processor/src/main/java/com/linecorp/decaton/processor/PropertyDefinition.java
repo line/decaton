@@ -25,15 +25,13 @@ import lombok.Getter;
 import lombok.experimental.Accessors;
 
 /**
- * Represents definition of a {@link Property<T>}. This instance annotates {@link Property<T>}, naming it,
+ * Represents definition of a {@link Property}. This instance annotates {@link Property}, naming it,
  * declaring it's runtime type and the default value, and providing validation on the value if necessary.
  *
- * @param <T> the type of associated {@link Property<T>}.
+ * @param <T> the type of associated {@link Property}.
  */
 @Accessors(fluent = true)
 public class PropertyDefinition<T> {
-    public static final String ANONYMOUS = "__ANONYMOUS__";
-
     /**
      * Name of the property.
      */
@@ -52,40 +50,40 @@ public class PropertyDefinition<T> {
     private final Predicate<Object> validator;
 
     /**
-     * Creates a {@link PropertyDefinition<T>}.
+     * Creates a {@link PropertyDefinition}.
      *
      * @param name name of the property.
      * @param runtimeType runtime type of the property.
      * @param <T> type of the property.
-     * @return a {@link PropertyDefinition<T>}.
+     * @return a {@link PropertyDefinition}.
      */
     public static <T> PropertyDefinition<T> define(String name, Class<?> runtimeType) {
         return define(name, runtimeType, null);
     }
 
     /**
-     * Creates a {@link PropertyDefinition<T>}.
+     * Creates a {@link PropertyDefinition}.
      *
      * @param name name of the property.
      * @param runtimeType runtime type of the property.
      * @param defaultValue the default value of the property.
      * @param <T> type of the property.
-     * @return a {@link PropertyDefinition<T>}.
+     * @return a {@link PropertyDefinition}.
      */
     public static <T> PropertyDefinition<T> define(String name, Class<?> runtimeType, T defaultValue) {
         return define(name, runtimeType, defaultValue, v -> true);
     }
 
     /**
-     * Creates a {@link PropertyDefinition<T>}.
+     * Creates a {@link PropertyDefinition}.
      *
      * @param name name of the property.
      * @param runtimeType runtime type of the property.
      * @param defaultValue the default value of the property.
-     * @param validator a {@link Function>} which returns boolean wheres true indicates valid and false
+     * @param validator a {@link Function} which returns boolean wheres true indicates valid and false
      * indicates invalid taking an {@link Object} the value of property as an argument.
      * @param <T> type of the property.
-     * @return a {@link PropertyDefinition<T>}.
+     * @return a {@link PropertyDefinition}.
      */
     public static <T> PropertyDefinition<T> define(
             String name,
