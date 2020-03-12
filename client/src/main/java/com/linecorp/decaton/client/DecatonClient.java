@@ -48,8 +48,8 @@ public interface DecatonClient<T> extends AutoCloseable {
 
     /**
      * Put a task onto associated decaton queue.
-     * This is just a helper method of {@link #put(String, T)} for typical use cases - put task asynchronously
-     * and observe result just for telling whether the message production succeeded:
+     * This is just a helper method for typical use cases - put task asynchronously and observe result just for telling
+     * whether the message production succeeded:
      * {@code
      * decaton.put(key, task)
      *        .exceptionally(e -> {
@@ -69,8 +69,9 @@ public interface DecatonClient<T> extends AutoCloseable {
 
     /**
      * Put a task onto associated decaton queue with specifying arbitrary timestamp.
-     * This is just a helper method of {@link #put(String, T)} for typical use cases - put task asynchronously
-     * and observe result just for telling whether the message production succeeded:
+     * This is just a helper method for typical use cases - put task asynchronously and observe result just for telling
+     * whether the message production succeeded:
+     *
      * {@code
      * decaton.put(key, task)
      *        .exceptionally(e -> {

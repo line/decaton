@@ -22,7 +22,7 @@ package com.linecorp.decaton.common;
  */
 public interface Deserializer<T> {
     /**
-     * Serialize given {@param bytes} into object of type {@link T}.
+     * Serialize given bytes into object of type {@link T}.
      * @param bytes data to be deserialized.
      * @return object of type {@link T}.
      */

@@ -22,7 +22,7 @@ package com.linecorp.decaton.processor;
  */
 public interface TaskExtractor<T> {
     /**
-     * Extract object of type {@link DecatonTask} from given {@param bytes}.
+     * Extract object of type {@link DecatonTask} from given bytes.
      * @param bytes raw message bytes.
      * @return object of type {@link DecatonTask}.
      * @throws RuntimeException this method can throw arbitrary {@link RuntimeException} if given bytes is invalid.

@@ -21,10 +21,10 @@ package com.linecorp.decaton.processor;
  */
 public interface DecatonProperties {
     /**
-     * Returns associated {@link Property<T>} for the {@link PropertyDefinition<T>} given as an argument.
-     * @param definition a {@link PropertyDefinition<T>} to lookup associated {@link Property<T>}.
+     * Returns associated {@link Property} for the {@link PropertyDefinition} given as an argument.
+     * @param definition a {@link PropertyDefinition} to lookup associated {@link Property}.
      * @param <T> type of the property.
-     * @return a {@link Property<T>} associated to the given {@link PropertyDefinition<T>}.
+     * @return a {@link Property} associated to the given {@link PropertyDefinition}.
      *
      * @throws IllegalArgumentException when {@link PropertyDefinition} doesn't exists in properties.
      */

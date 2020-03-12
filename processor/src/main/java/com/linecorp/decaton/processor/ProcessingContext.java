@@ -50,8 +50,8 @@ public interface ProcessingContext<T> {
 
     /**
      * Tells the completion of this processing should be postponed and processor can accept next task.
-     * Once this method called within {@link DecatonProcessor#process(ProcessingContext, T)} method,
-     * caller *MUST* call {@link DeferredCompletion#complete()} method in any cases.
+     * Once this method called within {@link DecatonProcessor#process} method, caller *MUST* call
+     * {@link DeferredCompletion#complete()} method in any cases.
      * Otherwise consumption will stuck in short future and no new task will be given to the processor.
      * @return a {@link DeferredCompletion} which can be used to tell the result of processing asynchronously.
      */
@@ -65,7 +65,7 @@ public interface ProcessingContext<T> {
      * If the completion of the current task depends on downstream's processing, the current processing
      * also needs to defer its completion along with binding completion to downstream's future like:
      * {@code context.deferCompletion().completeWith(context.push(task));}
-     * If the current processing needs to call {@link #push(T)} multiple times and if it depends on
+     * If the current processing needs to call {@link #push} multiple times and if it depends on
      * all results, {@link CompletableFuture#allOf(CompletableFuture[])} can be utilized to gather all results
      * into one {@link CompletableFuture}:
      * {@code context.deferCompletion().completeWith(CompletableFuture.allOf(result1, result2);}

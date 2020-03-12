@@ -17,7 +17,7 @@
 package com.linecorp.decaton.processor;
 
 /**
- * A {@link Property<T>} implementation which holds fixed, static value.
+ * A {@link Property} implementation which holds fixed, static value.
  * @param <T> type of the property value.
  */
 public class StaticProperty<T> extends AbstractProperty<T> {
