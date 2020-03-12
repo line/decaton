@@ -75,14 +75,18 @@ fi
 
 # Extract version to be released
 version=$(grep "^version=" gradle.properties | cut -f 2 -d=)
+
 if [ $is_snapshot = true ]; then
-    version="$version-SNAPSHOT"
-fi
+    echo "Publishing Decaton $version-SNAPSHOT"
+    ./gradlew clean build publish
+else
+    # prevent double publishing
+    if [ $(git ls-remote --tags origin | cut -f 2 | grep "^refs/tags/v$version\$" | wc -l) -ne 0 ]; then
+        echo "$version already released"
+        exit 1
+    fi
 
-echo "Publishing Decaton $version"
-
-./gradlew -P snapshot=$is_snapshot clean build publish
-
-if [ $is_snapshot = false ]; then
+    echo "Publishing Decaton $version"
+    ./gradlew -P snapshot=false clean build publish
     bump_version $version
 fi
