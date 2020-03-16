@@ -43,36 +43,14 @@ public interface SubscriptionStateListener {
     /**
      * Represents possible states that a {@link ProcessorSubscription} can be in.
      * The expected state transition is:
-     *
      * <pre>
-     *
-     *                 +-----+--------+
-     *                 | INITIALIZING |
-     *                 +-----+--------+
-     *                       |
-     *                       v
-     *                 +--------------+
-     *                 | REBALANCING  |
-     *                 +----+--+------+
-     *                      |  ^
-     *                      v  |
-     *                 +----+--+------+
-     *                 |   RUNNING    |
-     *                 +-----+--------+
-     *                       |
-     *                       v
-     *                 +-----+--------+
-     *                 |SHUTTING_DOWN |
-     *                 +-----+--------+
-     *                       |
-     *                       v
-     *                 +-----+--------+
-     *                 | TERMINATED   |
-     *                 +--------------+
-     *
+     * {@code
+     * INITIALIZING -> REBALANCING <-> RUNNING -> SHUTTING_DOWN -> TERMINATED
+     * }
      * </pre>
+     *
      * Listener will be called at each transition in the flow.
-     * In addition, listener will be also called with INITIALIZING state when Decaton starts startup sequence
+     * In addition, listener will be also called with INITIALIZING state when Decaton starts initialization sequence.
      */
     enum State {
         /**
