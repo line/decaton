@@ -31,6 +31,7 @@ import com.linecorp.decaton.processor.ProcessingContext;
 import com.linecorp.decaton.processor.ProcessorProperties;
 import com.linecorp.decaton.processor.ProcessorsBuilder;
 import com.linecorp.decaton.processor.PropertySupplier;
+import com.linecorp.decaton.processor.SubscriptionStateListener;
 import com.linecorp.decaton.processor.TaskMetadata;
 
 import lombok.AccessLevel;
@@ -59,6 +60,10 @@ public class SubscriptionBuilder {
      * A {@link ProcessorsBuilder} to configure processors pipeline which actually processes tasks.
      */
     private ProcessorsBuilder<?> processorsBuilder;
+    /**
+     * A {@link SubscriptionStateListener} to listen state changes of {@link ProcessorSubscription}
+     */
+    private SubscriptionStateListener stateListener;
 
     @Setter(AccessLevel.NONE)
     private RetryConfig retryConfig;
@@ -143,8 +148,11 @@ public class SubscriptionBuilder {
             }, ProcessorScope.SINGLETON);
         }
 
-        return new ProcessorSubscription(scope, consumerSupplier,
-                                         processorsBuilder.build(retryProcessorSupplier), props);
+        return new ProcessorSubscription(scope,
+                                         consumerSupplier,
+                                         processorsBuilder.build(retryProcessorSupplier),
+                                         props,
+                                         stateListener);
     }
 
     public ProcessorSubscription buildAndStart() {

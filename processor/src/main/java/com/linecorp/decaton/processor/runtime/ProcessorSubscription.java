@@ -43,6 +43,7 @@ import org.slf4j.LoggerFactory;
 import com.linecorp.decaton.processor.DeferredCompletion;
 import com.linecorp.decaton.processor.ProcessorProperties;
 import com.linecorp.decaton.processor.Property;
+import com.linecorp.decaton.processor.SubscriptionStateListener;
 import com.linecorp.decaton.processor.runtime.Utils.Timer;
 
 public class ProcessorSubscription extends Thread implements AsyncShutdownable {
@@ -58,14 +59,17 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
     private final Processors<?> processors;
     private final Property<Long> commitIntervalMillis;
     private final Property<Long> rebalanceTimeoutMillis;
+    private final SubscriptionStateListener stateListener;
 
     public ProcessorSubscription(SubscriptionScope scope,
                                  Supplier<Consumer<String, byte[]>> consumerSupplier,
                                  Processors<?> processors,
-                                 ProcessorProperties props) {
+                                 ProcessorProperties props,
+                                 SubscriptionStateListener stateListener) {
         this.scope = scope;
         this.consumerSupplier = consumerSupplier;
         this.processors = processors;
+        this.stateListener = stateListener;
         terminated = new AtomicBoolean();
         contexts = new PartitionContexts(scope, processors);
 
@@ -74,6 +78,17 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
         rebalanceTimeoutMillis = props.get(ProcessorProperties.CONFIG_GROUP_REBALANCE_TIMEOUT_MS);
 
         setName(String.format("DecatonSubscriptionThread-%s", scope));
+    }
+
+    private void updateState(SubscriptionStateListener.State newState) {
+        logger.info("ProcessorSubscription transitioned to state: {}", newState);
+        if (stateListener != null) {
+            try {
+                stateListener.onChange(newState);
+            } catch (Exception e) {
+                logger.warn("State listener threw an exception", e);
+            }
+        }
     }
 
     private Set<String> subscribeTopics() {
@@ -159,6 +174,8 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
 
     @Override
     public void run() {
+        updateState(SubscriptionStateListener.State.INITIALIZING);
+
         Consumer<String, byte[]> consumer = consumerSupplier.get();
 
         final Collection<TopicPartition> currentAssignment = new HashSet<>();
@@ -166,6 +183,8 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
             consumer.subscribe(subscribeTopics(), new ConsumerRebalanceListener() {
                 @Override
                 public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+                    updateState(SubscriptionStateListener.State.REBALANCING);
+
                     waitForRemainingTasksCompletion(rebalanceTimeoutMillis.value());
                     commitCompletedOffsets(consumer);
                 }
@@ -204,6 +223,8 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
                     // Set currentAssignment to latest partitions set.
                     currentAssignment.clear();
                     currentAssignment.addAll(partitions);
+
+                    updateState(SubscriptionStateListener.State.RUNNING);
                 }
             });
 
@@ -224,6 +245,8 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
             logger.error("ProcessorSubscription {} got exception while consuming, currently assigned: {}",
                          scope, currentAssignment, e);
         } finally {
+            updateState(SubscriptionStateListener.State.SHUTTING_DOWN);
+
             Timer timer = Utils.timer();
             contexts.destroyAllProcessors();
             try {
@@ -236,6 +259,8 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
             consumer.close();
             logger.info("ProcessorSubscription {} terminated in {} ms", scope,
                         timer.elapsedMillis());
+
+            updateState(SubscriptionStateListener.State.TERMINATED);
         }
     }
 
