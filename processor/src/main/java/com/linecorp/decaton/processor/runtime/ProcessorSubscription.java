@@ -80,13 +80,13 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
         setName(String.format("DecatonSubscriptionThread-%s", scope));
     }
 
-    private void onStateChange(SubscriptionStateListener.State newState) {
+    private void updateState(SubscriptionStateListener.State newState) {
         logger.info("ProcessorSubscription transitioned to state: {}", newState);
         if (stateListener != null) {
             try {
                 stateListener.onChange(newState);
             } catch (Exception e) {
-                logger.warn("State listener throws an exception", e);
+                logger.warn("State listener threw an exception", e);
             }
         }
     }
@@ -174,7 +174,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
 
     @Override
     public void run() {
-        onStateChange(SubscriptionStateListener.State.INITIALIZING);
+        updateState(SubscriptionStateListener.State.INITIALIZING);
 
         Consumer<String, byte[]> consumer = consumerSupplier.get();
 
@@ -183,7 +183,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
             consumer.subscribe(subscribeTopics(), new ConsumerRebalanceListener() {
                 @Override
                 public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
-                    onStateChange(SubscriptionStateListener.State.REBALANCING);
+                    updateState(SubscriptionStateListener.State.REBALANCING);
 
                     waitForRemainingTasksCompletion(rebalanceTimeoutMillis.value());
                     commitCompletedOffsets(consumer);
@@ -224,7 +224,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
                     currentAssignment.clear();
                     currentAssignment.addAll(partitions);
 
-                    onStateChange(SubscriptionStateListener.State.RUNNING);
+                    updateState(SubscriptionStateListener.State.RUNNING);
                 }
             });
 
@@ -245,7 +245,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
             logger.error("ProcessorSubscription {} got exception while consuming, currently assigned: {}",
                          scope, currentAssignment, e);
         } finally {
-            onStateChange(SubscriptionStateListener.State.SHUTTING_DOWN);
+            updateState(SubscriptionStateListener.State.SHUTTING_DOWN);
 
             Timer timer = Utils.timer();
             contexts.destroyAllProcessors();
@@ -260,7 +260,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
             logger.info("ProcessorSubscription {} terminated in {} ms", scope,
                         timer.elapsedMillis());
 
-            onStateChange(SubscriptionStateListener.State.TERMINATED);
+            updateState(SubscriptionStateListener.State.TERMINATED);
         }
     }
 

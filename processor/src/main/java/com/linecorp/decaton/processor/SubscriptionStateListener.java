@@ -38,6 +38,7 @@ import com.linecorp.decaton.processor.runtime.ProcessorSubscription;
  * }
  * </pre>
  */
+@FunctionalInterface
 public interface SubscriptionStateListener {
     /**
      * Represents possible states that a {@link ProcessorSubscription} can be in.
@@ -100,7 +101,7 @@ public interface SubscriptionStateListener {
     }
 
     /**
-     * Called after state transitioned to new state.
+     * Called at state transitioned to new state.
      * This method is called only from subscription thread (i.e. {@link ProcessorSubscription} itself)
      * @param newState new state of the subscription
      */
