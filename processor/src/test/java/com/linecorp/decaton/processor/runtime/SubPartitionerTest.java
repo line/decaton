@@ -19,13 +19,13 @@ package com.linecorp.decaton.processor.runtime;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-import org.apache.kafka.common.utils.Utils;
-import org.junit.Before;
-import org.junit.Test;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+
+import org.apache.kafka.common.utils.Utils;
+import org.junit.Before;
+import org.junit.Test;
 
 public class SubPartitionerTest {
     static final int DIST_KEYS_COUNT = 10000;
@@ -43,7 +43,7 @@ public class SubPartitionerTest {
     }
 
     private static double stddev(int[] counts) {
-        double avg = Arrays.stream(counts).sum() / counts.length;
+        double avg = (double) Arrays.stream(counts).sum() / counts.length;
         double variance = Arrays.stream(counts).asDoubleStream()
                                 .map(v -> Math.pow(avg - v, 2)).sum() / counts.length;
         return Math.sqrt(variance);
