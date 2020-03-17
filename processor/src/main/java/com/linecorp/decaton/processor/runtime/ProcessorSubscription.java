@@ -22,7 +22,6 @@ import java.time.Duration;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -84,23 +83,15 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
                      .collect(Collectors.toSet());
     }
 
-    private static boolean commitNeeded(Consumer<?, ?> consumer,
-                                        Map<TopicPartition, OffsetAndMetadata> committedOffsets) {
-        for (Entry<TopicPartition, OffsetAndMetadata> entry : committedOffsets.entrySet()) {
-            OffsetAndMetadata consumerOffset = consumer.committed(entry.getKey());
-            if (consumerOffset == null || consumerOffset.offset() != entry.getValue().offset()) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     private void commitCompletedOffsets(Consumer<?, ?> consumer) {
         Map<TopicPartition, OffsetAndMetadata> commitOffsets = contexts.commitOffsets();
-        if (commitNeeded(consumer, commitOffsets)) {
-            logger.debug("committing offsets: {}", commitOffsets);
-            consumer.commitSync(commitOffsets);
+        if (commitOffsets.isEmpty()) {
+            logger.debug("No new offsets to commit, skipping commit");
+            return;
         }
+        logger.debug("Committing offsets: {}", commitOffsets);
+        consumer.commitSync(commitOffsets);
+        contexts.updateCommittedOffsets(commitOffsets);
     }
 
     private void waitForRemainingTasksCompletion(long timeoutMillis) {

@@ -33,11 +33,13 @@ import static org.mockito.Mockito.verify;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.stream.Collectors;
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -104,7 +106,7 @@ public class PartitionContextsTest {
         PartitionContext context = putContexts(1).get(0);
 
         long offset = 1L;
-        doReturn(offset).when(context).commitReadyOffset();
+        doReturn(OptionalLong.of(offset)).when(context).offsetWaitingCommit();
 
         Map<TopicPartition, OffsetAndMetadata> committedOffsets = contexts.commitOffsets();
         assertEquals(offset + 1, committedOffsets.get(context.topicPartition()).offset());
@@ -114,19 +116,35 @@ public class PartitionContextsTest {
     public void testCommittedOffsetsNeverReturnsZero() {
         List<PartitionContext> cts = putContexts(2);
 
-        doReturn(0L).when(cts.get(0)).commitReadyOffset();
-        doReturn(0L).when(cts.get(1)).commitReadyOffset();
+        doReturn(OptionalLong.empty()).when(cts.get(0)).offsetWaitingCommit();
+        doReturn(OptionalLong.empty()).when(cts.get(1)).offsetWaitingCommit();
 
         Map<TopicPartition, OffsetAndMetadata> committedOffsets = contexts.commitOffsets();
         // No record has been committed so returned map should be empty
         assertTrue(committedOffsets.isEmpty());
 
-        doReturn(1L).when(cts.get(0)).commitReadyOffset();
+        doReturn(OptionalLong.of(1)).when(cts.get(0)).offsetWaitingCommit();
         committedOffsets = contexts.commitOffsets();
         // No record has been committed for tp1 so the returned map shouldn't contain entry for it.
         assertEquals(1, committedOffsets.size());
         Entry<TopicPartition, OffsetAndMetadata> entry = committedOffsets.entrySet().iterator().next();
         assertEquals(cts.get(0).topicPartition(), entry.getKey());
+    }
+
+    @Test
+    public void testUpdateCommittedOffset() {
+        List<PartitionContext> ctxs = putContexts(2);
+
+        Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
+        offsets.put(ctxs.get(0).topicPartition(), new OffsetAndMetadata(101));
+        offsets.put(ctxs.get(1).topicPartition(), new OffsetAndMetadata(201));
+
+        contexts.updateCommittedOffsets(offsets);
+
+        // PartitionContext manages their "completed" offset so its minus 1 from committed offset
+        // which indicates the offset to "fetch next".
+        verify(ctxs.get(0), times(1)).updateCommittedOffset(100);
+        verify(ctxs.get(1), times(1)).updateCommittedOffset(200);
     }
 
     @Test

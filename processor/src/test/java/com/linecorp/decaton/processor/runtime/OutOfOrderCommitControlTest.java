@@ -63,12 +63,12 @@ public class OutOfOrderCommitControlTest {
         comp3.complete();
         partitionState.updateHighWatermark();
         assertEquals(4, partitionState.pendingOffsetsCount());
-        assertEquals(0, partitionState.commitReadyOffset());
+        assertEquals(-1, partitionState.commitReadyOffset());
 
         comp2.complete();
         partitionState.updateHighWatermark();
         assertEquals(4, partitionState.pendingOffsetsCount());
-        assertEquals(0, partitionState.commitReadyOffset());
+        assertEquals(-1, partitionState.commitReadyOffset());
 
         comp1.complete();
         partitionState.updateHighWatermark();
@@ -86,7 +86,7 @@ public class OutOfOrderCommitControlTest {
         DeferredCompletion comp1 = partitionState.reportFetchedOffset(1);
 
         comp1.complete();
-        assertEquals(0, partitionState.commitReadyOffset());
+        assertEquals(-1, partitionState.commitReadyOffset());
         comp1.complete(); // nothing happens
         partitionState.updateHighWatermark();
         assertEquals(1, partitionState.commitReadyOffset());
@@ -114,10 +114,10 @@ public class OutOfOrderCommitControlTest {
 
         comp2.complete(); // now committedOffsets contains 2
         partitionState.updateHighWatermark();
-        assertEquals(0, partitionState.commitReadyOffset());
+        assertEquals(-1, partitionState.commitReadyOffset());
         comp2.complete(); // commit again
         partitionState.updateHighWatermark();
-        assertEquals(0, partitionState.commitReadyOffset());
+        assertEquals(-1, partitionState.commitReadyOffset());
     }
 
     @Test

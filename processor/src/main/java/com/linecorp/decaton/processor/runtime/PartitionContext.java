@@ -16,6 +16,7 @@
 
 package com.linecorp.decaton.processor.runtime;
 
+import java.util.OptionalLong;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.kafka.common.TopicPartition;
@@ -34,6 +35,8 @@ public class PartitionContext {
     private final Processors<?> processors;
     private final PartitionStateMetrics metrics;
 
+    // The offset committed successfully at last commit
+    private long lastCommittedOffset;
     private long pausedTimeNanos;
 
     public PartitionContext(PartitionScope scope, Processors<?> processors, int maxPendingRecords) {
@@ -50,11 +53,33 @@ public class PartitionContext {
                                    "partition", String.valueOf(tp.partition()))
                 .new PartitionStateMetrics();
 
+        lastCommittedOffset = -1;
         pausedTimeNanos = -1;
     }
 
-    public long commitReadyOffset() {
-        return commitControl.commitReadyOffset();
+    /**
+     * Returns the largest offset waiting to be committed, if exists.
+     *
+     * It returns non-empty value with offset which is larger than the offset
+     * reported last by {@link #updateCommittedOffset(long)}.
+     *
+     * @return optional long value representing an offset waiting for commit.
+     */
+    public OptionalLong offsetWaitingCommit() {
+        long readyOffset = commitControl.commitReadyOffset();
+        if (readyOffset > lastCommittedOffset) {
+            return OptionalLong.of(readyOffset);
+        }
+        return OptionalLong.empty();
+    }
+
+    /**
+     * Report the largest offset that has successfully committed into Kafka.
+     *
+     * @param offset successfully committed offset.
+     */
+    public void updateCommittedOffset(long offset) {
+        lastCommittedOffset = offset;
     }
 
     public TopicPartition topicPartition() {

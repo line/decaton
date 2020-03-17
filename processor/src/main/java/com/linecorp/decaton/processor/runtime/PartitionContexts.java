@@ -23,9 +23,9 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.stream.Collectors;
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
@@ -110,12 +110,23 @@ public class PartitionContexts {
 
     // visible for testing
     public Map<TopicPartition, OffsetAndMetadata> commitOffsets() {
-        return contexts.values().stream()
-                       .filter(c -> c.commitReadyOffset() > 0)
-                       .collect(Collectors.toMap(PartitionContext::topicPartition,
-                                                 // Committing offset tells "the offset I expected to fetch next", so need to add one for the
-                                                 // offset that we've finished processing.
-                                                 c -> new OffsetAndMetadata(c.commitReadyOffset() + 1, null)));
+        Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
+        for (PartitionContext context : contexts.values()) {
+            context.offsetWaitingCommit().ifPresent(
+                    offset -> offsets.put(context.topicPartition(),
+                                          new OffsetAndMetadata(offset + 1, null)));
+        }
+        return offsets;
+    }
+
+    public void updateCommittedOffsets(Map<TopicPartition, OffsetAndMetadata> offsets) {
+        for (Entry<TopicPartition, OffsetAndMetadata> entry : offsets.entrySet()) {
+            TopicPartition tp = entry.getKey();
+            long offset = entry.getValue().offset();
+            // PartitionContext manages their "completed" offset so its minus 1 from committed offset
+            // which indicates the offset to "fetch next".
+            contexts.get(tp).updateCommittedOffset(offset - 1);
+        }
     }
 
     public int totalPendingTasks() {
