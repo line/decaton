@@ -24,6 +24,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -33,6 +34,7 @@ import java.util.regex.Pattern;
 
 import org.asciidoctor.Asciidoctor;
 import org.asciidoctor.ast.DocumentHeader;
+import org.asciidoctor.jruby.internal.IOUtils;
 
 import lombok.Value;
 import lombok.experimental.Accessors;
@@ -154,8 +156,8 @@ public final class DocumentChecker {
     }
 
     private static Set<String> findUpdatedModules(Version baseVersion, String[] modules) throws IOException {
-        Process proc = Runtime.getRuntime().exec(
-                new String[] { "git", "diff", "--name-only", "tags/v" + baseVersion, "HEAD" });
+        String[] cmd = { "git", "diff", "--name-only", "tags/v" + baseVersion, "HEAD" };
+        Process proc = Runtime.getRuntime().exec(cmd);
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(proc.getInputStream()))) {
             Set<String> updatedMods = new HashSet<>();
             reader.lines().forEach(line -> {
@@ -176,6 +178,8 @@ public final class DocumentChecker {
             }
 
             if (proc.exitValue() != 0) {
+                System.err.printf("git command %s failed with output: %s\n",
+                                  Arrays.toString(cmd), IOUtils.readFull(proc.getErrorStream()));
                 throw new RuntimeException("git command failed");
             }
         }

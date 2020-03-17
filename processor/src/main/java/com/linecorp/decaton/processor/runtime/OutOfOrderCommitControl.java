@@ -71,7 +71,8 @@ public class OutOfOrderCommitControl {
         this.topicPartition = topicPartition;
         states = new ArrayDeque<>(capacity);
         this.capacity = capacity;
-        earliest = latest = highWatermark = 0;
+        earliest = latest = 0;
+        highWatermark = -1;
     }
 
     public TopicPartition topicPartition() {

@@ -22,7 +22,6 @@ import java.time.Duration;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -37,6 +36,7 @@ import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -99,23 +99,15 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
                      .collect(Collectors.toSet());
     }
 
-    private static boolean commitNeeded(Consumer<?, ?> consumer,
-                                        Map<TopicPartition, OffsetAndMetadata> committedOffsets) {
-        for (Entry<TopicPartition, OffsetAndMetadata> entry : committedOffsets.entrySet()) {
-            OffsetAndMetadata consumerOffset = consumer.committed(entry.getKey());
-            if (consumerOffset == null || consumerOffset.offset() != entry.getValue().offset()) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     private void commitCompletedOffsets(Consumer<?, ?> consumer) {
         Map<TopicPartition, OffsetAndMetadata> commitOffsets = contexts.commitOffsets();
-        if (commitNeeded(consumer, commitOffsets)) {
-            logger.debug("committing offsets: {}", commitOffsets);
-            consumer.commitSync(commitOffsets);
+        if (commitOffsets.isEmpty()) {
+            logger.debug("No new offsets to commit, skipping commit");
+            return;
         }
+        logger.debug("Committing offsets: {}", commitOffsets);
+        consumer.commitSync(commitOffsets);
+        contexts.updateCommittedOffsets(commitOffsets);
     }
 
     private void waitForRemainingTasksCompletion(long timeoutMillis) {
@@ -186,7 +178,11 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
                     updateState(SubscriptionStateListener.State.REBALANCING);
 
                     waitForRemainingTasksCompletion(rebalanceTimeoutMillis.value());
-                    commitCompletedOffsets(consumer);
+                    try {
+                        commitCompletedOffsets(consumer);
+                    } catch (CommitFailedException | TimeoutException e) {
+                        logger.warn("Offset commit failed at group rebalance", e);
+                    }
                 }
 
                 @Override
@@ -234,8 +230,8 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
                 if (System.currentTimeMillis() - lastCommittedMillis >= commitIntervalMillis.value()) {
                     try {
                         commitCompletedOffsets(consumer);
-                    } catch (CommitFailedException e) {
-                        logger.warn("offset commit failed by transient reason", e);
+                    } catch (CommitFailedException | TimeoutException e) {
+                        logger.warn("Offset commit failed, but continuing to consume", e);
                         // Continue processing, assuming commit will be handled successfully in next attempt.
                     }
                     lastCommittedMillis = System.currentTimeMillis();
@@ -252,7 +248,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
             try {
                 commitCompletedOffsets(consumer);
             } catch (RuntimeException e) {
-                logger.error("failed to commit offset on shutdown", e);
+                logger.error("Offset commit failed before closing consumer", e);
             }
 
             processors.destroySingletonScope(scope.subscriptionId());
