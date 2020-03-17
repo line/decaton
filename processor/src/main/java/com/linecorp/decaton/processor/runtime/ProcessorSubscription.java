@@ -36,6 +36,7 @@ import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -158,7 +159,11 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
                 @Override
                 public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
                     waitForRemainingTasksCompletion(rebalanceTimeoutMillis.value());
-                    commitCompletedOffsets(consumer);
+                    try {
+                        commitCompletedOffsets(consumer);
+                    } catch (CommitFailedException | TimeoutException e) {
+                        logger.warn("Offset commit failed at group rebalance", e);
+                    }
                 }
 
                 @Override
@@ -204,8 +209,8 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
                 if (System.currentTimeMillis() - lastCommittedMillis >= commitIntervalMillis.value()) {
                     try {
                         commitCompletedOffsets(consumer);
-                    } catch (CommitFailedException e) {
-                        logger.warn("offset commit failed by transient reason", e);
+                    } catch (CommitFailedException | TimeoutException e) {
+                        logger.warn("Offset commit failed, but continuing to consume", e);
                         // Continue processing, assuming commit will be handled successfully in next attempt.
                     }
                     lastCommittedMillis = System.currentTimeMillis();
@@ -220,7 +225,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
             try {
                 commitCompletedOffsets(consumer);
             } catch (RuntimeException e) {
-                logger.error("failed to commit offset on shutdown", e);
+                logger.error("Offset commit failed before closing consumer", e);
             }
 
             processors.destroySingletonScope(scope.subscriptionId());
