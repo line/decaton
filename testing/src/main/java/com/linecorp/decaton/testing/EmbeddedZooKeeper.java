@@ -25,9 +25,12 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.zookeeper.server.ServerCnxnFactory;
 import org.apache.zookeeper.server.ZooKeeperServer;
 
+import lombok.extern.slf4j.Slf4j;
+
 /**
  * Starts embedded ZooKeeper server in a same process on random port
  */
+@Slf4j
 public class EmbeddedZooKeeper implements AutoCloseable {
     private final int port;
     private final ServerCnxnFactory cnxnFactory;
@@ -69,7 +72,7 @@ public class EmbeddedZooKeeper implements AutoCloseable {
         try {
             Utils.delete(file);
         } catch (IOException e) {
-            System.err.printf("Failed to delete %s\n", file);
+            log.info("Failed to delete {}", file, e);
         }
     }
 }

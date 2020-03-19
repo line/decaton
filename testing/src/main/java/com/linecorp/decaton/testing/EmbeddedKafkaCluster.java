@@ -27,11 +27,13 @@ import kafka.server.KafkaConfig;
 import kafka.server.KafkaServer;
 import kafka.utils.CoreUtils;
 import kafka.utils.TestUtils;
+import lombok.extern.slf4j.Slf4j;
 import scala.Option;
 
 /**
  * Starts embedded Kafka brokers in a same process on random ports
  */
+@Slf4j
 public class EmbeddedKafkaCluster implements AutoCloseable {
     private final List<KafkaServer> servers;
     private final String bootstrapServers;
@@ -47,7 +49,7 @@ public class EmbeddedKafkaCluster implements AutoCloseable {
             String listener = "127.0.0.1:" + port;
             listeners.add(listener);
 
-            System.err.printf("Broker %d started at %s\n", i, listener);
+            log.info("Broker {} started at {}", i, listener);
         }
 
         bootstrapServers = String.join(",", listeners);
@@ -85,15 +87,13 @@ public class EmbeddedKafkaCluster implements AutoCloseable {
                 server.shutdown();
                 server.awaitShutdown();
             } catch (Exception e) {
-                System.err.printf("Kafka broker %d threw an exception during shutting down\n",
-                                  server.config().brokerId());
+                log.info("Kafka broker {} threw an exception during shutting down", server.config().brokerId(), e);
             }
 
             try {
                 CoreUtils.delete(server.config().logDirs());
             } catch (Exception e) {
-                System.err.printf("Failed to delete log dirs %s\n",
-                                  server.config().logDirs());
+                log.info("Failed to delete log dirs {}", server.config().logDirs(), e);
             }
         }
     }

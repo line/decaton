@@ -19,9 +19,12 @@ package com.linecorp.decaton.testing;
 import org.junit.Rule;
 import org.junit.rules.ExternalResource;
 
+import lombok.extern.slf4j.Slf4j;
+
 /**
  * JUnit {@link Rule} that starts an embedded Kafka cluster.
  */
+@Slf4j
 public class KafkaClusterRule extends ExternalResource {
     private static final int KAFKA_CLUSTER_SIZE = 3;
 
@@ -59,7 +62,7 @@ public class KafkaClusterRule extends ExternalResource {
         try {
             resource.close();
         } catch (Exception e) {
-            System.err.println("Failed to close the resource");
+            log.info("Failed to close the resource", e);
         }
     }
 }
