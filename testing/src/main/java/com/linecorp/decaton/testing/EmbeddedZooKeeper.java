@@ -72,7 +72,7 @@ public class EmbeddedZooKeeper implements AutoCloseable {
         try {
             Utils.delete(file);
         } catch (IOException e) {
-            log.info("Failed to delete {}", file, e);
+            log.warn("Failed to delete {}", file, e);
         }
     }
 }

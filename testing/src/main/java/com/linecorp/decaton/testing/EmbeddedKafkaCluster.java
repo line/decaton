@@ -27,6 +27,8 @@ import kafka.server.KafkaConfig;
 import kafka.server.KafkaServer;
 import kafka.utils.CoreUtils;
 import kafka.utils.TestUtils;
+import lombok.Getter;
+import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
 import scala.Option;
 
@@ -36,6 +38,8 @@ import scala.Option;
 @Slf4j
 public class EmbeddedKafkaCluster implements AutoCloseable {
     private final List<KafkaServer> servers;
+    @Getter
+    @Accessors(fluent = true)
     private final String bootstrapServers;
 
     public EmbeddedKafkaCluster(int numBrokers, String zkConnect) {
@@ -53,10 +57,6 @@ public class EmbeddedKafkaCluster implements AutoCloseable {
         }
 
         bootstrapServers = String.join(",", listeners);
-    }
-
-    public String bootstrapServers() {
-        return bootstrapServers;
     }
 
     private static Properties createBrokerConfig(int brokerId, String zkConnect) {
@@ -87,13 +87,13 @@ public class EmbeddedKafkaCluster implements AutoCloseable {
                 server.shutdown();
                 server.awaitShutdown();
             } catch (Exception e) {
-                log.info("Kafka broker {} threw an exception during shutting down", server.config().brokerId(), e);
+                log.warn("Kafka broker {} threw an exception during shutting down", server.config().brokerId(), e);
             }
 
             try {
                 CoreUtils.delete(server.config().logDirs());
             } catch (Exception e) {
-                log.info("Failed to delete log dirs {}", server.config().logDirs(), e);
+                log.warn("Failed to delete log dirs {}", server.config().logDirs(), e);
             }
         }
     }

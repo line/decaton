@@ -62,7 +62,7 @@ public class KafkaClusterRule extends ExternalResource {
         try {
             resource.close();
         } catch (Exception e) {
-            log.info("Failed to close the resource", e);
+            log.warn("Failed to close the resource", e);
         }
     }
 }

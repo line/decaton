@@ -34,8 +34,9 @@ import com.linecorp.decaton.processor.runtime.RetryConfig;
 import com.linecorp.decaton.protobuf.ProtocolBuffersDeserializer;
 import com.linecorp.decaton.protocol.Sample.HelloTask;
 import com.linecorp.decaton.testing.KafkaClusterRule;
+import com.linecorp.decaton.testing.TestUtils;
 
-public class RetryQueueingIntegration {
+public class RetryQueueingTest {
     @ClassRule
     public static KafkaClusterRule rule = new KafkaClusterRule();
 
@@ -49,13 +50,13 @@ public class RetryQueueingIntegration {
         Set<String> keysNeedRetry = new HashSet<>();
 
         // scenario:
-        //   * produce 100 tasks at total.
-        //   * half tasks have "-needRetry" suffix. they will be retried once, and processed after retried
+        //   * produce 10000 tasks at total.
+        //   * 3000 tasks have "-needRetry" suffix. they will be retried once, and processed after retried
         //   * other tasks will be processed as usual
-        for (int i = 0; i < 50; i++) {
+        for (int i = 0; i < 3000; i++) {
             keysNeedRetry.add("key" + i + "-needRetry");
         }
-        for (int i = 50; i < 100; i++) {
+        for (int i = 3000; i < 10000; i++) {
             keys.add("key" + i);
         }
         Set<String> processedKeys = Collections.synchronizedSet(new HashSet<>());
@@ -86,11 +87,10 @@ public class RetryQueueingIntegration {
 
             keys.forEach(key -> client.put(key, HelloTask.getDefaultInstance()));
             keysNeedRetry.forEach(key -> client.put(key, HelloTask.getDefaultInstance()));
-
             processLatch.await();
-
-            assertEquals(keys, processedKeys);
-            assertEquals(keysNeedRetry, retriedKeys);
         }
+
+        assertEquals(7000, processedKeys.size());
+        assertEquals(3000, retriedKeys.size());
     }
 }
