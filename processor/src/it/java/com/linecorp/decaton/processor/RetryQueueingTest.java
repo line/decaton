@@ -45,14 +45,14 @@ public class RetryQueueingTest {
     private String retryTopicName;
 
     @Before
-    public void setup() {
+    public void setUp() {
         topicName = rule.admin().createRandomTopic(3, 3);
         retryTopicName = topicName + "-retry";
         rule.admin().createTopic(retryTopicName, 3, 3);
     }
 
     @After
-    public void teardown() {
+    public void tearDown() {
         rule.admin().deleteTopics(topicName, retryTopicName);
     }
 

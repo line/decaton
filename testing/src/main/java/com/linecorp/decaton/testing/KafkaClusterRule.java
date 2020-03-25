@@ -19,6 +19,8 @@ package com.linecorp.decaton.testing;
 import org.junit.Rule;
 import org.junit.rules.ExternalResource;
 
+import lombok.Getter;
+import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -30,14 +32,12 @@ public class KafkaClusterRule extends ExternalResource {
 
     private EmbeddedZooKeeper zooKeeper;
     private EmbeddedKafkaCluster kafkaCluster;
+    @Getter
+    @Accessors(fluent = true)
     private KafkaAdmin admin;
 
     public String bootstrapServers() {
         return kafkaCluster.bootstrapServers();
-    }
-
-    public KafkaAdmin admin() {
-        return admin;
     }
 
     @Override
