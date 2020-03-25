@@ -16,8 +16,10 @@
 
 package com.linecorp.decaton.testing;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Properties;
+import java.util.UUID;
 
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
@@ -37,11 +39,29 @@ public class KafkaAdmin implements AutoCloseable {
         adminClient = AdminClient.create(props);
     }
 
+    /**
+     * Create a topic with random name
+     * @return created topic name
+     */
+    public String createRandomTopic(int numPartitions, int replicationFactor) {
+        String topicName = "test-" + UUID.randomUUID();
+        createTopic(topicName, numPartitions, replicationFactor);
+        return topicName;
+    }
+
     public void createTopic(String topicName, int numPartitions, int replicationFactor) {
         NewTopic newTopic = new NewTopic(topicName, numPartitions, (short) replicationFactor);
 
         try {
             adminClient.createTopics(Collections.singleton(newTopic)).all().get();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void deleteTopics(String... topicNames) {
+        try {
+            adminClient.deleteTopics(Arrays.asList(topicNames)).all().get();
         } catch (Exception e) {
             throw new RuntimeException(e);
         }

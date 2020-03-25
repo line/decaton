@@ -22,9 +22,10 @@ import java.time.Duration;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
-import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 
+import org.junit.After;
+import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Test;
 
@@ -40,12 +41,23 @@ public class RetryQueueingTest {
     @ClassRule
     public static KafkaClusterRule rule = new KafkaClusterRule();
 
+    private String topicName;
+    private String retryTopicName;
+
+    @Before
+    public void setup() {
+        topicName = rule.admin().createRandomTopic(3, 3);
+        retryTopicName = topicName + "-retry";
+        rule.admin().createTopic(retryTopicName, 3, 3);
+    }
+
+    @After
+    public void teardown() {
+        rule.admin().deleteTopics(topicName, retryTopicName);
+    }
+
     @Test(timeout = 30000)
     public void testRetryQueuing() throws Exception {
-        String topicName = "test-" + UUID.randomUUID();
-        rule.admin().createTopic(topicName, 3, 3);
-        rule.admin().createTopic(topicName + "-retry", 3, 3);
-
         Set<String> keys = new HashSet<>();
         Set<String> keysNeedRetry = new HashSet<>();
 
