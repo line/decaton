@@ -59,33 +59,23 @@ public class RetryQueueingTest {
     @Test(timeout = 30000)
     public void testRetryQueuing() throws Exception {
         Set<String> keys = new HashSet<>();
-        Set<String> keysNeedRetry = new HashSet<>();
 
         // scenario:
-        //   * produce 10000 tasks at total.
-        //   * 3000 tasks have "-needRetry" suffix. they will be retried once, and processed after retried
-        //   * other tasks will be processed as usual
-        for (int i = 0; i < 3000; i++) {
-            keysNeedRetry.add("key" + i + "-needRetry");
-        }
-        for (int i = 3000; i < 10000; i++) {
+        //   * produce 10000 tasks.
+        //   * all tasks will be retried once, and processed after retried
+        for (int i = 0; i < 10000; i++) {
             keys.add("key" + i);
         }
         Set<String> processedKeys = Collections.synchronizedSet(new HashSet<>());
-        Set<String> retriedKeys = Collections.synchronizedSet(new HashSet<>());
-        CountDownLatch processLatch = new CountDownLatch(keys.size() + keysNeedRetry.size());
+        CountDownLatch processLatch = new CountDownLatch(keys.size());
 
         DecatonProcessor<HelloTask> processor = (context, task) -> {
             String key = context.key();
-            if (!key.endsWith("needRetry")) {
-                processedKeys.add(key);
-                processLatch.countDown();
-                return;
-            }
+
             if (context.metadata().retryCount() == 0) {
                 context.retry();
             } else {
-                retriedKeys.add(key);
+                processedKeys.add(key);
                 processLatch.countDown();
             }
         };
@@ -98,11 +88,9 @@ public class RetryQueueingTest {
              DecatonClient<HelloTask> client = TestUtils.client(topicName, rule.bootstrapServers())) {
 
             keys.forEach(key -> client.put(key, HelloTask.getDefaultInstance()));
-            keysNeedRetry.forEach(key -> client.put(key, HelloTask.getDefaultInstance()));
             processLatch.await();
         }
 
-        assertEquals(7000, processedKeys.size());
-        assertEquals(3000, retriedKeys.size());
+        assertEquals(10000, processedKeys.size());
     }
 }
