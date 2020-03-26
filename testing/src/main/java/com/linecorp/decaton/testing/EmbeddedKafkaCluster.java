@@ -52,6 +52,7 @@ public class EmbeddedKafkaCluster implements AutoCloseable {
             int port = TestUtils.boundPort(server, SecurityProtocol.PLAINTEXT);
             String listener = "127.0.0.1:" + port;
             listeners.add(listener);
+            servers.add(server);
 
             log.info("Broker {} started at {}", i, listener);
         }
