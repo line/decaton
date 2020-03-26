@@ -52,9 +52,9 @@ public class KafkaClusterRule extends ExternalResource {
 
     @Override
     protected void after() {
+        safeClose(admin);
         safeClose(kafkaCluster);
         safeClose(zooKeeper);
-        safeClose(admin);
         super.after();
     }
 
