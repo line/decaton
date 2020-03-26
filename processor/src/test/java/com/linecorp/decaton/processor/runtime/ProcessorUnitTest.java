@@ -127,16 +127,19 @@ public class ProcessorUnitTest {
 
     @Test(timeout = 1000)
     public void testProcessThrowRuntimeExceptionDuringShutdown() throws Exception {
-        CountDownLatch latch = new CountDownLatch(1);
+        CountDownLatch taskPutLatch = new CountDownLatch(1);
+        CountDownLatch firstProcessLatch = new CountDownLatch(1);
         doAnswer(invocation -> {
+            taskPutLatch.await();
             unit.initiateShutdown();
-            latch.countDown();
+            firstProcessLatch.countDown();
             throw new RuntimeException("runtime exception");
         }).when(pipeline).scheduleThenProcess(taskRequest);
 
         unit.putTask(taskRequest);
         unit.putTask(taskRequest);
-        latch.await();
+        taskPutLatch.countDown();
+        firstProcessLatch.await();
         unit.close();
 
         // The first process throw and at the time shutdown has been started then it should abort there.
@@ -147,16 +150,19 @@ public class ProcessorUnitTest {
 
     @Test(timeout = 1000)
     public void testProcessThrowInterruptedExceptionDuringShutdown() throws Exception {
-        CountDownLatch latch = new CountDownLatch(1);
+        CountDownLatch taskPutLatch = new CountDownLatch(1);
+        CountDownLatch firstProcessLatch = new CountDownLatch(1);
         doAnswer(invocation -> {
+            taskPutLatch.await();
             unit.initiateShutdown();
-            latch.countDown();
+            firstProcessLatch.countDown();
             throw new InterruptedException();
         }).when(pipeline).scheduleThenProcess(taskRequest);
 
         unit.putTask(taskRequest);
         unit.putTask(taskRequest);
-        latch.await();
+        taskPutLatch.countDown();
+        firstProcessLatch.await();
         unit.close();
 
         // The first process throw and at the time shutdown has been started then it should abort there.
