@@ -41,7 +41,7 @@ public class LoggingContext implements AutoCloseable {
 
     public LoggingContext(String subscriptionId, TaskRequest request, TaskMetadata metadata) {
         MDC.put(METADATA_KEY, metadata.toString());
-        MDC.put(TASK_KEY, request.key());
+        MDC.put(TASK_KEY, String.valueOf(request.key()));
         MDC.put(SUBSCRIPTION_ID_KEY, subscriptionId);
         MDC.put(OFFSET_KEY, String.valueOf(request.recordOffset()));
         MDC.put(TOPIC_KEY, request.topicPartition().topic());
