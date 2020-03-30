@@ -19,9 +19,11 @@ package com.linecorp.decaton.processor.runtime;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.producer.ProducerConfig;
 
 import com.linecorp.decaton.client.DecatonClientBuilder.DefaultKafkaProducerSupplier;
 import com.linecorp.decaton.client.DecatonTaskProducer;
@@ -137,7 +139,18 @@ public class SubscriptionBuilder {
         DecatonProcessorSupplier<byte[]> retryProcessorSupplier = null;
         if (retryConfig != null) {
             Properties producerConfig = Optional.ofNullable(retryConfig.producerConfig())
-                                                .orElse(consumerConfig);
+                                                .orElseGet(() -> {
+                                                    Properties producerProps = new Properties();
+                                                    Set<String> definedProps = ProducerConfig.configNames();
+                                                    consumerConfig.entrySet()
+                                                                  .stream()
+                                                                  .filter(entry -> definedProps
+                                                                          .contains(entry.getKey()))
+                                                                  .forEach(entry -> producerProps.put(
+                                                                          entry.getKey(),
+                                                                          entry.getValue()));
+                                                    return producerProps;
+                                                });
             KafkaProducerSupplier producerSupplier = Optional.ofNullable(retryConfig.producerSupplier())
                                                              .orElseGet(DefaultKafkaProducerSupplier::new);
             retryProcessorSupplier = new DecatonProcessorSupplierImpl<>(() -> {
