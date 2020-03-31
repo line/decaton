@@ -101,6 +101,7 @@ class DynamicRateLimiter implements RateLimiter {
                 // In case of 1, we can use a grabbed `latest` limiter but it is preferred to retry to grab
                 // a new one so the prop listener thread doesn't have to wait extra long until this thread
                 // release the lock.
+                latest.lock.readLock().unlock();
                 continue;
             }
 
