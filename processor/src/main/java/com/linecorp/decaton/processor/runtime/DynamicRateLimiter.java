@@ -16,6 +16,8 @@
 
 package com.linecorp.decaton.processor.runtime;
 
+import java.util.concurrent.locks.ReentrantReadWriteLock;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -24,19 +26,32 @@ import com.linecorp.decaton.processor.Property;
 class DynamicRateLimiter implements RateLimiter {
     private static final Logger logger = LoggerFactory.getLogger(DynamicRateLimiter.class);
 
-    private volatile RateLimiter current;
+    static class Limiter {
+        final RateLimiter limiter;
+        final ReentrantReadWriteLock lock;
+
+        Limiter(RateLimiter limiter) {
+            this.limiter = limiter;
+            lock = new ReentrantReadWriteLock(false);
+        }
+    }
+
+    private volatile Limiter current;
 
     DynamicRateLimiter(Property<Long> rateProperty) {
-        current = createLimiter(RateLimiter.UNLIMITED);
+        current = new Limiter(createLimiter(RateLimiter.UNLIMITED));
 
         rateProperty.listen((oldValue, newValue) -> {
-            RateLimiter oldLimiter = current;
-            current = createLimiter(newValue);
+            Limiter oldLimiter = current;
+            current = new Limiter(createLimiter(newValue));
 
+            oldLimiter.lock.writeLock().lock();
             try {
-                oldLimiter.close();
+                oldLimiter.limiter.close();
             } catch (Exception e) {
                 logger.warn("Failed to close rate limiter: {}", oldLimiter, e);
+            } finally {
+                oldLimiter.lock.writeLock().unlock();
             }
         });
     }
@@ -46,13 +61,56 @@ class DynamicRateLimiter implements RateLimiter {
         return RateLimiter.create(permitsPerSecond);
     }
 
+    Limiter readLockedLatestLimiter() {
+        while (true) {
+            Limiter latest = current;
+            if (!latest.lock.readLock().tryLock()) {
+                // Failing to take read lock here means prop listener is now acquired write lock.
+                // Since write lock is acquired only for closing limiter instance, there should be a new
+                // limiter already prepared so its better to go grabbing a new one rather than waiting old one.
+                continue;
+            }
+            if (latest != current) {
+                // This indicates one of following two situations:
+                // 1. property listener has just updated `current`, but still not have closed it because it is
+                // awaiting to acquire write lock.
+                // 2. property listener has updated `current` and closed it then released write lock so this
+                // thread now got a read lock of it.
+                //
+                // In case of 2, we must retry to grab a new limiter because the `latest` has closed already.
+                // In case of 1, we can use a grabbed `latest` limiter but it is preferred to retry to grab
+                // a new one so the prop listener thread doesn't have to wait extra long until this thread
+                // release the lock.
+                continue;
+            }
+
+            // Reaching here, still prop listener might have just updated `current` with the new one, but at
+            // least the currently held `latest` is guaranteed to not to be closed until this thread releases
+            // the read lock, because the listener prop requires exclusive lock to close it.
+            return latest;
+        }
+    }
+
     @Override
     public long acquire(int permits) throws InterruptedException {
-        return current.acquire(permits);
+        Limiter current = readLockedLatestLimiter();
+        try {
+            return current.limiter.acquire(permits);
+        } finally {
+            current.lock.readLock().unlock();
+        }
     }
 
     @Override
     public void close() throws Exception {
-        current.close();
+        Limiter current = readLockedLatestLimiter();
+        try {
+            // In contrast to prop listener, it is okay to close limiter here w/o write lock because by contract
+            // it is guaranteed that at the time close is called, there is no possibility of extra acquire()
+            // call.
+            current.limiter.close();
+        } finally {
+            current.lock.readLock().unlock();
+        }
     }
 }

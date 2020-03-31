@@ -77,18 +77,16 @@ public class DynamicRateLimiterTest {
 
         ExecutorService executor = Executors.newFixedThreadPool(1);
 
-        CountDownLatch limiterClosed = new CountDownLatch(1);
         doAnswer(invocation -> {
             readOld.countDown();
-            limiterClosed.await();
+            // The prop listener thread will entire wait on write lock and we have no way to synchronize on it
+            // just linger a bit here assuming if anything went wrong prop listener closes limiter.
+            Thread.sleep(100);
             return invocation.callRealMethod();
         }).when(oldLimiter).acquire(anyInt()); // Don't switch to acquire() which is defined as default interface method
 
         // 1. Call prop listener so it reads the current limiter and stops there
-        executor.execute(() -> {
-            listener.accept(null, 100L);
-            limiterClosed.countDown();
-        });
+        executor.execute(() -> listener.accept(null, 100L));
         recreate.await();
 
         // 2. Attempt to acquire so it also reads the current limiter and stops at entry
