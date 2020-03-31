@@ -27,11 +27,11 @@ class DynamicRateLimiter implements RateLimiter {
     private volatile RateLimiter current;
 
     DynamicRateLimiter(Property<Long> rateProperty) {
-        current = RateLimiter.create(RateLimiter.UNLIMITED);
+        current = createLimiter(RateLimiter.UNLIMITED);
 
         rateProperty.listen((oldValue, newValue) -> {
             RateLimiter oldLimiter = current;
-            current = RateLimiter.create(newValue);
+            current = createLimiter(newValue);
 
             try {
                 oldLimiter.close();
@@ -39,6 +39,11 @@ class DynamicRateLimiter implements RateLimiter {
                 logger.warn("Failed to close rate limiter: {}", oldLimiter, e);
             }
         });
+    }
+
+    // visible for testing
+    RateLimiter createLimiter(long permitsPerSecond) {
+        return RateLimiter.create(permitsPerSecond);
     }
 
     @Override
