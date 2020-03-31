@@ -74,7 +74,7 @@ public class DynamicProperty<T> extends AbstractProperty<T> {
         validate(value);
 
         this.value = value;
-        logger.debug("Property {} has been updated ({} => {})", name(), currentValue, value);
+        logger.info("Property {} has been updated ({} => {})", name(), currentValue, value);
 
         notifyListeners(currentValue, value);
         return currentValue;

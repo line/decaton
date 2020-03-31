@@ -16,6 +16,7 @@
 
 package com.linecorp.decaton.processor.runtime;
 
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import org.slf4j.Logger;
@@ -37,6 +38,7 @@ class DynamicRateLimiter implements RateLimiter {
     }
 
     private volatile Limiter current;
+    private volatile boolean terminated;
 
     DynamicRateLimiter(Property<Long> rateProperty) {
         current = new Limiter(createLimiter(RateLimiter.UNLIMITED));
@@ -45,13 +47,15 @@ class DynamicRateLimiter implements RateLimiter {
             Limiter oldLimiter = current;
             current = new Limiter(createLimiter(newValue));
 
-            oldLimiter.lock.writeLock().lock();
+            boolean locked = lockExclusivelyIfNotTerminated(oldLimiter);
             try {
                 oldLimiter.limiter.close();
             } catch (Exception e) {
                 logger.warn("Failed to close rate limiter: {}", oldLimiter, e);
             } finally {
-                oldLimiter.lock.writeLock().unlock();
+                if (locked) {
+                    oldLimiter.lock.writeLock().unlock();
+                }
             }
         });
     }
@@ -61,8 +65,24 @@ class DynamicRateLimiter implements RateLimiter {
         return RateLimiter.create(permitsPerSecond);
     }
 
-    Limiter readLockedLatestLimiter() {
-        while (true) {
+    private boolean lockExclusivelyIfNotTerminated(Limiter limiter) {
+        // If we're shutting down, we don't have to acquire exclusive lock and should go forward calling close
+        // to let all its waiters to abort.
+        while (!terminated) {
+            try {
+                if (limiter.lock.writeLock().tryLock(50, TimeUnit.MILLISECONDS)) {
+                    return true;
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new RuntimeException(e);
+            }
+        }
+        return false;
+    }
+
+    private Limiter readLockedLatestLimiter() {
+        while (!terminated) {
             Limiter latest = current;
             if (!latest.lock.readLock().tryLock()) {
                 // Failing to take read lock here means prop listener is now acquired write lock.
@@ -89,6 +109,8 @@ class DynamicRateLimiter implements RateLimiter {
             // the read lock, because the listener prop requires exclusive lock to close it.
             return latest;
         }
+
+        throw new IllegalStateException("rater limiter shutdown already");
     }
 
     @Override
@@ -105,9 +127,9 @@ class DynamicRateLimiter implements RateLimiter {
     public void close() throws Exception {
         Limiter current = readLockedLatestLimiter();
         try {
-            // In contrast to prop listener, it is okay to close limiter here w/o write lock because by contract
-            // it is guaranteed that at the time close is called, there is no possibility of extra acquire()
-            // call.
+            // In contrast to prop listener, it is okay to close limiter here w/o write lock because that means
+            // subscription is being shutdown so no new/on-going acquire() needs to success.
+            terminated = true;
             current.limiter.close();
         } finally {
             current.lock.readLock().unlock();
