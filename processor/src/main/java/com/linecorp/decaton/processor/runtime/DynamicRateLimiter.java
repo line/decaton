@@ -130,9 +130,9 @@ class DynamicRateLimiter implements RateLimiter {
         try {
             // In contrast to prop listener, it is okay to close limiter here w/o write lock because that means
             // subscription is being shutdown so no new/on-going acquire() needs to success.
-            terminated = true;
             current.limiter.close();
         } finally {
+            terminated = true;
             current.lock.readLock().unlock();
         }
     }
