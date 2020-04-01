@@ -19,9 +19,12 @@ package com.linecorp.decaton.processor.runtime;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
+import java.util.function.Supplier;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.producer.ProducerConfig;
 
 import com.linecorp.decaton.client.DecatonClientBuilder.DefaultKafkaProducerSupplier;
 import com.linecorp.decaton.client.DecatonTaskProducer;
@@ -137,7 +140,7 @@ public class SubscriptionBuilder {
         DecatonProcessorSupplier<byte[]> retryProcessorSupplier = null;
         if (retryConfig != null) {
             Properties producerConfig = Optional.ofNullable(retryConfig.producerConfig())
-                                                .orElse(consumerConfig);
+                                                .orElseGet(producerConfigSupplier(consumerConfig));
             KafkaProducerSupplier producerSupplier = Optional.ofNullable(retryConfig.producerSupplier())
                                                              .orElseGet(DefaultKafkaProducerSupplier::new);
             retryProcessorSupplier = new DecatonProcessorSupplierImpl<>(() -> {
@@ -159,5 +162,23 @@ public class SubscriptionBuilder {
         ProcessorSubscription subscription = build();
         subscription.start();
         return subscription;
+    }
+
+    /**
+     * Creates a supplier to get {@link Properties} for a kafka producer by taking an intersection
+     * of {@link ProducerConfig#configNames)} and the given {@link Properties} of the consumer.
+     *
+     */
+    static Supplier<Properties> producerConfigSupplier(Properties consumerConfig) {
+        return () -> {
+            Properties producerProps = new Properties();
+            Set<String> definedProps = ProducerConfig.configNames();
+            consumerConfig.stringPropertyNames()
+                          .stream()
+                          .filter(definedProps::contains)
+                          .forEach(propertyName -> producerProps.setProperty(
+                                  propertyName, consumerConfig.getProperty(propertyName)));
+            return producerProps;
+        };
     }
 }
