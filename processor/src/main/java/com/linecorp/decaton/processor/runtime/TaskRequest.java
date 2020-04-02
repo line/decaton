@@ -37,10 +37,10 @@ class TaskRequest {
     private byte[] rawRequestBytes;
 
     TaskRequest(TopicPartition topicPartition,
-                       long recordOffset,
-                       DeferredCompletion completion,
-                       String key,
-                       byte[] rawRequestBytes) {
+                long recordOffset,
+                DeferredCompletion completion,
+                String key,
+                byte[] rawRequestBytes) {
         this.topicPartition = topicPartition;
         this.recordOffset = recordOffset;
         this.completion = completion;
