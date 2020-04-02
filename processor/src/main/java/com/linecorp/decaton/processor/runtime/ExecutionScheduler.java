@@ -87,7 +87,7 @@ public class ExecutionScheduler implements AutoCloseable {
         if (terminated()) {
             return;
         }
-        metrics.tasksSchedulingDelay.record(Math.max(timeWaitedMs, 0), TimeUnit.MILLISECONDS);
+        metrics.tasksSchedulingDelay.record(Math.max(0, timeWaitedMs), TimeUnit.MILLISECONDS);
 
         long throttledMicros = rateLimiter.acquire();
         if (terminated()) {

@@ -16,10 +16,10 @@
 
 package com.linecorp.decaton.processor.runtime;
 
+import static java.util.stream.Collectors.toList;
+
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import org.apache.kafka.common.TopicPartition;
@@ -29,7 +29,6 @@ import org.slf4j.LoggerFactory;
 import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.ProcessorProperties;
 import com.linecorp.decaton.processor.metrics.Metrics;
-import com.linecorp.decaton.processor.runtime.Utils.Task;
 
 /**
  * This class is responsible for following portions:
@@ -46,7 +45,6 @@ public class PartitionProcessor implements AsyncShutdownable {
     private final Processors<?> processors;
 
     private final List<ProcessorUnit> units;
-    private CompletableFuture<Void> cleanupResult;
 
     private final SubPartitioner subPartitioner;
 
@@ -113,13 +111,25 @@ public class PartitionProcessor implements AsyncShutdownable {
 
     @Override
     public void initiateShutdown() {
-        cleanupResult = Utils.runInParallel(
-                "PartitionProcessor-Cleanup",
-                IntStream.range(0, units.size()).mapToObj(i -> (Task) () -> {
-                    units.get(i).close();
-                    processors.destroyThreadScope(scope.subscriptionId(), scope.topicPartition(), i);
-                }).collect(Collectors.toList()));
+        // Shutdown sequence:
+        // 1. ProcessorUnit#initiateShutdown => termination flag turns on, new tasks inflow stops.
+        // 2. ProcessorPipeline#close => termination flag turns on, it becomes ready to return immediately for
+        // all following tasks that hasn't yet started processing user-supplied logic.
+        // 3. ExecutionScheduler#close => terminates all pending schedule waits which are based on metadata.
+        // 4. RateLimiter#close => terminates all pending waits for rate limiting, then returns immediately by
+        // termination flag at ExecutionScheduler, ProcessorPipeline
+        // ===========
+        // 5. ProcessorUnit#awaitShutdown => synchronize on executor termination, ensure there's no remaining
+        // running tasks.
+        // 6. Destroy all thread-scoped processors.
 
+        for (ProcessorUnit unit : units) {
+            try {
+                unit.initiateShutdown();
+            } catch (RuntimeException e) {
+                logger.error("Processor unit threw exception on shutdown", e);
+            }
+        }
         try {
             rateLimiter.close();
         } catch (Exception e) {
@@ -127,8 +137,18 @@ public class PartitionProcessor implements AsyncShutdownable {
         }
     }
 
+    private Utils.Task destroyThreadProcessorTask(int i) {
+        return () -> processors.destroyThreadScope(scope.subscriptionId(), scope.topicPartition(), i);
+    }
+
     @Override
     public void awaitShutdown() throws InterruptedException {
-        cleanupResult.join();
+        for (ProcessorUnit unit : units) {
+            unit.awaitShutdown();
+        }
+        Utils.runInParallel(
+                "DestroyThreadScopedProcessors",
+                IntStream.range(0, units.size()).mapToObj(this::destroyThreadProcessorTask).collect(toList()))
+             .join();
     }
 }
