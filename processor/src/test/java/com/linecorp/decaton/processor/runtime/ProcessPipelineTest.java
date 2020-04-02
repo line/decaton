@@ -16,18 +16,20 @@
 
 package com.linecorp.decaton.processor.runtime;
 
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.Collections;
 import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 
 import org.apache.kafka.common.TopicPartition;
 import org.junit.Before;
@@ -39,6 +41,8 @@ import org.mockito.junit.MockitoRule;
 
 import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.DecatonTask;
+import com.linecorp.decaton.processor.DeferredCompletion;
+import com.linecorp.decaton.processor.ProcessingContext;
 import com.linecorp.decaton.processor.ProcessorProperties;
 import com.linecorp.decaton.processor.TaskExtractor;
 import com.linecorp.decaton.processor.TaskMetadata;
@@ -70,7 +74,7 @@ public class ProcessPipelineTest {
 
     private static TaskRequest taskRequest() {
         return new TaskRequest(
-                new TopicPartition("topic", 1), 1, null, "TEST", REQUEST.toByteArray());
+                new TopicPartition("topic", 1), 1, mock(DeferredCompletion.class), "TEST", REQUEST.toByteArray());
     }
 
     @Rule
@@ -94,34 +98,70 @@ public class ProcessPipelineTest {
     }
 
     @Test
-    public void testScheduleThenProcess() throws InterruptedException {
+    public void testScheduleThenProcess_SYNC_COMPLETE() throws InterruptedException {
         when(extractorMock.extract(any()))
                 .thenReturn(new DecatonTask<>(TaskMetadata.fromProto(REQUEST.getMetadata()), TASK, TASK.toByteArray()));
 
-        CompletableFuture<Void> future = pipeline.scheduleThenProcess(taskRequest());
+        TaskRequest request = taskRequest();
+        pipeline.scheduleThenProcess(request);
+        verify(schedulerMock, times(1)).schedule(eq(TaskMetadata.fromProto(REQUEST.getMetadata())));
+        verify(processorMock, times(1)).process(any(), eq(TASK));
+        verify(request.completion(), times(1)).complete();
+    }
+
+    @Test
+    public void testScheduleThenProcess_ASYNC_COMPLETE() throws InterruptedException {
+        when(extractorMock.extract(any()))
+                .thenReturn(new DecatonTask<>(TaskMetadata.fromProto(REQUEST.getMetadata()), TASK, TASK.toByteArray()));
+        CountDownLatch beforeComplete = new CountDownLatch(1);
+        CountDownLatch afterComplete = new CountDownLatch(1);
+        doAnswer(invocation -> {
+            ProcessingContext<?> context = invocation.getArgument(0);
+            DeferredCompletion completion = context.deferCompletion();
+            new Thread(() -> {
+                try {
+                    beforeComplete.await();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new RuntimeException(e);
+                }
+                completion.complete();
+                afterComplete.countDown();
+            }).start();
+            return null;
+        }).when(processorMock).process(any(), any());
+
+        TaskRequest request = taskRequest();
+        pipeline.scheduleThenProcess(request);
         verify(schedulerMock, times(1)).schedule(eq(TaskMetadata.fromProto(REQUEST.getMetadata())));
         verify(processorMock, times(1)).process(any(), eq(TASK));
 
-        assertTrue(future.isDone());
+        // Should complete only after processor completes it
+        verify(request.completion(), never()).complete();
+        beforeComplete.countDown();
+        afterComplete.await();
+        verify(request.completion(), times(1)).complete();
     }
 
-    @Test(expected = RuntimeException.class)
+    @Test
     public void testExtract_InvalidTask() throws InterruptedException {
         when(extractorMock.extract(any()))
                 .thenReturn(new DecatonTask<>(null, TASK, TASK.toByteArray()));
 
-        pipeline.extract(taskRequest());
+        // Checking exception doesn't bubble up
+        pipeline.scheduleThenProcess(taskRequest());
+        verify(schedulerMock, never()).schedule(any());
+        verify(processorMock, never()).process(any(), any());
     }
 
-    static class ExtractionException extends RuntimeException {
-    }
+    @Test
+    public void testscheduleThenProcess_ExtractThrows() throws InterruptedException {
+        when(extractorMock.extract(any())).thenThrow(new RuntimeException());
 
-    @Test(expected = ExtractionException.class)
-    public void testExtract_ExtractorThrows() throws InterruptedException {
-        when(extractorMock.extract(any()))
-                .thenThrow(new ExtractionException());
-
-        pipeline.extract(taskRequest());
+        // Checking exception doesn't bubble up
+        pipeline.scheduleThenProcess(taskRequest());
+        verify(schedulerMock, never()).schedule(any());
+        verify(processorMock, never()).process(any(), any());
     }
 
     @Test
@@ -129,25 +169,22 @@ public class ProcessPipelineTest {
         when(extractorMock.extract(any()))
                 .thenReturn(new DecatonTask<>(TaskMetadata.fromProto(REQUEST.getMetadata()), TASK, TASK.toByteArray()));
 
-        TaskRequest requestSpy = spy(taskRequest());
+        TaskRequest request = taskRequest();
+        pipeline.extract(request);
 
-        pipeline.extract(requestSpy);
-
-        verify(requestSpy, times(1)).purgeRawRequestBytes();
+        assertNull(request.rawRequestBytes());
     }
 
-    static class ProcessException extends RuntimeException {
-    }
-
-    @Test(expected = ProcessException.class)
-    public void testProcess_SynchronousFailure() throws InterruptedException {
+    @Test
+    public void testscheduleThenProcess_SynchronousFailure() throws InterruptedException {
         DecatonTask<HelloTask> task = new DecatonTask<>(TaskMetadata.fromProto(REQUEST.getMetadata()), TASK, TASK.toByteArray());
+        when(extractorMock.extract(any())).thenReturn(task);
 
-        when(extractorMock.extract(any()))
-                .thenReturn(task);
+        doThrow(new RuntimeException()).when(processorMock).process(any(), eq(TASK));
 
-        doThrow(new ProcessException()).when(processorMock).process(any(), eq(TASK));
-
-        pipeline.process(taskRequest(), task);
+        TaskRequest request = taskRequest();
+        // Checking exception doesn't bubble up
+        pipeline.scheduleThenProcess(request);
+        verify(request.completion(), times(1)).complete();
     }
 }

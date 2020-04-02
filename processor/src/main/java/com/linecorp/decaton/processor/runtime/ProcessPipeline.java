@@ -21,21 +21,20 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import com.linecorp.decaton.processor.DecatonTask;
-import com.linecorp.decaton.processor.TaskExtractor;
 import com.linecorp.decaton.processor.DecatonProcessor;
+import com.linecorp.decaton.processor.DecatonTask;
+import com.linecorp.decaton.processor.DeferredCompletion;
 import com.linecorp.decaton.processor.ProcessingContext;
+import com.linecorp.decaton.processor.TaskExtractor;
 import com.linecorp.decaton.processor.metrics.Metrics;
 import com.linecorp.decaton.processor.metrics.Metrics.ProcessMetrics;
 import com.linecorp.decaton.processor.metrics.Metrics.TaskMetrics;
 import com.linecorp.decaton.processor.runtime.Utils.Timer;
 
-public class ProcessPipeline<T> implements AutoCloseable {
-    private static final Logger logger = LoggerFactory.getLogger(ProcessPipeline.class);
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
+public class ProcessPipeline<T> implements AutoCloseable {
     private final ThreadScope scope;
     private final List<DecatonProcessor<T>> processors;
     private final DecatonProcessor<byte[]> retryProcessor;
@@ -60,28 +59,45 @@ public class ProcessPipeline<T> implements AutoCloseable {
         processMetrics = metrics.new ProcessMetrics();
     }
 
-    public CompletableFuture<Void> scheduleThenProcess(TaskRequest request) throws InterruptedException {
-        DecatonTask<T> extracted = extract(request);
+    public void scheduleThenProcess(TaskRequest request) throws InterruptedException {
+        final DecatonTask<T> extracted;
+        try {
+            extracted = extract(request);
+        } catch (RuntimeException e) {
+            log.error("Dropping not-deserializable task [{}]", request.id(), e);
+            taskMetrics.tasksDiscarded.increment();
+            return;
+        }
 
         scheduler.schedule(extracted.metadata());
 
-        return process(request, extracted);
+        CompletableFuture<Void> result = process(request, extracted);
+        DeferredCompletion completion = request.completion();
+        result.whenComplete((r, e) -> {
+            if (e != null) {
+                if (e instanceof InterruptedException && true /* terminated */) {
+                    log.info("Processing task interrupted during shutdown");
+                    // Usually an InterruptedException is considered as just one case of failure,
+                    // but if it occurred while shutting down it's highly likely indicating processing
+                    // had been interrupted regardless to it's logic failure.
+                    // In case we must don't want to mark a processing offset as completed as it can be
+                    // expected to be processed successfully after an instance restarts.
+                    return;
+                } else {
+                    taskMetrics.tasksError.increment();
+                }
+            }
+            completion.complete();
+        });
     }
 
     // visible for testing
     DecatonTask<T> extract(TaskRequest request) {
         final DecatonTask<T> extracted;
-        try {
-            extracted = taskExtractor.extract(request.rawRequestBytes());
-            if (!validateTask(extracted)) {
-                throw new RuntimeException("Invalid task");
-            }
-        } catch (RuntimeException e) {
-            logger.error("Dropping failed to deserialized task for [{}]", request.id(), e);
-            taskMetrics.tasksDiscarded.increment();
-            throw e;
+        extracted = taskExtractor.extract(request.rawRequestBytes());
+        if (!validateTask(extracted)) {
+            throw new RuntimeException("Invalid task");
         }
-
         request.purgeRawRequestBytes();
 
         return extracted;
@@ -93,31 +109,37 @@ public class ProcessPipeline<T> implements AutoCloseable {
                 new ProcessingContextImpl<>(scope.subscriptionId(), request, task, processors, retryProcessor);
 
         Timer timer = Utils.timer();
-        final CompletableFuture<Void> processResult;
-        final Duration elapsed;
+        CompletableFuture<Void> processResult;
         try (LoggingContext ignored = context.loggingContext()) {
             processResult = context.push(task.taskData());
         } catch (Exception e) {
-            taskMetrics.tasksError.increment();
-            throw e;
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
+            processResult = new CompletableFuture<>();
+            processResult.completeExceptionally(e);
+
+            log.error("Uncaught exception thrown by processor {} for task {}",
+                      scope, request, e);
         } finally {
-            elapsed = timer.duration();
-            if (logger.isTraceEnabled()) {
-                logger.trace("processing task of [{}] took {} ns", request.id(), Utils.formatNanos(elapsed));
+            Duration elapsed = timer.duration();
+            if (log.isTraceEnabled()) {
+                log.trace("Processing task [{}] took {} ns", request.id(), Utils.formatNanos(elapsed));
             }
             taskMetrics.tasksProcessed.increment();
             processMetrics.tasksProcessDuration.record(elapsed);
         }
 
-        return processResult.whenComplete((r, e) -> {
+        processResult.whenComplete((r, e) -> {
             // Performance logging and metrics update
             Duration completeDuration = timer.duration();
-            if (logger.isTraceEnabled()) {
-                logger.trace("completing task of [{}] took {} ns",
-                             request.id(), Utils.formatNanos(completeDuration));
+            if (log.isTraceEnabled()) {
+                log.trace("Completing task [{}] took {} ns",
+                          request.id(), Utils.formatNanos(completeDuration));
             }
             processMetrics.tasksCompleteDuration.record(completeDuration);
         });
+        return processResult;
     }
 
     private boolean validateTask(DecatonTask<T> task) {
