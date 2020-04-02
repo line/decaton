@@ -21,16 +21,15 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 import org.apache.kafka.common.TopicPartition;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import com.linecorp.decaton.processor.TaskMetadata;
 import com.linecorp.decaton.processor.metrics.Metrics;
 import com.linecorp.decaton.processor.metrics.Metrics.SchedulerMetrics;
 
-public class ExecutionScheduler implements AutoCloseable {
-    private static final Logger logger = LoggerFactory.getLogger(ExecutionScheduler.class);
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
+public class ExecutionScheduler implements AutoCloseable {
     private final ThreadScope scope;
     private final RateLimiter rateLimiter;
     private final Supplier<Long> currentTimeMillis;
@@ -60,27 +59,45 @@ public class ExecutionScheduler implements AutoCloseable {
     }
 
     // visible for testing
-    void waitOnScheduledTime(TaskMetadata metadata) throws InterruptedException {
-        long timeUntilProcess = metadata.scheduledTimeMillis() - currentTimeMillis.get();
-        if (timeUntilProcess > 0) {
-            if (logger.isDebugEnabled()) {
-                logger.debug("Sleeping {} ms awaiting scheduled time for task in {} - ({})",
-                             timeUntilProcess, scope, metadata);
-            }
-            sleep(timeUntilProcess);
+    long waitOnScheduledTime(TaskMetadata metadata) throws InterruptedException {
+        long timeToWaitMs = metadata.scheduledTimeMillis() - currentTimeMillis.get();
+        if (timeToWaitMs > 0) {
+            log.debug("Sleeping {} ms awaiting scheduled time for task in {} - ({})",
+                      timeToWaitMs, scope, metadata);
+            sleep(timeToWaitMs);
         }
-
-        metrics.tasksSchedulingDelay.record(Math.max(timeUntilProcess, 0), TimeUnit.MILLISECONDS);
+        return timeToWaitMs;
     }
 
+    /**
+     * Wait for the time ready to start executing a task which is associated with the given
+     * {@link TaskMetadata}.
+     * This method pauses until all below criteria tells it is ready to start executing next task.
+     * - Execution time configured in task metadata
+     * - Per-partition rate limiting
+     *
+     * This method might returns earlier than the time ready to execute the task when {@link #close()} called.
+     *
+     * @param metadata the {@link TaskMetadata} associated with the task waiting to be processed.
+     * @throws InterruptedException when interrupted.
+     */
     public void schedule(TaskMetadata metadata) throws InterruptedException {
         // For tasks which are configured to delay its execution.
-        waitOnScheduledTime(metadata);
+        long timeWaitedMs = waitOnScheduledTime(metadata);
+        if (terminated()) {
+            return;
+        }
+        metrics.tasksSchedulingDelay.record(Math.max(timeWaitedMs, 0), TimeUnit.MILLISECONDS);
 
         long throttledMicros = rateLimiter.acquire();
-        if (throttledMicros > 0L) {
-            metrics.partitionThrottledTime.record(throttledMicros, TimeUnit.MICROSECONDS);
+        if (terminated()) {
+            return;
         }
+        metrics.partitionThrottledTime.record(Math.max(0, throttledMicros), TimeUnit.MICROSECONDS);
+    }
+
+    private boolean terminated() {
+        return terminateLatch.getCount() == 0;
     }
 
     @Override

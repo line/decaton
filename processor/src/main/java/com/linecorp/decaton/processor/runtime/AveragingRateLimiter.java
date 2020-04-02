@@ -55,13 +55,12 @@ class AveragingRateLimiter implements RateLimiter {
 
     @Override
     public long acquire(int permits) throws InterruptedException {
-        if (latch.getCount() == 0) {
-            throw new IllegalStateException("This limiter is already closed");
-        }
-
         long microsToWait = reserve(permits);
         if (microsToWait > 0L) {
             latch.await(microsToWait, MICROSECONDS);
+        }
+        if (terminated()) {
+            return 0;
         }
         return microsToWait;
     }
@@ -100,6 +99,10 @@ class AveragingRateLimiter implements RateLimiter {
 
     private long nowMicros() {
         return NANOSECONDS.toMicros(currentTimeNanos.getAsLong() - startNanos);
+    }
+
+    private boolean terminated() {
+        return latch.getCount() == 0;
     }
 
     @Override

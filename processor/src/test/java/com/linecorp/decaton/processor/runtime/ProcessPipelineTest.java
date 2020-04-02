@@ -17,12 +17,14 @@
 package com.linecorp.decaton.processor.runtime;
 
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -30,6 +32,9 @@ import static org.mockito.Mockito.when;
 import java.util.Collections;
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.kafka.common.TopicPartition;
 import org.junit.Before;
@@ -93,8 +98,8 @@ public class ProcessPipelineTest {
 
     @Before
     public void setUp() {
-        pipeline = new ProcessPipeline<>(
-                scope, Collections.singletonList(processorMock), null, extractorMock, schedulerMock, METRICS);
+        pipeline = spy(new ProcessPipeline<>(
+                scope, Collections.singletonList(processorMock), null, extractorMock, schedulerMock, METRICS));
     }
 
     @Test
@@ -155,7 +160,7 @@ public class ProcessPipelineTest {
     }
 
     @Test
-    public void testscheduleThenProcess_ExtractThrows() throws InterruptedException {
+    public void testScheduleThenProcess_ExtractThrows() throws InterruptedException {
         when(extractorMock.extract(any())).thenThrow(new RuntimeException());
 
         // Checking exception doesn't bubble up
@@ -176,7 +181,7 @@ public class ProcessPipelineTest {
     }
 
     @Test
-    public void testscheduleThenProcess_SynchronousFailure() throws InterruptedException {
+    public void testScheduleThenProcess_SynchronousFailure() throws InterruptedException {
         DecatonTask<HelloTask> task = new DecatonTask<>(TaskMetadata.fromProto(REQUEST.getMetadata()), TASK, TASK.toByteArray());
         when(extractorMock.extract(any())).thenReturn(task);
 
@@ -187,4 +192,36 @@ public class ProcessPipelineTest {
         pipeline.scheduleThenProcess(request);
         verify(request.completion(), times(1)).complete();
     }
+
+    @Test(timeout = 5000)
+    public void testScheduleThenProcess_Terminate() throws InterruptedException {
+        DecatonTask<HelloTask> task = new DecatonTask<>(TaskMetadata.fromProto(REQUEST.getMetadata()), TASK, TASK.toByteArray());
+        when(extractorMock.extract(any())).thenReturn(task);
+
+        CountDownLatch atSchedule = new CountDownLatch(1);
+        CountDownLatch closeLatch = new CountDownLatch(1);
+        doAnswer(invocation -> {
+            atSchedule.countDown();
+            closeLatch.await();
+            return null;
+        }).when(schedulerMock).schedule(any());
+
+        ExecutorService executor = Executors.newFixedThreadPool(1);
+        executor.execute(() -> {
+            try {
+                pipeline.scheduleThenProcess(taskRequest());
+            } catch (InterruptedException e) {
+                fail("Fail by exception: " + e);
+            }
+        });
+        atSchedule.await();
+        pipeline.close();
+        closeLatch.countDown();
+
+        executor.shutdown();
+        // Checking it actually returns
+        executor.awaitTermination(Long.MAX_VALUE, TimeUnit.SECONDS);
+        verify(pipeline, never()).process(any(), any());
+    }
 }
+
