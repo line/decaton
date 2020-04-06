@@ -30,7 +30,7 @@ public interface RateLimiter extends AutoCloseable {
      * For any access that is simultaneous or later of {@link #close()} call, this method returns immediately
      * with return value zero.
      *
-     * @return duration in microseconds that the caller should wait before start execution.
+     * @return duration in microseconds that it has blocked.
      * @throws InterruptedException when interrupted.
      */
     default long acquire() throws InterruptedException {
@@ -44,7 +44,7 @@ public interface RateLimiter extends AutoCloseable {
      * with return value zero.
      *
      * @param permits number of executions.
-     * @return duration in microseconds that the caller should wait before start execution.
+     * @return duration in microseconds that it has blocked.
      * @throws InterruptedException when interrupted.
      */
     long acquire(int permits) throws InterruptedException;

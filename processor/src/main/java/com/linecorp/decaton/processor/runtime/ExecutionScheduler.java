@@ -66,7 +66,7 @@ public class ExecutionScheduler implements AutoCloseable {
                       timeToWaitMs, scope, metadata);
             sleep(timeToWaitMs);
         }
-        return timeToWaitMs;
+        return Math.max(0, timeToWaitMs);
     }
 
     /**
@@ -87,13 +87,13 @@ public class ExecutionScheduler implements AutoCloseable {
         if (terminated()) {
             return;
         }
-        metrics.tasksSchedulingDelay.record(Math.max(0, timeWaitedMs), TimeUnit.MILLISECONDS);
+        metrics.tasksSchedulingDelay.record(timeWaitedMs, TimeUnit.MILLISECONDS);
 
         long throttledMicros = rateLimiter.acquire();
         if (terminated()) {
             return;
         }
-        metrics.partitionThrottledTime.record(Math.max(0, throttledMicros), TimeUnit.MICROSECONDS);
+        metrics.partitionThrottledTime.record(throttledMicros, TimeUnit.MICROSECONDS);
     }
 
     private boolean terminated() {
