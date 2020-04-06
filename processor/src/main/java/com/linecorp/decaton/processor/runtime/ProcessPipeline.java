@@ -61,10 +61,14 @@ public class ProcessPipeline<T> implements AutoCloseable {
     }
 
     public void scheduleThenProcess(TaskRequest request) throws InterruptedException {
+        DeferredCompletion completion = request.completion();
         final DecatonTask<T> extracted;
         try {
             extracted = extract(request);
         } catch (RuntimeException e) {
+            // Complete the offset to forward offsets
+            completion.complete();
+
             log.error("Dropping not-deserializable task [{}]", request.id(), e);
             taskMetrics.tasksDiscarded.increment();
             return;
@@ -77,7 +81,6 @@ public class ProcessPipeline<T> implements AutoCloseable {
         }
 
         CompletableFuture<Void> result = process(request, extracted);
-        DeferredCompletion completion = request.completion();
         result.whenComplete((r, e) -> {
             if (e != null) {
                 taskMetrics.tasksError.increment();
