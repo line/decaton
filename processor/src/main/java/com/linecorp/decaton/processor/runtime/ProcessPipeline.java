@@ -80,17 +80,7 @@ public class ProcessPipeline<T> implements AutoCloseable {
         DeferredCompletion completion = request.completion();
         result.whenComplete((r, e) -> {
             if (e != null) {
-                if (e instanceof InterruptedException && true /* terminated */) {
-                    log.info("Processing task interrupted during shutdown");
-                    // Usually an InterruptedException is considered as just one case of failure,
-                    // but if it occurred while shutting down it's highly likely indicating processing
-                    // had been interrupted regardless to it's logic failure.
-                    // In case we must don't want to mark a processing offset as completed as it can be
-                    // expected to be processed successfully after an instance restarts.
-                    return;
-                } else {
-                    taskMetrics.tasksError.increment();
-                }
+                taskMetrics.tasksError.increment();
             }
             completion.complete();
         });
