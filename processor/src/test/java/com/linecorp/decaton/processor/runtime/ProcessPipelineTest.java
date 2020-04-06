@@ -153,20 +153,24 @@ public class ProcessPipelineTest {
         when(extractorMock.extract(any()))
                 .thenReturn(new DecatonTask<>(null, TASK, TASK.toByteArray()));
 
+        TaskRequest request = taskRequest();
         // Checking exception doesn't bubble up
-        pipeline.scheduleThenProcess(taskRequest());
+        pipeline.scheduleThenProcess(request);
         verify(schedulerMock, never()).schedule(any());
         verify(processorMock, never()).process(any(), any());
+        verify(request.completion(), times(1)).complete();
     }
 
     @Test
     public void testScheduleThenProcess_ExtractThrows() throws InterruptedException {
         when(extractorMock.extract(any())).thenThrow(new RuntimeException());
 
+        TaskRequest request = taskRequest();
         // Checking exception doesn't bubble up
-        pipeline.scheduleThenProcess(taskRequest());
+        pipeline.scheduleThenProcess(request);
         verify(schedulerMock, never()).schedule(any());
         verify(processorMock, never()).process(any(), any());
+        verify(request.completion(), times(1)).complete();
     }
 
     @Test
