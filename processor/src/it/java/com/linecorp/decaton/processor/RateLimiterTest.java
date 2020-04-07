@@ -18,7 +18,6 @@ package com.linecorp.decaton.processor;
 
 import static org.junit.Assert.assertEquals;
 
-import java.time.Duration;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
@@ -31,7 +30,6 @@ import org.junit.Test;
 
 import com.linecorp.decaton.client.DecatonClient;
 import com.linecorp.decaton.processor.runtime.ProcessorSubscription;
-import com.linecorp.decaton.processor.runtime.RetryConfig;
 import com.linecorp.decaton.protobuf.ProtocolBuffersDeserializer;
 import com.linecorp.decaton.protocol.Sample.HelloTask;
 import com.linecorp.decaton.testing.KafkaClusterRule;
@@ -42,18 +40,15 @@ public class RateLimiterTest {
     public static KafkaClusterRule rule = new KafkaClusterRule();
 
     private String topicName;
-    private String retryTopicName;
 
     @Before
     public void setUp() {
         topicName = rule.admin().createRandomTopic(3, 3);
-        retryTopicName = topicName + "-retry";
-        rule.admin().createTopic(retryTopicName, 3, 3);
     }
 
     @After
     public void tearDown() {
-        rule.admin().deleteTopics(topicName, retryTopicName);
+        rule.admin().deleteTopics(topicName);
     }
 
     @Test(timeout = 30000)
@@ -76,7 +71,7 @@ public class RateLimiterTest {
                 rule.bootstrapServers(),
                 ProcessorsBuilder.consuming(topicName, new ProtocolBuffersDeserializer<>(HelloTask.parser()))
                                  .thenProcess(processor),
-                RetryConfig.withBackoff(Duration.ofMillis(10)),
+                null,
                 StaticPropertySupplier.of(rateProp));
              DecatonClient<HelloTask> client = TestUtils.client(topicName, rule.bootstrapServers())) {
 
