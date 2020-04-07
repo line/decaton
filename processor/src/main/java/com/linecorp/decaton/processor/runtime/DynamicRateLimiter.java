@@ -43,7 +43,18 @@ class DynamicRateLimiter implements RateLimiter {
 
     @Override
     public long acquire(int permits) throws InterruptedException {
-        return current.acquire(permits);
+        RateLimiter limiter;
+        long waitedTimeUs = 0;
+        do {
+            // We conservatively check if acquire has returned because of it closed by switch
+            // rather than complete waiting for the expected time.
+            // This might apply extra waiting time for callers but still better than taking risk
+            // of making it like a starting pistol that effectively synchronizes all threads and resume them
+            // exactly at the same time.
+            limiter = current;
+            waitedTimeUs += limiter.acquire(permits);
+        } while (limiter != current);
+        return waitedTimeUs;
     }
 
     @Override
