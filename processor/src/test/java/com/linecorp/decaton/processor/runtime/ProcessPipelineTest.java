@@ -210,10 +210,11 @@ public class ProcessPipelineTest {
             return null;
         }).when(schedulerMock).schedule(any());
 
+        TaskRequest request = taskRequest();
         ExecutorService executor = Executors.newFixedThreadPool(1);
         executor.execute(() -> {
             try {
-                pipeline.scheduleThenProcess(taskRequest());
+                pipeline.scheduleThenProcess(request);
             } catch (InterruptedException e) {
                 fail("Fail by exception: " + e);
             }
@@ -226,6 +227,7 @@ public class ProcessPipelineTest {
         // Checking it actually returns
         executor.awaitTermination(Long.MAX_VALUE, TimeUnit.SECONDS);
         verify(pipeline, never()).process(any(), any());
+        verify(request.completion(), never()).complete();
     }
 }
 
