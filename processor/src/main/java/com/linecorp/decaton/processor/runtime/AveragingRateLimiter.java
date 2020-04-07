@@ -69,7 +69,8 @@ class AveragingRateLimiter implements RateLimiter {
         return timer.elapsedMicros();
     }
 
-    private synchronized long reserve(int permits) {
+    // visible for testing
+    synchronized long reserve(int permits) {
         if (permits <= 0) {
             throw new IllegalArgumentException("Requested permits (%s) must be positive");
         }

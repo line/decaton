@@ -95,37 +95,35 @@ public class RateLimiterTest {
         final long rate = 10L;
         final long permitIntervalNanos = SECONDS.toNanos(1L) / rate;
 
-        RateLimiter limiter = spy(new AveragingRateLimiter(rate, 1.0d, timeSupplier));
+        AveragingRateLimiter limiter = new AveragingRateLimiter(rate, 1.0d, timeSupplier);
 
         AtomicInteger callCount = new AtomicInteger();
-        LongUnaryOperator expectedThrottlingMicros = currentNanos -> {
-            return NANOSECONDS.toMicros(
-                    Math.max(permitIntervalNanos * callCount.getAndIncrement() - currentNanos, 0L));
-        };
+        LongUnaryOperator expectedThrottlingMicros = currentNanos -> NANOSECONDS.toMicros(
+                Math.max(permitIntervalNanos * callCount.getAndIncrement() - currentNanos, 0L));
 
         // 1st call
         doReturn(0L).when(timeSupplier).getAsLong();
-        assertEquals(expectedThrottlingMicros.applyAsLong(0L), limiter.acquire());
+        assertEquals(expectedThrottlingMicros.applyAsLong(0L), limiter.reserve(1));
 
         // 2nd call, 9ms after started
         long currentNanos = MILLISECONDS.toNanos(9L);
         doReturn(currentNanos).when(timeSupplier).getAsLong();
-        assertEquals(expectedThrottlingMicros.applyAsLong(currentNanos), limiter.acquire());
+        assertEquals(expectedThrottlingMicros.applyAsLong(currentNanos), limiter.reserve(1));
 
         // 3rd call, 140ms after started
         currentNanos = MILLISECONDS.toNanos(140L);
         doReturn(currentNanos).when(timeSupplier).getAsLong();
-        assertEquals(expectedThrottlingMicros.applyAsLong(currentNanos), limiter.acquire());
+        assertEquals(expectedThrottlingMicros.applyAsLong(currentNanos), limiter.reserve(1));
 
         // 4th call, 150ms after started
         currentNanos = MILLISECONDS.toNanos(150L);
         doReturn(currentNanos).when(timeSupplier).getAsLong();
-        assertEquals(expectedThrottlingMicros.applyAsLong(currentNanos), limiter.acquire());
+        assertEquals(expectedThrottlingMicros.applyAsLong(currentNanos), limiter.reserve(1));
 
         // 5th call, 500ms after started
         currentNanos = MILLISECONDS.toNanos(500L);
         doReturn(currentNanos).when(timeSupplier).getAsLong();
-        assertEquals(expectedThrottlingMicros.applyAsLong(currentNanos), limiter.acquire());
+        assertEquals(expectedThrottlingMicros.applyAsLong(currentNanos), limiter.reserve(1));
     }
 
     @Test(timeout = 2000)
