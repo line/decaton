@@ -27,8 +27,7 @@ public interface RateLimiter extends AutoCloseable {
     /**
      * Acquire single execution from this limiter.
      * Blocks until next execution is permitted and returns duration in microseconds that it has blocked.
-     * For any access that is simultaneous or later of {@link #close()} call, this method returns immediately
-     * with return value zero.
+     * For any access that is simultaneous or later of {@link #close()} call, this method returns immediately.
      *
      * @return duration in microseconds that it has blocked.
      * @throws InterruptedException when interrupted.
@@ -40,8 +39,7 @@ public interface RateLimiter extends AutoCloseable {
     /**
      * Acquire given number of executions from this limiter for execution.
      * Blocks until next execution is permitted and returns duration in microseconds that it has blocked.
-     * For any access that is simultaneous or later of {@link #close()} call, this method returns immediately
-     * with return value zero.
+     * For any access that is simultaneous or later of {@link #close()} call, this method returns immediately.
      *
      * @param permits number of executions.
      * @return duration in microseconds that it has blocked.

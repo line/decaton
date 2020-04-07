@@ -30,6 +30,8 @@ import java.util.Locale;
 import java.util.concurrent.CountDownLatch;
 import java.util.function.LongSupplier;
 
+import com.linecorp.decaton.processor.runtime.Utils.Timer;
+
 // based on SmoothBursty limiter of guava library
 class AveragingRateLimiter implements RateLimiter {
     private final long startNanos;
@@ -55,14 +57,16 @@ class AveragingRateLimiter implements RateLimiter {
 
     @Override
     public long acquire(int permits) throws InterruptedException {
-        long microsToWait = reserve(permits);
-        if (microsToWait > 0L) {
-            latch.await(microsToWait, MICROSECONDS);
-        }
         if (terminated()) {
             return 0;
         }
-        return microsToWait;
+        long microsToWait = reserve(permits);
+        if (microsToWait <= 0L) {
+            return 0L;
+        }
+        Timer timer = Utils.timer();
+        latch.await(microsToWait, MICROSECONDS);
+        return timer.elapsedMicros();
     }
 
     private synchronized long reserve(int permits) {
