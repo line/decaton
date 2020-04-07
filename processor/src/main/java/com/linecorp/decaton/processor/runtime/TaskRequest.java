@@ -33,13 +33,14 @@ class TaskRequest {
     private final DeferredCompletion completion;
     private final String key;
     private final String id;
+    @ToString.Exclude
     private byte[] rawRequestBytes;
 
-    public TaskRequest(TopicPartition topicPartition,
-                       long recordOffset,
-                       DeferredCompletion completion,
-                       String key,
-                       byte[] rawRequestBytes) {
+    TaskRequest(TopicPartition topicPartition,
+                long recordOffset,
+                DeferredCompletion completion,
+                String key,
+                byte[] rawRequestBytes) {
         this.topicPartition = topicPartition;
         this.recordOffset = recordOffset;
         this.completion = completion;

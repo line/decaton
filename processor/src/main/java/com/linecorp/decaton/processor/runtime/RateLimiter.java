@@ -24,15 +24,39 @@ public interface RateLimiter extends AutoCloseable {
     long PAUSED = 0L;
     long MAX_RATE = SECONDS.toMicros(1L);
 
+    /**
+     * Acquire single execution from this limiter.
+     * Blocks until next execution is permitted and returns duration in microseconds that it has blocked.
+     * For any access that is simultaneous or later of {@link #close()} call, this method returns immediately
+     * with return value zero.
+     *
+     * @return duration in microseconds that it has blocked.
+     * @throws InterruptedException when interrupted.
+     */
     default long acquire() throws InterruptedException {
         return acquire(1);
     }
 
+    /**
+     * Acquire given number of executions from this limiter for execution.
+     * Blocks until next execution is permitted and returns duration in microseconds that it has blocked.
+     * For any access that is simultaneous or later of {@link #close()} call, this method returns immediately
+     * with return value zero.
+     *
+     * @param permits number of executions.
+     * @return duration in microseconds that it has blocked.
+     * @throws InterruptedException when interrupted.
+     */
     long acquire(int permits) throws InterruptedException;
 
     @Override
     default void close() throws Exception {}
 
+    /**
+     * Create a new {@link RateLimiter} with appropriate implementation based on given parameter.
+     * @param permitsPerSecond the number of executions to permit for every second.
+     * @return a {@link RateLimiter}.
+     */
     static RateLimiter create(long permitsPerSecond) {
         if (permitsPerSecond == PAUSED) {
             return new InfiniteBlocker();

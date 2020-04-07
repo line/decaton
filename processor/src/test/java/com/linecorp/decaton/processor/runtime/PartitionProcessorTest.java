@@ -20,6 +20,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -60,11 +61,10 @@ public class PartitionProcessorTest {
             if (count.incrementAndGet() == 3) {
                 throw new RuntimeException("exception");
             }
-            return null;
+            return mock(ProcessPipeline.class);
         }).when(processors).newPipeline(any(), any(), any());
 
         List<ProcessorUnit> units = new ArrayList<>();
-
         try {
             new PartitionProcessor(scope, processors) {
                 @Override
@@ -79,7 +79,9 @@ public class PartitionProcessorTest {
         }
 
         assertEquals(2, units.size());
-        verify(units.get(0), times(1)).close();
-        verify(units.get(1), times(1)).close();
+        verify(units.get(0), times(1)).initiateShutdown();
+        verify(units.get(1), times(1)).initiateShutdown();
+        verify(units.get(0), times(1)).awaitShutdown();
+        verify(units.get(1), times(1)).awaitShutdown();
     }
 }

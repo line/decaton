@@ -16,6 +16,7 @@
 
 package com.linecorp.decaton.processor.runtime;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
@@ -87,88 +88,22 @@ public class ProcessorUnitTest {
         unit.close();
 
         verify(pipeline, times(1)).scheduleThenProcess(taskRequest);
-        verify(completion, times(1)).complete();
     }
 
     @Test(timeout = 1000)
-    public void testProcessDeferredCompletion() throws Exception {
-        CountDownLatch latch = new CountDownLatch(1);
+    public void testProcess_PIPELINE_THREW() throws Exception {
+        CountDownLatch processLatch = new CountDownLatch(2);
         doAnswer(invocation -> {
-            latch.countDown();
-            return new CompletableFuture<>();
-        }).when(pipeline).scheduleThenProcess(taskRequest);
-
-        unit.putTask(taskRequest);
-        latch.await();
-        unit.close();
-
-        verify(pipeline, times(1)).scheduleThenProcess(taskRequest);
-        verify(completion, times(0)).complete();
-    }
-
-    @Test(timeout = 1000)
-    public void testProcessThrowExceptionNotDuringShutdown() throws Exception {
-        CountDownLatch latch = new CountDownLatch(2);
-        doAnswer(invocation -> {
-            latch.countDown();
-            throw new RuntimeException("runtime exception");
-        }).when(pipeline).scheduleThenProcess(taskRequest);
+            processLatch.countDown();
+            throw new RuntimeException("something happened");
+        }).when(pipeline).scheduleThenProcess(any());
 
         unit.putTask(taskRequest);
         unit.putTask(taskRequest);
-        latch.await();
+        processLatch.await();
         unit.close();
 
         // Even if the first process throw it should keep processing it
         verify(pipeline, times(2)).scheduleThenProcess(taskRequest);
-        // Hence completion should occur even twice
-        verify(completion, times(2)).complete();
-    }
-
-    @Test(timeout = 1000)
-    public void testProcessThrowRuntimeExceptionDuringShutdown() throws Exception {
-        CountDownLatch taskPutLatch = new CountDownLatch(1);
-        CountDownLatch firstProcessLatch = new CountDownLatch(1);
-        doAnswer(invocation -> {
-            taskPutLatch.await();
-            unit.initiateShutdown();
-            firstProcessLatch.countDown();
-            throw new RuntimeException("runtime exception");
-        }).when(pipeline).scheduleThenProcess(taskRequest);
-
-        unit.putTask(taskRequest);
-        unit.putTask(taskRequest);
-        taskPutLatch.countDown();
-        firstProcessLatch.await();
-        unit.close();
-
-        // The first process throw and at the time shutdown has been started then it should abort there.
-        verify(pipeline, times(1)).scheduleThenProcess(taskRequest);
-        // When process throw RuntimeException during shutdown sequence we still consider the task as completed.
-        verify(completion, times(1)).complete();
-    }
-
-    @Test(timeout = 1000)
-    public void testProcessThrowInterruptedExceptionDuringShutdown() throws Exception {
-        CountDownLatch taskPutLatch = new CountDownLatch(1);
-        CountDownLatch firstProcessLatch = new CountDownLatch(1);
-        doAnswer(invocation -> {
-            taskPutLatch.await();
-            unit.initiateShutdown();
-            firstProcessLatch.countDown();
-            throw new InterruptedException();
-        }).when(pipeline).scheduleThenProcess(taskRequest);
-
-        unit.putTask(taskRequest);
-        unit.putTask(taskRequest);
-        taskPutLatch.countDown();
-        firstProcessLatch.await();
-        unit.close();
-
-        // The first process throw and at the time shutdown has been started then it should abort there.
-        verify(pipeline, times(1)).scheduleThenProcess(taskRequest);
-        // When process throw InterruptedException during shutdown sequence we shouldn't consider the task
-        // completed.
-        verify(completion, times(0)).complete();
     }
 }

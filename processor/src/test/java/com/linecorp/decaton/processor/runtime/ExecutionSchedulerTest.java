@@ -17,7 +17,9 @@
 package com.linecorp.decaton.processor.runtime;
 
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
@@ -25,6 +27,9 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
@@ -33,6 +38,7 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
 
@@ -53,13 +59,14 @@ public class ExecutionSchedulerTest {
     @Mock
     private Supplier<Long> currentTimeMillis;
 
-    @Mock
-    private RateLimiter rateLimiter;
+    @Spy
+    private final RateLimiter rateLimiter = RateLimiter.create(RateLimiter.PAUSED);
 
     private ExecutionScheduler scheduler;
 
     @Before
     public void setUp() {
+        doAnswer(invocation -> System.currentTimeMillis()).when(currentTimeMillis).get();
         scheduler = spy(new ExecutionScheduler(scope, rateLimiter, currentTimeMillis));
     }
 
@@ -74,7 +81,7 @@ public class ExecutionSchedulerTest {
     }
 
     @Test(timeout = 5000)
-    public void testScheduledProcess_DELAYED() throws InterruptedException {
+    public void testScheduledProcess_DELAY_BY_METADATA() throws InterruptedException {
         doReturn(1L).when(currentTimeMillis).get();
         long t0 = System.nanoTime();
         scheduler.waitOnScheduledTime(TaskMetadata.builder().scheduledTimeMillis(500).build());
@@ -82,5 +89,64 @@ public class ExecutionSchedulerTest {
 
         verify(scheduler, times(1)).sleep(499);
         assertTrue(TimeUnit.NANOSECONDS.toMillis(elapsed) >= 499);
+    }
+
+    @Test(timeout = 5000)
+    public void testScheduledProcess_TERMINATE_AT_METADATA() throws Exception {
+        CountDownLatch atSleepLatch = new CountDownLatch(1);
+        doAnswer(invocation -> {
+            atSleepLatch.countDown();
+            return invocation.callRealMethod();
+        }).when(scheduler).sleep(anyLong());
+
+        ExecutorService executor = Executors.newFixedThreadPool(1);
+        executor.execute(() -> {
+            try {
+                scheduler.schedule(TaskMetadata.builder().scheduledTimeMillis(Long.MAX_VALUE).build());
+            } catch (InterruptedException e) {
+                fail("Fail by exception " + e);
+            }
+        });
+        atSleepLatch.await();
+        scheduler.close();
+
+        // Checking the above call actually returns
+        executor.shutdown();
+        executor.awaitTermination(Long.MAX_VALUE, TimeUnit.SECONDS);
+        verify(rateLimiter, never()).acquire();
+    }
+
+    @Test(timeout = 5000)
+    public void testScheduledProcess_TERMINATE_AT_LIMITER() throws Exception {
+        CountDownLatch atAcquire = new CountDownLatch(1);
+        doAnswer(invocation -> {
+            atAcquire.countDown();
+            return invocation.callRealMethod();
+        }).when(rateLimiter).acquire();
+
+        ExecutorService executor = Executors.newFixedThreadPool(1);
+        executor.execute(() -> {
+            try {
+                scheduler.schedule(TaskMetadata.builder().scheduledTimeMillis(0).build());
+            } catch (InterruptedException e) {
+                fail("Fail by exception " + e);
+            }
+        });
+        atAcquire.await();
+        scheduler.close();
+        rateLimiter.close();
+
+        // Checking the above call actually returns
+        executor.shutdown();
+        executor.awaitTermination(Long.MAX_VALUE, TimeUnit.SECONDS);
+    }
+
+    @Test(timeout = 5000)
+    public void testScheduledProcess_TERMINATE_AT_ENTER() throws Exception {
+        scheduler.close();
+        rateLimiter.close();
+
+        // Checking the above call actually returns
+        scheduler.schedule(TaskMetadata.builder().scheduledTimeMillis(Long.MAX_VALUE).build());
     }
 }

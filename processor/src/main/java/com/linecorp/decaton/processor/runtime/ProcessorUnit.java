@@ -16,24 +16,20 @@
 
 package com.linecorp.decaton.processor.runtime;
 
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.kafka.common.TopicPartition;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
-import com.linecorp.decaton.processor.DeferredCompletion;
 import com.linecorp.decaton.processor.metrics.Metrics;
 import com.linecorp.decaton.processor.metrics.Metrics.ResourceUtilizationMetrics;
 import com.linecorp.decaton.processor.runtime.Utils.Timer;
 
-public class ProcessorUnit implements AsyncShutdownable {
-    private static final Logger logger = LoggerFactory.getLogger(ProcessorUnit.class);
+import lombok.extern.slf4j.Slf4j;
 
-    private final ThreadScope scope;
+@Slf4j
+public class ProcessorUnit implements AsyncShutdownable {
     private final ProcessPipeline<?> pipeline;
     private final ExecutorService executor;
 
@@ -42,7 +38,6 @@ public class ProcessorUnit implements AsyncShutdownable {
     private volatile boolean terminated;
 
     public ProcessorUnit(ThreadScope scope, ProcessPipeline<?> pipeline) {
-        this.scope = scope;
         this.pipeline = pipeline;
 
         executor = Executors.newSingleThreadExecutor(
@@ -68,37 +63,18 @@ public class ProcessorUnit implements AsyncShutdownable {
             return;
         }
 
-        CompletableFuture<Void> processResult = null;
         Timer timer = Utils.timer();
         try {
-            processResult = pipeline.scheduleThenProcess(request);
+            pipeline.scheduleThenProcess(request);
         } catch (Exception e) {
             if (e instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
             }
-            processResult = new CompletableFuture<>();
-            processResult.completeExceptionally(e);
-
-            logger.error("Uncaught exception thrown by processor {} for task {}",
-                         scope, request, e);
+            log.error("Error while processing request {}. Offset of this will left uncommitted", request);
         } finally {
-            // In practice this will never be false.
-            // This is just for stopping IDE complaining about potential NPE.
-            if (processResult != null) {
-                DeferredCompletion completion = request.completion();
-                processResult.whenComplete((r, e) -> {
-                    if (e instanceof InterruptedException && terminated) {
-                        logger.info("process interrupted during shutdown");
-                        // Usually an InterruptedException is considered as just one case of failure,
-                        // but if it occurred while shutting down it's highly likely indicating processing
-                        // had been interrupted regardless to it's logic failure.
-                        // In case we must don't want to mark a processing offset as completed as it can be
-                        // expected to be processed successfully after an instance restarts.
-                        return;
-                    }
-                    completion.complete();
-                });
-            }
+            // This metric measures the total amount of time the processors were processing tasks including time
+            // for scheduling those tasks and is used to refer processor threads utilization, so it needs to measure
+            // entire time of schedule and process.
             metrics.processorProcessedTime.record(timer.duration());
         }
     }
