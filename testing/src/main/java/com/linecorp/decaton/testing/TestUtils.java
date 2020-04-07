@@ -26,6 +26,7 @@ import com.google.protobuf.MessageLite;
 
 import com.linecorp.decaton.client.DecatonClient;
 import com.linecorp.decaton.processor.ProcessorsBuilder;
+import com.linecorp.decaton.processor.PropertySupplier;
 import com.linecorp.decaton.processor.SubscriptionStateListener.State;
 import com.linecorp.decaton.processor.runtime.ProcessorSubscription;
 import com.linecorp.decaton.processor.runtime.RetryConfig;
@@ -54,22 +55,29 @@ public class TestUtils {
 
     public static <T> ProcessorSubscription subscription(String bootstrapServers,
                                                          ProcessorsBuilder<T> processorsBuilder,
-                                                         RetryConfig retryConfig) {
+                                                         RetryConfig retryConfig,
+                                                         PropertySupplier propertySupplier) {
         Properties props = new Properties();
         props.setProperty("bootstrap.servers", bootstrapServers);
         props.setProperty("client.id", "test-processor-" + sequence());
         props.setProperty("group.id", "test-group");
         CountDownLatch initializationLatch = new CountDownLatch(1);
-        ProcessorSubscription subscription = SubscriptionBuilder.newBuilder("test-subscription")
-                                                                .consumerConfig(props)
-                                                                .processorsBuilder(processorsBuilder)
-                                                                .stateListener(state -> {
-                                                                    if (state == State.RUNNING) {
-                                                                        initializationLatch.countDown();
-                                                                    }
-                                                                })
-                                                                .enableRetry(retryConfig)
-                                                                .buildAndStart();
+        SubscriptionBuilder builder = SubscriptionBuilder.newBuilder("test-subscription")
+                                                                     .consumerConfig(props)
+                                                                     .processorsBuilder(processorsBuilder)
+                                                                     .stateListener(state -> {
+                                                                         if (state == State.RUNNING) {
+                                                                             initializationLatch.countDown();
+                                                                         }
+                                                                     });
+        if (retryConfig != null) {
+            builder.enableRetry(retryConfig);
+        }
+        if (propertySupplier != null) {
+            builder.properties(propertySupplier);
+        }
+        ProcessorSubscription subscription = builder.buildAndStart();
+
         try {
             initializationLatch.await();
         } catch (InterruptedException e) {
