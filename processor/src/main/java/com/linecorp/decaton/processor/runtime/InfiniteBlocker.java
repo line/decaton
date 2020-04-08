@@ -29,11 +29,11 @@ class InfiniteBlocker implements RateLimiter {
 
     @Override
     public long acquire(int permits) throws InterruptedException {
-        Timer timer = Utils.timer();
-        latch.await();
         if (terminated()) {
             return 0;
         }
+        Timer timer = Utils.timer();
+        latch.await();
         return timer.elapsedMicros();
     }
 
