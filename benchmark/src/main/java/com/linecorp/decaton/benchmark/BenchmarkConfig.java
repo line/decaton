@@ -24,34 +24,34 @@ import lombok.experimental.Accessors;
 @Value
 @Accessors(fluent = true)
 public class BenchmarkConfig {
-	/**
-	 * Title of this benchmark.
-	 */
-	String title;
-	/**
-	 * Fully-qualified runner class name that implements {@link Runner} interface.
-	 */
-	String runner;
-	/**
-	 * The number of tasks to apply for testing.
-	 */
-	int tasks;
-	/**
-	 * The number of tasks to apply before start measuring performance for warmup execution (considering JIT,
-	 * class loading...).
-	 */
-	int warmupTasks;
-	/**
-	 * Max latency to simulate as processing duration. Latencies between 0 to this value are randomly generated.
-	 */
-	int maxLatencyMs;
-	/**
-	 * Optional bootstrap.servers to specify the cluster to use for testing. Otherwise local embedded cluster is
-	 * used.
-	 */
-	String bootstrapServers;
-	/**
-	 * Implementation specific key-value parameters that are supported by {@link Runner} implementation.
-	 */
-	Map<String, String> configs;
+    /**
+     * Title of this benchmark.
+     */
+    String title;
+    /**
+     * Fully-qualified runner class name that implements {@link Runner} interface.
+     */
+    String runner;
+    /**
+     * The number of tasks to apply for testing.
+     */
+    int tasks;
+    /**
+     * The number of tasks to apply before start measuring performance for warmup execution (considering JIT,
+     * class loading...).
+     */
+    int warmupTasks;
+    /**
+     * Max latency to simulate as processing duration. Latencies between 0 to this value are randomly generated.
+     */
+    int maxLatencyMs;
+    /**
+     * Optional bootstrap.servers to specify the cluster to use for testing. Otherwise local embedded cluster is
+     * used.
+     */
+    String bootstrapServers;
+    /**
+     * Implementation specific key-value parameters that are supported by {@link Runner} implementation.
+     */
+    Map<String, String> params;
 }

@@ -24,38 +24,38 @@ import lombok.Value;
 import lombok.experimental.Accessors;
 
 public interface Runner extends AutoCloseable {
-	@Value
-	@Accessors(fluent = true)
-	class Config {
-		String bootstrapServers;
-		String topic;
-		Deserializer<Task> taskDeserializer;
-		Map<String, String> parameters;
-	}
+    @Value
+    @Accessors(fluent = true)
+    class Config {
+        String bootstrapServers;
+        String topic;
+        Deserializer<Task> taskDeserializer;
+        Map<String, String> parameters;
+    }
 
-	/**
-	 * Initialize consumer for start consuming the topic.
-	 * The underlying implementation must be configured to consume {@link Config#topic} from
-	 * {@link Config#bootstrapServers}, using {@link Config#taskDeserializer} to deserialize read record values
-	 * and pass it immediately to {@link Recording#process(Task)} which is given by an argument.
-	 *
-	 * @param config runner configurations.
-	 * @param recording recording for this benchmark.
-	 * @param resourceTracker resource tracking interface (use is optional).
-	 * @throws InterruptedException whenever appropriate.
-	 */
-	void init(Config config, Recording recording, ResourceTracker resourceTracker) throws InterruptedException;
+    /**
+     * Initialize consumer for start consuming the topic.
+     * The underlying implementation must be configured to consume {@link Config#topic} from
+     * {@link Config#bootstrapServers}, using {@link Config#taskDeserializer} to deserialize read record values
+     * and pass it immediately to {@link Recording#process(Task)} which is given by an argument.
+     *
+     * @param config runner configurations.
+     * @param recording recording for this benchmark.
+     * @param resourceTracker resource tracking interface (use is optional).
+     * @throws InterruptedException whenever appropriate.
+     */
+    void init(Config config, Recording recording, ResourceTracker resourceTracker) throws InterruptedException;
 
-	@Override
-	default void close() throws Exception {
-		// noop by default
-	}
+    @Override
+    default void close() throws Exception {
+        // noop by default
+    }
 
-	static Runner fromClassName(String className) {
-		try {
-			return Class.forName(className).asSubclass(Runner.class).newInstance();
-		} catch (IllegalAccessException | ClassNotFoundException | InstantiationException e) {
-			throw new RuntimeException("error loading runner class" + className, e);
-		}
-	}
+    static Runner fromClassName(String className) {
+        try {
+            return Class.forName(className).asSubclass(Runner.class).newInstance();
+        } catch (IllegalAccessException | ClassNotFoundException | InstantiationException e) {
+            throw new RuntimeException("error loading runner class" + className, e);
+        }
+    }
 }

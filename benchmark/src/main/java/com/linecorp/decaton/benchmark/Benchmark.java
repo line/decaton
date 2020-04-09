@@ -44,20 +44,20 @@ public class Benchmark {
         return TemporaryTopic.create(bootstrapServers, topic);
     }
 
-    void generateWorkload(String bootstrapServers, String topic) throws InterruptedException {
+    private void generateWorkload(String bootstrapServers, String topic) throws InterruptedException {
         RecordsGenerator generator = new RecordsGenerator(config.maxLatencyMs());
         int totalTasks = config.tasks() + config.warmupTasks();
         log.info("Generate {} tasks in total wheres {} are for warmup", totalTasks, config.warmupTasks());
         generator.generate(bootstrapServers, topic, totalTasks);
     }
 
-    BenchmarkResult runRecording(String bootstrapServers, String topic) throws InterruptedException {
+    private BenchmarkResult runRecording(String bootstrapServers, String topic) throws InterruptedException {
         log.info("Loading runner {}", config.runner());
         Runner runner = Runner.fromClassName(config.runner());
         Config config = new Config(bootstrapServers,
                                    topic,
                                    new KafkaDeserializer(),
-                                   this.config.configs());
+                                   this.config.params());
 
         Recording recording = new Recording(this.config.tasks(), this.config.warmupTasks());
         ResourceTracker resourceTracker = new ResourceTracker();

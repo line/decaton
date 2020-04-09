@@ -58,7 +58,7 @@ public class BenchmarkResult {
         pw.printf("# Runner: %s\n", config.runner());
         pw.printf("# Tasks: %d (warmup: %d)\n", config.tasks(), config.warmupTasks());
         pw.printf("# Simulated Latency: 0..%d\n", config.maxLatencyMs());
-        for (Entry<String, String> e : config.configs().entrySet()) {
+        for (Entry<String, String> e : config.params().entrySet()) {
             pw.printf("# Param: %s=%s\n", e.getKey(), e.getValue());
         }
 
