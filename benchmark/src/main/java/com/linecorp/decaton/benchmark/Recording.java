@@ -23,7 +23,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import com.linecorp.decaton.benchmark.BenchmarkResult.Durations;
+import com.linecorp.decaton.benchmark.BenchmarkResult.Performance.Durations;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -106,7 +106,7 @@ public class Recording {
         completeLatch.await(timeout, unit);
     }
 
-    public BenchmarkResult computeResult() {
+    public BenchmarkResult.Performance computeResult() {
         Duration execTime = Duration.ofMillis(completeTimeMs - startTimeMs);
         double throughput = (double) tasks / execTime.toMillis() * 1000;
         long maxDeliveryLatency = children.stream()
@@ -117,6 +117,6 @@ public class Recording {
 
         Durations deliveryLatencies = new Durations(Duration.ofMillis(avgDeliveryLatency),
                                                     Duration.ofMillis(maxDeliveryLatency));
-        return new BenchmarkResult(tasks, execTime, throughput, deliveryLatencies);
+        return new BenchmarkResult.Performance(tasks, execTime, throughput, deliveryLatencies);
     }
 }

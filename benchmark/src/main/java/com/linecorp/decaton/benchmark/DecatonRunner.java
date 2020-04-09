@@ -48,7 +48,8 @@ public class DecatonRunner implements Runner {
     private ProcessorSubscription subscription;
 
     @Override
-    public void init(Config config, Recording recording) throws InterruptedException {
+    public void init(Config config, Recording recording, ResourceTracker resourceTracker)
+            throws InterruptedException {
         Properties props = new Properties();
         props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, config.bootstrapServers());
         props.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "decaton-benchmark");
@@ -78,14 +79,19 @@ public class DecatonRunner implements Runner {
                                                                 TaskMetadata.builder().build(), task, bytes);
                                                     })
                                          .thenProcess(
-                                                 () -> (ctx, task) -> recording.process(task),
+                                                 () -> (ctx, task) -> {
+                                                     resourceTracker.track(Thread.currentThread().getId());
+                                                     recording.process(task);
+                                                 },
                                                  ProcessorScope.THREAD))
                 .stateListener(state -> {
                     if (state == SubscriptionStateListener.State.RUNNING) {
                         startLatch.countDown();
                     }
                 })
-                .buildAndStart();
+                .build();
+        resourceTracker.track(subscription.getId());
+        subscription.start();
 
         startLatch.await();
     }

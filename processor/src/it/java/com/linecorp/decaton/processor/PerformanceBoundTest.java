@@ -31,7 +31,7 @@ import com.linecorp.decaton.benchmark.DecatonRunner;
 
 public class PerformanceBoundTest {
     static final int NUM_TASKS = 10_000;
-    static final int NUM_WARMUP_TASKS = 100;
+    static final int NUM_WARMUP_TASKS = 1000;
     static final int MAX_LATENCY_MS = 10;
 
     static final int THROUGHPUT_BOUND = 3000;
@@ -46,6 +46,6 @@ public class PerformanceBoundTest {
         Benchmark benchmark = new Benchmark(config);
         BenchmarkResult result = benchmark.run();
 
-        assertThat((int) result.throughput(), greaterThanOrEqualTo(THROUGHPUT_BOUND));
+        assertThat((int) result.performance().throughput(), greaterThanOrEqualTo(THROUGHPUT_BOUND));
     }
 }

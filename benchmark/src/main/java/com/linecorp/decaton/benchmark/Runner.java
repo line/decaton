@@ -41,9 +41,10 @@ public interface Runner extends AutoCloseable {
 	 *
 	 * @param config runner configurations.
 	 * @param recording recording for this benchmark.
+	 * @param resourceTracker resource tracking interface (use is optional).
 	 * @throws InterruptedException whenever appropriate.
 	 */
-	void init(Config config, Recording recording) throws InterruptedException;
+	void init(Config config, Recording recording, ResourceTracker resourceTracker) throws InterruptedException;
 
 	@Override
 	default void close() throws Exception {

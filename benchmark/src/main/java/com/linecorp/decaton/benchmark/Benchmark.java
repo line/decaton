@@ -16,9 +16,13 @@
 
 package com.linecorp.decaton.benchmark;
 
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
+import com.linecorp.decaton.benchmark.BenchmarkResult.Performance;
+import com.linecorp.decaton.benchmark.BenchmarkResult.ResourceUsage;
+import com.linecorp.decaton.benchmark.ResourceTracker.TrackingValues;
 import com.linecorp.decaton.benchmark.Runner.Config;
 import com.linecorp.decaton.benchmark.Task.KafkaDeserializer;
 import com.linecorp.decaton.testing.EmbeddedKafkaCluster;
@@ -47,7 +51,7 @@ public class Benchmark {
         generator.generate(bootstrapServers, topic, totalTasks);
     }
 
-    Recording runRecording(String bootstrapServers, String topic) throws InterruptedException {
+    BenchmarkResult runRecording(String bootstrapServers, String topic) throws InterruptedException {
         log.info("Loading runner {}", config.runner());
         Runner runner = Runner.fromClassName(config.runner());
         Config config = new Config(bootstrapServers,
@@ -56,11 +60,14 @@ public class Benchmark {
                                    this.config.configs());
 
         Recording recording = new Recording(this.config.tasks(), this.config.warmupTasks());
+        ResourceTracker resourceTracker = new ResourceTracker();
         log.info("Initializing runner {}", this.config.runner());
-        runner.init(config, recording);
+        runner.init(config, recording, resourceTracker);
+        final Map<Long, TrackingValues> resourceUsageReport;
         try {
             generateWorkload(bootstrapServers, topic);
             recording.await(3, TimeUnit.MINUTES);
+            resourceUsageReport = resourceTracker.report();
         } finally {
             try {
                 runner.close();
@@ -69,12 +76,26 @@ public class Benchmark {
             }
         }
 
-        return recording;
+        return assembleResult(recording, resourceUsageReport);
+    }
+
+    private static BenchmarkResult assembleResult(Recording recording,
+                                                  Map<Long, TrackingValues> resourceUsageReport) {
+        Performance performance = recording.computeResult();
+        int threads = resourceUsageReport.size();
+        TrackingValues resourceValues =
+                resourceUsageReport.values().stream()
+                                   .reduce(new TrackingValues(0, 0),
+                                           (a, b) -> new TrackingValues(
+                                                   a.cpuTime() + b.cpuTime(),
+                                                   a.allocatedBytes() + b.allocatedBytes()));
+        ResourceUsage resource = new ResourceUsage(threads,
+                                                   resourceValues.cpuTime(),
+                                                   resourceValues.allocatedBytes());
+        return new BenchmarkResult(performance, resource);
     }
 
     public BenchmarkResult run() throws InterruptedException {
-        final Recording recording;
-
         EmbeddedZooKeeper zooKeeper = null;
         EmbeddedKafkaCluster kafkaCluster = null;
         String bootstrapServers = config.bootstrapServers();
@@ -84,26 +105,25 @@ public class Benchmark {
             bootstrapServers = kafkaCluster.bootstrapServers();
         }
         log.info("Using kafka clusters: {}", bootstrapServers);
+
         try {
             TemporaryTopic topic = createTempTopic(bootstrapServers);
             try {
-                recording = runRecording(bootstrapServers, topic.topic());
+                return runRecording(bootstrapServers, topic.topic());
             } finally {
                 try {
                     topic.close();
+                    // Need to wait a while until all replicas of the deleted topic to disappear from brokers.
+                    Thread.sleep(1000);
                 } catch (Exception e) {
                     log.warn("Failed to cleanup temporary topic {}", topic.topic(), e);
                 }
             }
-
-            Thread.sleep(1000);
         } finally {
             if (kafkaCluster != null) {
                 kafkaCluster.close();
                 zooKeeper.close();
             }
         }
-
-        return recording.computeResult();
     }
 }
