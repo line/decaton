@@ -42,9 +42,11 @@ public class RecordsGenerator {
         latencies = new int[LATENCY_CYCLE];
         // Use maxProcessingLatencyMs as the seed so that we always get consistent
         // set of latencies.
-        Random random = new Random(maxProcessLatencyMs);
-        for (int i = 0; i < latencies.length; i++) {
-            latencies[i] = random.nextInt(maxProcessLatencyMs);
+        if (maxProcessLatencyMs > 0) {
+            Random random = new Random(maxProcessLatencyMs);
+            for (int i = 0; i < latencies.length; i++) {
+                latencies[i] = random.nextInt(maxProcessLatencyMs);
+            }
         }
     }
 

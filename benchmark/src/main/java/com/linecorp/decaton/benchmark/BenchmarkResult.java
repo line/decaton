@@ -57,20 +57,20 @@ public class BenchmarkResult {
         pw.printf("=== %s (%d tasks) ===\n", config.title(), performance.totalTasks);
         pw.printf("# Runner: %s\n", config.runner());
         pw.printf("# Tasks: %d (warmup: %d)\n", config.tasks(), config.warmupTasks());
-        pw.printf("# Simulated Latency: 0..%d\n", config.maxLatencyMs());
+        pw.printf("# Simulated Latency(ms): 0..%d\n", config.maxLatencyMs());
         for (Entry<String, String> e : config.params().entrySet()) {
             pw.printf("# Param: %s=%s\n", e.getKey(), e.getValue());
         }
 
         pw.printf("--- Performance ---\n");
-        pw.printf("Execution Time (ms): %.2f\n", performance.executionTime.toNanos() / 1_000_000.0);
+        pw.printf("Execution Time(ms): %.2f\n", performance.executionTime.toNanos() / 1_000_000.0);
         pw.printf("Throughput: %.2f tasks/sec\n", performance.throughput);
         pw.printf("Delivery Latency(ms): mean=%d max=%d\n",
                   performance.deliveryLatency.avg.toMillis(), performance.deliveryLatency.max.toMillis());
 
         pw.printf("--- Resource Usage (%d threads observed) ---\n", resource.threads);
         pw.printf("Cpu Time(ms): %.2f\n", resource.totalCpuTimeNs / 1_000_000.0);
-        pw.printf("Allocated Heap (KiB): %.2f\n", resource.totalAllocatedBytes / 1024.0);
+        pw.printf("Allocated Heap(KiB): %.2f\n", resource.totalAllocatedBytes / 1024.0);
 
         pw.flush();
     }

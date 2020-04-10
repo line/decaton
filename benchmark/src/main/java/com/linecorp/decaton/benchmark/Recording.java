@@ -48,7 +48,10 @@ public class Recording {
 
             // Simulate processing latency by sleeping a while
             try {
-                Thread.sleep(task.getProcessLatency());
+                int latency = task.getProcessLatency();
+                if (latency > 0) {
+                    Thread.sleep(latency);
+                }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 throw new RuntimeException("interrupted", e);
