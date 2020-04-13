@@ -54,10 +54,9 @@ public class PerformanceBoundTest {
             BenchmarkResult result = benchmark.run();
             results.add(result);
         }
-        System.err.println("results = " + results);
         BenchmarkResult result = BenchmarkResult.aggregateAverage(results);
 
-        assertThat((int) result.performance().throughput(), greaterThanOrEqualTo(20000));
+        assertThat((int) result.performance().throughput(), greaterThanOrEqualTo(10000));
     }
 
     @Test
@@ -73,9 +72,8 @@ public class PerformanceBoundTest {
             BenchmarkResult result = benchmark.run();
             results.add(result);
         }
-        System.err.println("results = " + results);
         BenchmarkResult result = BenchmarkResult.aggregateAverage(results);
 
-        assertThat((int) result.performance().throughput(), greaterThanOrEqualTo(3000));
+        assertThat((int) result.performance().throughput(), greaterThanOrEqualTo(2500));
     }
 }
