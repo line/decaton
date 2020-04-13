@@ -46,9 +46,8 @@ public class Benchmark {
 
     private void generateWorkload(String bootstrapServers, String topic) throws InterruptedException {
         RecordsGenerator generator = new RecordsGenerator(config.simulateLatencyMs());
-        int totalTasks = config.tasks() + config.warmupTasks();
-        log.info("Generate {} tasks in total wheres {} are for warmup", totalTasks, config.warmupTasks());
-        generator.generate(bootstrapServers, topic, totalTasks);
+        log.info("Generate {} tasks and {} for warmup", config.tasks(), config.warmupTasks());
+        generator.generate(bootstrapServers, topic, config.tasks(), config.warmupTasks());
     }
 
     private BenchmarkResult runRecording(String bootstrapServers, String topic) throws InterruptedException {

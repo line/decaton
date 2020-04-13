@@ -55,7 +55,15 @@ public class RecordsGenerator {
         }
     }
 
-    public void generate(String bootstrapServers, String topic, int numTasks) throws InterruptedException {
+    private static Future<RecordMetadata> produce(
+            Producer<byte[], Task> producer, String topic, int latencyMs) {
+        Task task = new Task(System.currentTimeMillis(), latencyMs);
+        ProducerRecord<byte[], Task> record = new ProducerRecord<>(topic, null, task);
+        return producer.send(record);
+    }
+
+    public void generate(String bootstrapServers, String topic, int numTasks, int numWarmupTasks)
+            throws InterruptedException {
         Properties props = new Properties();
         props.setProperty(ProducerConfig.CLIENT_ID_CONFIG, "decaton-benchmark");
         props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
@@ -67,12 +75,13 @@ public class RecordsGenerator {
         Deque<Future<RecordMetadata>> results = new ArrayDeque<>();
         try (Producer<byte[], Task> producer =
                      new KafkaProducer<>(props, new ByteArraySerializer(), new Task.KafkaSerializer())) {
-            for (int i = 0; i < numTasks; i++) {
-                Task task = new Task(System.currentTimeMillis(), simulateLatencyMs);
-                ProducerRecord<byte[], Task> record = new ProducerRecord<>(topic, null, task);
-                Future<RecordMetadata> result = producer.send(record);
-                results.addLast(result);
+            for (int i = 0; i < numWarmupTasks; i++) {
+                results.addLast(produce(producer, topic, 0));
+                consumeResults(results, false);
+            }
 
+            for (int i = 0; i < numTasks; i++) {
+                results.addLast(produce(producer, topic, simulateLatencyMs));
                 consumeResults(results, false);
             }
         }
