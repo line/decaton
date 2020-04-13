@@ -44,7 +44,7 @@ public class BenchmarkConfig {
     /**
      * Max latency to simulate as processing duration. Latencies between 0 to this value are randomly generated.
      */
-    int maxLatencyMs;
+    int simulateLatencyMs;
     /**
      * Optional bootstrap.servers to specify the cluster to use for testing. Otherwise local embedded cluster is
      * used.

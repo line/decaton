@@ -105,8 +105,8 @@ public class Recording {
         }
     }
 
-    public void await(long timeout, TimeUnit unit) throws InterruptedException {
-        completeLatch.await(timeout, unit);
+    public boolean await(long timeout, TimeUnit unit) throws InterruptedException {
+        return completeLatch.await(timeout, unit);
     }
 
     public BenchmarkResult.Performance computeResult() {

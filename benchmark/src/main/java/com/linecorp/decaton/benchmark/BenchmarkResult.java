@@ -57,7 +57,7 @@ public class BenchmarkResult {
         pw.printf("=== %s (%d tasks) ===\n", config.title(), performance.totalTasks);
         pw.printf("# Runner: %s\n", config.runner());
         pw.printf("# Tasks: %d (warmup: %d)\n", config.tasks(), config.warmupTasks());
-        pw.printf("# Simulated Latency(ms): 0..%d\n", config.maxLatencyMs());
+        pw.printf("# Simulated Latency(ms): %d\n", config.simulateLatencyMs());
         for (Entry<String, String> e : config.params().entrySet()) {
             pw.printf("# Param: %s=%s\n", e.getKey(), e.getValue());
         }

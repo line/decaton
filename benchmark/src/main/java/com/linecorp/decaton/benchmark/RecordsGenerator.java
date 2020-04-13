@@ -19,7 +19,6 @@ package com.linecorp.decaton.benchmark;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.Properties;
-import java.util.Random;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 
@@ -34,20 +33,10 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class RecordsGenerator {
-    public static final int LATENCY_CYCLE = 1000;
+    private final int simulateLatencyMs;
 
-    private final int[] latencies;
-
-    public RecordsGenerator(int maxProcessLatencyMs) {
-        latencies = new int[LATENCY_CYCLE];
-        // Use maxProcessingLatencyMs as the seed so that we always get consistent
-        // set of latencies.
-        if (maxProcessLatencyMs > 0) {
-            Random random = new Random(maxProcessLatencyMs);
-            for (int i = 0; i < latencies.length; i++) {
-                latencies[i] = random.nextInt(maxProcessLatencyMs);
-            }
-        }
+    public RecordsGenerator(int simulateLatencyMs) {
+        this.simulateLatencyMs = Math.max(0, simulateLatencyMs);
     }
 
     private static void consumeResults(Deque<Future<RecordMetadata>> results, boolean await)
@@ -79,8 +68,7 @@ public class RecordsGenerator {
         try (Producer<byte[], Task> producer =
                      new KafkaProducer<>(props, new ByteArraySerializer(), new Task.KafkaSerializer())) {
             for (int i = 0; i < numTasks; i++) {
-                int latencyMs = latencies[i % latencies.length];
-                Task task = new Task(System.currentTimeMillis(), latencyMs);
+                Task task = new Task(System.currentTimeMillis(), simulateLatencyMs);
                 ProducerRecord<byte[], Task> record = new ProducerRecord<>(topic, null, task);
                 Future<RecordMetadata> result = producer.send(record);
                 results.addLast(result);

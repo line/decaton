@@ -45,7 +45,7 @@ public class Benchmark {
     }
 
     private void generateWorkload(String bootstrapServers, String topic) throws InterruptedException {
-        RecordsGenerator generator = new RecordsGenerator(config.maxLatencyMs());
+        RecordsGenerator generator = new RecordsGenerator(config.simulateLatencyMs());
         int totalTasks = config.tasks() + config.warmupTasks();
         log.info("Generate {} tasks in total wheres {} are for warmup", totalTasks, config.warmupTasks());
         generator.generate(bootstrapServers, topic, totalTasks);
@@ -66,7 +66,9 @@ public class Benchmark {
         final Map<Long, TrackingValues> resourceUsageReport;
         try {
             generateWorkload(bootstrapServers, topic);
-            recording.await(3, TimeUnit.MINUTES);
+            if (!recording.await(3, TimeUnit.MINUTES)) {
+                throw new RuntimeException("timeout on awaiting benchmark to complete");
+            }
             resourceUsageReport = resourceTracker.report();
         } finally {
             try {

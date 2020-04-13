@@ -39,8 +39,8 @@ public final class Main implements Callable<Integer> {
     @Option(names = "--warmup", description = "Number of tasks to apply for warm up execution (class loading, JIT compile...) before start measurement", defaultValue = "10")
     private int warmupTasks;
 
-    @Option(names = "--max-latency", description = "Upper bound latency to inject for simulating processing time for each tasks. Randomly generated latencies between 0 to this value is used for each task", defaultValue = "10")
-    private int maxLatencyMs;
+    @Option(names = "--simulate-latency", description = "Latency in milliseconds to inject for simulating processing time for each tasks", defaultValue = "0")
+    private int simulateLatencyMs;
 
     @Option(names = "--bootstrap-servers", description = "Optional bootstrap.servers property. if supplied, the specified kafka cluster is used for benchmarking instead of local embedded clusters")
     private String bootstrapServers;
@@ -51,7 +51,7 @@ public final class Main implements Callable<Integer> {
     @Override
     public Integer call() throws Exception {
         BenchmarkConfig config = new BenchmarkConfig(
-                title, runner, tasks, warmupTasks, maxLatencyMs, bootstrapServers, params);
+                title, runner, tasks, warmupTasks, simulateLatencyMs, bootstrapServers, params);
         Benchmark benchmark = new Benchmark(config);
         BenchmarkResult result = benchmark.run();
         result.print(config, System.out);
