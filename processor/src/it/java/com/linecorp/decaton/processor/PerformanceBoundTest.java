@@ -24,6 +24,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.junit.Assume;
+import org.junit.Before;
 import org.junit.Test;
 
 import com.linecorp.decaton.benchmark.Benchmark;
@@ -33,19 +35,19 @@ import com.linecorp.decaton.benchmark.DecatonRunner;
 
 public class PerformanceBoundTest {
     static final int ITERATIONS = 3;
-    static final int NUM_TASKS = 10_000;
-    static final int NUM_WARMUP_TASKS = 1000;
-    static final int MAX_LATENCY_MS = 10;
 
-    static final int THROUGHPUT_BOUND = 3000;
+    @Before
+    public void setUp() {
+        Assume.assumeTrue(System.getProperty("it.test-perf") != null);
+    }
 
     @Test
-    public void testPerformanceBound() throws InterruptedException {
+    public void testPerformanceBoundBusy() throws InterruptedException {
         Map<String, String> params = new HashMap<>();
-        params.put(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY.name(), "10");
+        params.put(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY.name(), "8");
         BenchmarkConfig config = new BenchmarkConfig(
-                "PerformanceBound", DecatonRunner.class.getCanonicalName(),
-                NUM_TASKS, NUM_WARMUP_TASKS, MAX_LATENCY_MS, null, params);
+                "PerformanceBoundBusy", DecatonRunner.class.getCanonicalName(),
+                10_000, 10_000, 0, null, params);
         Benchmark benchmark = new Benchmark(config);
         List<BenchmarkResult> results = new ArrayList<>(ITERATIONS);
         for (int i = 0; i < ITERATIONS; i++) {
@@ -55,6 +57,25 @@ public class PerformanceBoundTest {
         System.err.println("results = " + results);
         BenchmarkResult result = BenchmarkResult.aggregateAverage(results);
 
-        assertThat((int) result.performance().throughput(), greaterThanOrEqualTo(THROUGHPUT_BOUND));
+        assertThat((int) result.performance().throughput(), greaterThanOrEqualTo(20000));
+    }
+
+    @Test
+    public void testPerformanceBoundWithLatency() throws InterruptedException {
+        Map<String, String> params = new HashMap<>();
+        params.put(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY.name(), "10");
+        BenchmarkConfig config = new BenchmarkConfig(
+                "PerformanceBoundWithLatency", DecatonRunner.class.getCanonicalName(),
+                10_000, 10_000, 10, null, params);
+        Benchmark benchmark = new Benchmark(config);
+        List<BenchmarkResult> results = new ArrayList<>(ITERATIONS);
+        for (int i = 0; i < ITERATIONS; i++) {
+            BenchmarkResult result = benchmark.run();
+            results.add(result);
+        }
+        System.err.println("results = " + results);
+        BenchmarkResult result = BenchmarkResult.aggregateAverage(results);
+
+        assertThat((int) result.performance().throughput(), greaterThanOrEqualTo(3000));
     }
 }
