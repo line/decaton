@@ -19,6 +19,7 @@ package com.linecorp.decaton.benchmark;
 import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.time.Duration;
+import java.util.List;
 import java.util.Map.Entry;
 
 import lombok.Value;
@@ -33,12 +34,36 @@ public class BenchmarkResult {
         public static class Durations {
             Duration avg;
             Duration max;
+
+            public Durations plus(Durations other) {
+                return new Durations(Duration.ofNanos(avg.toNanos() + other.avg.toNanos()),
+                                     Duration.ofNanos(max.toNanos() + other.max.toNanos()));
+            }
+
+            public Durations div(int d) {
+                return new Durations(Duration.ofNanos(avg.toNanos() / d),
+                                     Duration.ofNanos(max.toNanos() / d));
+            }
         }
 
         int totalTasks;
         Duration executionTime;
         double throughput;
         Durations deliveryLatency;
+
+        public Performance plus(Performance other) {
+            return new Performance(totalTasks + other.totalTasks,
+                                   Duration.ofNanos(executionTime.toNanos() + other.executionTime.toNanos()),
+                                   throughput + other.throughput,
+                                   deliveryLatency.plus(other.deliveryLatency));
+        }
+
+        public Performance div(int d) {
+            return new Performance(totalTasks / d,
+                                   Duration.ofNanos(executionTime.toNanos() / d),
+                                   throughput / d,
+                                   deliveryLatency.div(d));
+        }
     }
 
     @Value
@@ -46,6 +71,18 @@ public class BenchmarkResult {
         int threads;
         long totalCpuTimeNs;
         long totalAllocatedBytes;
+
+        public ResourceUsage plus(ResourceUsage other) {
+            return new ResourceUsage(threads + other.threads,
+                                     totalCpuTimeNs + other.totalCpuTimeNs,
+                                     totalAllocatedBytes + other.totalAllocatedBytes);
+        }
+
+        public ResourceUsage div(int d) {
+            return new ResourceUsage(threads / d,
+                                     totalCpuTimeNs / d,
+                                     totalAllocatedBytes / d);
+        }
     }
 
     Performance performance;
@@ -73,5 +110,20 @@ public class BenchmarkResult {
         pw.printf("Allocated Heap(KiB): %.2f\n", resource.totalAllocatedBytes / 1024.0);
 
         pw.flush();
+    }
+
+    public BenchmarkResult plus(BenchmarkResult other) {
+        return new BenchmarkResult(performance.plus(other.performance), resource.plus(other.resource));
+    }
+
+    public BenchmarkResult div(int d) {
+        return new BenchmarkResult(performance.div(d), resource.div(d));
+    }
+
+    public static BenchmarkResult aggregateAverage(List<BenchmarkResult> results) {
+        return results.stream()
+                      .reduce(BenchmarkResult::plus)
+                      .map(r -> r.div(results.size()))
+                      .orElse(null);
     }
 }

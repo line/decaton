@@ -19,7 +19,9 @@ package com.linecorp.decaton.processor;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.junit.Assert.assertThat;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.junit.Test;
@@ -30,6 +32,7 @@ import com.linecorp.decaton.benchmark.BenchmarkResult;
 import com.linecorp.decaton.benchmark.DecatonRunner;
 
 public class PerformanceBoundTest {
+    static final int ITERATIONS = 3;
     static final int NUM_TASKS = 10_000;
     static final int NUM_WARMUP_TASKS = 1000;
     static final int MAX_LATENCY_MS = 10;
@@ -44,7 +47,13 @@ public class PerformanceBoundTest {
                 "PerformanceBound", DecatonRunner.class.getCanonicalName(),
                 NUM_TASKS, NUM_WARMUP_TASKS, MAX_LATENCY_MS, null, params);
         Benchmark benchmark = new Benchmark(config);
-        BenchmarkResult result = benchmark.run();
+        List<BenchmarkResult> results = new ArrayList<>(ITERATIONS);
+        for (int i = 0; i < ITERATIONS; i++) {
+            BenchmarkResult result = benchmark.run();
+            results.add(result);
+        }
+        System.err.println("results = " + results);
+        BenchmarkResult result = BenchmarkResult.aggregateAverage(results);
 
         assertThat((int) result.performance().throughput(), greaterThanOrEqualTo(THROUGHPUT_BOUND));
     }
