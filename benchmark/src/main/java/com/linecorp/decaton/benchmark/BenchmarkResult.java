@@ -36,13 +36,11 @@ public class BenchmarkResult {
             Duration max;
 
             public Durations plus(Durations other) {
-                return new Durations(Duration.ofNanos(avg.toNanos() + other.avg.toNanos()),
-                                     Duration.ofNanos(max.toNanos() + other.max.toNanos()));
+                return new Durations(avg.plus(other.avg), max.plus(other.max));
             }
 
             public Durations div(int d) {
-                return new Durations(Duration.ofNanos(avg.toNanos() / d),
-                                     Duration.ofNanos(max.toNanos() / d));
+                return new Durations(avg.dividedBy(d), max.dividedBy(d));
             }
         }
 
@@ -53,14 +51,14 @@ public class BenchmarkResult {
 
         public Performance plus(Performance other) {
             return new Performance(totalTasks + other.totalTasks,
-                                   Duration.ofNanos(executionTime.toNanos() + other.executionTime.toNanos()),
+                                   executionTime.plus(other.executionTime),
                                    throughput + other.throughput,
                                    deliveryLatency.plus(other.deliveryLatency));
         }
 
         public Performance div(int d) {
             return new Performance(totalTasks / d,
-                                   Duration.ofNanos(executionTime.toNanos() / d),
+                                   executionTime.dividedBy(d),
                                    throughput / d,
                                    deliveryLatency.div(d));
         }

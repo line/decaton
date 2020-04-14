@@ -42,7 +42,7 @@ public class BenchmarkConfig {
      */
     int warmupTasks;
     /**
-     * Max latency to simulate as processing duration. Latencies between 0 to this value are randomly generated.
+     * Latency to simulate as processing duration.
      */
     int simulateLatencyMs;
     /**

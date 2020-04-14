@@ -46,7 +46,7 @@ public class PerformanceBoundTest {
         Map<String, String> params = new HashMap<>();
         params.put(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY.name(), "8");
         BenchmarkConfig config = new BenchmarkConfig(
-                "PerformanceBoundBusy", DecatonRunner.class.getCanonicalName(),
+                "PerformanceBoundBusy", DecatonRunner.class.getName(),
                 10_000, 10_000, 0, null, params);
         Benchmark benchmark = new Benchmark(config);
         List<BenchmarkResult> results = new ArrayList<>(ITERATIONS);
@@ -64,7 +64,7 @@ public class PerformanceBoundTest {
         Map<String, String> params = new HashMap<>();
         params.put(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY.name(), "10");
         BenchmarkConfig config = new BenchmarkConfig(
-                "PerformanceBoundWithLatency", DecatonRunner.class.getCanonicalName(),
+                "PerformanceBoundWithLatency", DecatonRunner.class.getName(),
                 10_000, 10_000, 10, null, params);
         Benchmark benchmark = new Benchmark(config);
         List<BenchmarkResult> results = new ArrayList<>(ITERATIONS);
