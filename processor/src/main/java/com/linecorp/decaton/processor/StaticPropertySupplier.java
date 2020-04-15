@@ -16,6 +16,8 @@
 
 package com.linecorp.decaton.processor;
 
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -35,6 +37,18 @@ public class StaticPropertySupplier implements PropertySupplier {
      * @throws IllegalArgumentException when the list contains duplicate entries for the same property key
      */
     public static StaticPropertySupplier of(Property<?>... properties) {
+        return of(Arrays.asList(properties));
+    }
+
+    /**
+     * Create a new {@link StaticPropertySupplier} with given properties.
+     * The argument property list must not contain duplicate entry for the same property definition.
+     *
+     * @param properties list of {@link Property} instances to hold
+     * @return a {@link StaticPropertySupplier}
+     * @throws IllegalArgumentException when the list contains duplicate entries for the same property key
+     */
+    public static StaticPropertySupplier of(Collection<Property<?>> properties) {
         Map<PropertyDefinition<?>, Property<?>> props = new HashMap<>();
 
         for (Property<?> prop : properties) {

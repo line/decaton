@@ -55,7 +55,7 @@ public abstract class AbstractProperty<T> implements Property<T> {
     protected void validate(Object value) {
         if (!definition.isValid(value)) {
             throw new IllegalArgumentException(String.format(
-                    "invalid value attempted to set for property %s", name()));
+                    "invalid value %s attempted to set for property %s", value, name()));
         }
     }
 

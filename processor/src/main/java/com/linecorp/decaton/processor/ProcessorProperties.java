@@ -109,6 +109,39 @@ public class ProcessorProperties extends AbstractDecatonProperties {
                     CONFIG_COMMIT_INTERVAL_MS,
                     CONFIG_GROUP_REBALANCE_TIMEOUT_MS));
 
+    /**
+     * Find and return a {@link PropertyDefinition} from its name.
+     * This method is not optimized for frequent invocation.
+     *
+     * @param name the name of property.
+     * @return a {@link PropertyDefinition} instance.
+     */
+    public static PropertyDefinition<?> definitionForName(String name) {
+        for (PropertyDefinition<?> def : PROPERTY_DEFINITIONS) {
+            if (def.name().equals(name)) {
+                return def;
+            }
+        }
+        throw new IllegalArgumentException("no such property definition: " + name);
+    }
+
+    /**
+     * Creates a new {@link Property} from the given name and value.
+     * This might be useful when code for constructing {@link ProcessorProperties} just needs to bridge
+     * a map of property name and values to {@link Property} instances.
+     * This method is not optimized for frequent invocation.
+     *
+     * @param name the name of property.
+     * @param value the value to assign for the property.
+     * @return a {@link Property} instance.
+     * @throws IllegalArgumentException if given name is not present in definitions.
+     */
+    @SuppressWarnings("unchecked")
+    public static Property<?> propertyForName(String name, Object value) {
+        PropertyDefinition<Object> def = (PropertyDefinition<Object>) definitionForName(name);
+        return Property.ofStatic(def, value);
+    }
+
     public static Builder<ProcessorProperties> builder() {
         return new Builder<>(
                 ProcessorProperties::new,
