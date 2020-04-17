@@ -224,10 +224,10 @@ public class ProcessPipelineTest {
         closeLatch.countDown();
 
         executor.shutdown();
-        // Checking it actually returns
+        // Checking scheduled task is passed to processor when shutdown
         executor.awaitTermination(Long.MAX_VALUE, TimeUnit.SECONDS);
-        verify(pipeline, never()).process(any(), any());
-        verify(request.completion(), never()).complete();
+        verify(pipeline, times(1)).process(any(), any());
+        verify(request.completion(), times(1)).complete();
     }
 }
 

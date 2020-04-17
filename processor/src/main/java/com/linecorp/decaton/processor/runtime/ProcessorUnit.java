@@ -35,8 +35,6 @@ public class ProcessorUnit implements AsyncShutdownable {
 
     private final ResourceUtilizationMetrics metrics;
 
-    private volatile boolean terminated;
-
     public ProcessorUnit(ThreadScope scope, ProcessPipeline<?> pipeline) {
         this.pipeline = pipeline;
 
@@ -56,13 +54,6 @@ public class ProcessorUnit implements AsyncShutdownable {
     }
 
     private void processTask(TaskRequest request) {
-        if (terminated) {
-            // There's a chance that some tasks leftover in executor's queue are still attempted to be processed
-            // even after this unit enters shutdown sequences.
-            // In such case we should ignore all following tasks to quickly complete shutdown sequence.
-            return;
-        }
-
         Timer timer = Utils.timer();
         try {
             pipeline.scheduleThenProcess(request);
@@ -81,7 +72,6 @@ public class ProcessorUnit implements AsyncShutdownable {
 
     @Override
     public void initiateShutdown() {
-        terminated = true;
         pipeline.close();
         executor.shutdown();
     }

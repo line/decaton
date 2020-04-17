@@ -175,6 +175,10 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
             consumer.subscribe(subscribeTopics(), new ConsumerRebalanceListener() {
                 @Override
                 public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+                    if (terminated.get()) {
+                        return;
+                    }
+
                     updateState(SubscriptionStateListener.State.REBALANCING);
 
                     waitForRemainingTasksCompletion(rebalanceTimeoutMillis.value());
@@ -246,6 +250,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
             Timer timer = Utils.timer();
             contexts.destroyAllProcessors();
             try {
+                contexts.updateHighWatermarks();
                 commitCompletedOffsets(consumer);
             } catch (RuntimeException e) {
                 logger.error("Offset commit failed before closing consumer", e);

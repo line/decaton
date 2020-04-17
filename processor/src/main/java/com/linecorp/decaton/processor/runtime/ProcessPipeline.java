@@ -42,7 +42,6 @@ public class ProcessPipeline<T> implements AutoCloseable {
     private final ExecutionScheduler scheduler;
     private final TaskMetrics taskMetrics;
     private final ProcessMetrics processMetrics;
-    private volatile boolean terminated;
 
     public ProcessPipeline(ThreadScope scope,
                            List<DecatonProcessor<T>> processors,
@@ -75,10 +74,6 @@ public class ProcessPipeline<T> implements AutoCloseable {
         }
 
         scheduler.schedule(extracted.metadata());
-        if (terminated) {
-            log.debug("Returning after schedule due to termination");
-            return;
-        }
 
         CompletableFuture<Void> result = process(request, extracted);
         result.whenComplete((r, e) -> {
@@ -149,7 +144,6 @@ public class ProcessPipeline<T> implements AutoCloseable {
 
     @Override
     public void close() {
-        terminated = true;
         scheduler.close();
     }
 }
