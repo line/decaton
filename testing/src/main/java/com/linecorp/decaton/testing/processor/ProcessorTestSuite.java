@@ -19,7 +19,9 @@ import com.linecorp.decaton.client.DecatonClient;
 import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.ProcessorProperties;
 import com.linecorp.decaton.processor.ProcessorsBuilder;
+import com.linecorp.decaton.processor.Property;
 import com.linecorp.decaton.processor.PropertySupplier;
+import com.linecorp.decaton.processor.StaticPropertySupplier;
 import com.linecorp.decaton.processor.runtime.ProcessorSubscription;
 import com.linecorp.decaton.processor.runtime.RetryConfig;
 import com.linecorp.decaton.protobuf.ProtocolBuffersDeserializer;
@@ -58,7 +60,7 @@ public class ProcessorTestSuite<T extends MessageLite> {
     private final Iterator<DecatonProducerRecord<T>> tasks;
     private final Function<ProcessorsBuilder<T>, ProcessorsBuilder<T>> configureProcessorsBuilder;
     private final RetryConfig retryConfig;
-    private final PropertySupplier propertySupplier;
+    private final PropertySupplier[] propertySuppliers;
 
     private static final int NUM_PARTITIONS = 8;
 
@@ -96,6 +98,14 @@ public class ProcessorTestSuite<T extends MessageLite> {
             this.parser = parser;
         }
 
+        /**
+         * Configure tasks which are produced to the topic.
+         * Note that all tasks should be differentiated from others (i.e. equals() never be true between tasks)
+         * since message ordering will be verified by checking produced task equals to processed task one by one.
+         *
+         * @param numTasks number of tasks
+         * @param taskIterator iterator which generates tasks
+         */
         public Builder<T> produce(int numTasks,
                                   Iterator<DecatonProducerRecord<T>> taskIterator) {
             this.numTasks = numTasks;
@@ -104,6 +114,18 @@ public class ProcessorTestSuite<T extends MessageLite> {
         }
 
         public ProcessorTestSuite<T> build() {
+            PropertySupplier[] suppliers;
+            if (propertySupplier != null) {
+                suppliers = new PropertySupplier[2];
+                suppliers[0] = propertySupplier;
+            } else {
+                suppliers = new PropertySupplier[1];
+            }
+            suppliers[suppliers.length - 1] = StaticPropertySupplier.of(
+                    // The scenario executed by ProcessorTestSuite assumes
+                    // timeout never occur during rebalance
+                    Property.ofStatic(ProcessorProperties.CONFIG_GROUP_REBALANCE_TIMEOUT_MS, Long.MAX_VALUE)
+            );
             return new ProcessorTestSuite<>(rule,
                                             parser,
                                             numSubscriptionInstances,
@@ -111,7 +133,7 @@ public class ProcessorTestSuite<T extends MessageLite> {
                                             taskIterator,
                                             configureProcessorsBuilder,
                                             retryConfig,
-                                            propertySupplier);
+                                            suppliers);
         }
     }
 
@@ -155,7 +177,7 @@ public class ProcessorTestSuite<T extends MessageLite> {
             return TestUtils.subscription(rule.bootstrapServers(),
                                           configureProcessorsBuilder.apply(processorsBuilder),
                                           retryConfig,
-                                          propertySupplier);
+                                          propertySuppliers);
         };
 
         DecatonClient<T> client = null;

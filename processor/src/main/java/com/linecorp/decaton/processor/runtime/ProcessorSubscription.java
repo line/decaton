@@ -250,7 +250,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
             Timer timer = Utils.timer();
             contexts.destroyAllProcessors();
             try {
-                contexts.updateHighWatermarks();
+                waitForRemainingTasksCompletion(rebalanceTimeoutMillis.value());
                 commitCompletedOffsets(consumer);
             } catch (RuntimeException e) {
                 logger.error("Offset commit failed before closing consumer", e);

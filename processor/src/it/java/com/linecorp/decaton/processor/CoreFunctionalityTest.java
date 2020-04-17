@@ -16,6 +16,7 @@
 
 package com.linecorp.decaton.processor;
 
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.IntStream;
 
 import org.junit.ClassRule;
@@ -31,21 +32,50 @@ public class CoreFunctionalityTest {
     public static KafkaClusterRule rule = new KafkaClusterRule();
 
     @Test(timeout = 30000)
+    public void testAsyncTaskCompletion() {
+        int numTasks = 10000;
+        ProcessorTestSuite<HelloTask> suite =
+                ProcessorTestSuite.builder(rule, HelloTask.parser())
+                                  .produce(numTasks, IntStream.range(0, numTasks).mapToObj(i -> {
+                                      String key = String.valueOf(i % 100);
+                                      return new DecatonProducerRecord<>(
+                                              key,
+                                              HelloTask.newBuilder().setAge(i).build());
+                                  }).iterator())
+                                  .configureProcessorsBuilder(builder -> builder.thenProcess((ctx, task) -> {
+                                      DeferredCompletion completion = ctx.deferCompletion();
+                                      CompletableFuture.runAsync(() -> {
+                                          try {
+                                              Thread.sleep(task.getAge() % 5);
+                                          } catch (InterruptedException e) {
+                                              Thread.currentThread().interrupt();
+                                              throw new RuntimeException(e);
+                                          } finally {
+                                              completion.complete();
+                                          }
+                                      });
+                                  }))
+                                  .build();
+        suite.run();
+    }
+
+    @Test(timeout = 30000)
     public void testProcessConcurrently() {
         int numTasks = 10000;
         ProcessorTestSuite<HelloTask> suite =
                 ProcessorTestSuite.builder(rule, HelloTask.parser())
                                   .produce(numTasks, IntStream.range(0, numTasks).mapToObj(i -> {
                                       String key = String.valueOf(i % 100);
-                                      return new DecatonProducerRecord<>(key, HelloTask.newBuilder().setAge(i).build());
+                                      return new DecatonProducerRecord<>(
+                                              key,
+                                              HelloTask.newBuilder().setAge(i).build());
                                   }).iterator())
                                   .configureProcessorsBuilder(builder -> builder.thenProcess((ctx, task) -> {
                                       // adding some delay to generate out-of-order completion
                                       Thread.sleep(task.getAge() % 5);
                                   }))
                                   .propertySupplier(StaticPropertySupplier.of(
-                                          Property.ofStatic(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY, 16),
-                                          Property.ofStatic(ProcessorProperties.CONFIG_GROUP_REBALANCE_TIMEOUT_MS, Long.MAX_VALUE)
+                                          Property.ofStatic(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY, 16)
                                   ))
                                   .build();
         suite.run();

@@ -84,8 +84,7 @@ public class RetryQueueingTest {
                 rule.bootstrapServers(),
                 ProcessorsBuilder.consuming(topicName, new ProtocolBuffersDeserializer<>(HelloTask.parser()))
                                  .thenProcess(processor),
-                RetryConfig.withBackoff(Duration.ofMillis(10)),
-                null);
+                RetryConfig.withBackoff(Duration.ofMillis(10)));
              DecatonClient<HelloTask> client = TestUtils.client(topicName, rule.bootstrapServers())) {
 
             keys.forEach(key -> client.put(key, HelloTask.getDefaultInstance()));

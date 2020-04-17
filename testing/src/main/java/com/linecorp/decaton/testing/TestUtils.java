@@ -60,7 +60,7 @@ public class TestUtils {
     public static <T> ProcessorSubscription subscription(String bootstrapServers,
                                                          ProcessorsBuilder<T> processorsBuilder,
                                                          RetryConfig retryConfig,
-                                                         PropertySupplier propertySupplier) {
+                                                         PropertySupplier... propertySuppliers) {
         Properties props = new Properties();
         props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         props.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, "test-processor" + sequence());
@@ -78,9 +78,7 @@ public class TestUtils {
         if (retryConfig != null) {
             builder.enableRetry(retryConfig);
         }
-        if (propertySupplier != null) {
-            builder.properties(propertySupplier);
-        }
+        builder.properties(propertySuppliers);
         ProcessorSubscription subscription = builder.buildAndStart();
 
         try {
