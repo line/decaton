@@ -1,5 +1,6 @@
 package com.linecorp.decaton.testing.processor;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 import java.util.ArrayList;
@@ -9,6 +10,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.function.Function;
@@ -280,9 +282,11 @@ public class ProcessorTestSuite<T extends MessageLite> {
                                                      key -> new ArrayList<>()).add(record.task());
             }
 
-            for (String key : producedTasks.keySet()) {
-                List<T> produced = producedTasks.get(key);
-                List<T> processed = processedTasksPerKey.get(key);
+            assertEquals("all produced keys must be processed",
+                         producedTasks.size(), processedTasksPerKey.size());
+            for (Entry<String, List<T>> entry : producedTasks.entrySet()) {
+                List<T> produced = entry.getValue();
+                List<T> processed = processedTasksPerKey.get(entry.getKey());
 
                 assertTrue("all produced tasks must be processed in order per key",
                            processOrdering.inOrder(produced, processed));
