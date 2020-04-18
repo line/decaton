@@ -20,6 +20,7 @@ import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 
 import com.google.protobuf.MessageLite;
@@ -46,6 +47,9 @@ public class TestUtils {
         Properties props = new Properties();
         props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         props.setProperty(ProducerConfig.CLIENT_ID_CONFIG, "test-client-" + sequence());
+        props.setProperty(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "1");
+        props.setProperty(ProducerConfig.ACKS_CONFIG, "all");
+        props.setProperty(ProducerConfig.LINGER_MS_CONFIG, "100");
         return DecatonClient.producing(topic, new ProtocolBuffersSerializer<T>())
                             .applicationId("test-application")
                             .instanceId("test-instance")
@@ -58,18 +62,19 @@ public class TestUtils {
                                                          RetryConfig retryConfig,
                                                          PropertySupplier propertySupplier) {
         Properties props = new Properties();
-        props.setProperty("bootstrap.servers", bootstrapServers);
-        props.setProperty("client.id", "test-processor-" + sequence());
-        props.setProperty("group.id", "test-group");
+        props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        props.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, "test-processor" + sequence());
+        props.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "test-group");
+        props.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         CountDownLatch initializationLatch = new CountDownLatch(1);
         SubscriptionBuilder builder = SubscriptionBuilder.newBuilder("test-subscription")
-                                                                     .consumerConfig(props)
-                                                                     .processorsBuilder(processorsBuilder)
-                                                                     .stateListener(state -> {
-                                                                         if (state == State.RUNNING) {
-                                                                             initializationLatch.countDown();
-                                                                         }
-                                                                     });
+                                                         .consumerConfig(props)
+                                                         .processorsBuilder(processorsBuilder)
+                                                         .stateListener(state -> {
+                                                             if (state == State.RUNNING) {
+                                                                 initializationLatch.countDown();
+                                                             }
+                                                         });
         if (retryConfig != null) {
             builder.enableRetry(retryConfig);
         }
