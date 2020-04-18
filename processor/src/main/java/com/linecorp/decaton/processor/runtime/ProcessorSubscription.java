@@ -179,6 +179,12 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
             consumer.subscribe(subscribeTopics(), new ConsumerRebalanceListener() {
                 @Override
                 public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+                    // KafkaConsumer#close has been changed to invoke onPartitionRevoked since Kafka 2.4.0.
+                    // But we don't want to await pending tasks on shutdown by design, and we're doing cleanup
+                    // procedure on shutdown separately so just immediately return if terminated
+                    if (terminated.get()) {
+                        return;
+                    }
                     updateState(SubscriptionStateListener.State.REBALANCING);
 
                     waitForRemainingTasksCompletion(rebalanceTimeoutMillis.value());
@@ -244,6 +250,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
             Timer timer = Utils.timer();
             contexts.destroyAllProcessors();
             try {
+                contexts.updateHighWatermarks();
                 commitCompletedOffsets(consumer);
             } catch (RuntimeException e) {
                 logger.error("Offset commit failed before closing consumer", e);
