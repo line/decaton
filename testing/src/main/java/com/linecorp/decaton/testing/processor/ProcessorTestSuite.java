@@ -74,6 +74,8 @@ public class ProcessorTestSuite<T extends MessageLite> {
         /**
          * All produced tasks are processed in order, but allowing duplication.
          * Example:
+         * <pre>
+         * {@code
          *   say produced offsets are: [1,2,3,4,5]
          *   valid processing order:
          *     - [1,2,3,4,5]
@@ -82,6 +84,8 @@ public class ProcessorTestSuite<T extends MessageLite> {
          *   invalid processing order:
          *     - [1,3,2,4,5] => gapping
          *     - [1,2,3,4,5,4,3] => reconsumed from 4 implies offset 3 is committed. 3 cannot appear after processing 4
+         * }
+         * </pre>
          */
         ALLOW_DUPLICATE;
 
