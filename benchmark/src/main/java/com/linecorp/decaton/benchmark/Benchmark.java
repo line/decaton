@@ -51,7 +51,12 @@ public class Benchmark {
 
     private BenchmarkResult runRecording(String bootstrapServers, String topic) throws InterruptedException {
         Execution.Config config = new Execution.Config(bootstrapServers, topic, this.config);
-        Execution execution = new ForkingExecution();
+        final Execution execution;
+        if (this.config.forking()) {
+            execution = new ForkingExecution();
+        } else {
+            execution = new InProcessExecution(false);
+        }
         return execution.execute(config, stage -> {
             if (stage == Stage.READY_WARMUP) {
                 log.info("Start warmup with {} tasks", this.config.warmupTasks());

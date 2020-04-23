@@ -41,7 +41,7 @@ public class PerformanceBoundTest {
         Assume.assumeTrue(System.getProperty("it.test-perf") != null);
     }
 
-    @Test
+    @Test(timeout = 300000)
     public void testPerformanceBoundBusy() throws InterruptedException {
         Map<String, String> params = new HashMap<>();
         params.put(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY.name(), "8");
@@ -52,6 +52,7 @@ public class PerformanceBoundTest {
                                                 .warmupTasks(10_000)
                                                 .simulateLatencyMs(0)
                                                 .params(params)
+                                                .forking(false)
                                                 .build();
         Benchmark benchmark = new Benchmark(config);
         List<BenchmarkResult> results = new ArrayList<>(ITERATIONS);
@@ -64,7 +65,7 @@ public class PerformanceBoundTest {
         assertThat((int) result.performance().throughput(), greaterThanOrEqualTo(10000));
     }
 
-    @Test
+    @Test(timeout = 300000)
     public void testPerformanceBoundWithLatency() throws InterruptedException {
         Map<String, String> params = new HashMap<>();
         params.put(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY.name(), "10");
@@ -75,6 +76,7 @@ public class PerformanceBoundTest {
                                                 .warmupTasks(10_000)
                                                 .simulateLatencyMs(10)
                                                 .params(params)
+                                                .forking(false)
                                                 .build();
         Benchmark benchmark = new Benchmark(config);
         List<BenchmarkResult> results = new ArrayList<>(ITERATIONS);

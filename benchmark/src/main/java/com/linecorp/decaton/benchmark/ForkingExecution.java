@@ -50,7 +50,7 @@ public class ForkingExecution implements Execution {
 
     public static void main(String[] args) throws IOException, InterruptedException {
         Config config = mapper.readValue(args[0], Config.class);
-        InProcessExecution execution = new InProcessExecution();
+        InProcessExecution execution = new InProcessExecution(true);
         BenchmarkResult result = execution.execute(config, System.out::println);
         mapper.writeValue(System.out, result);
     }

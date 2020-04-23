@@ -92,9 +92,18 @@ public final class Main implements Callable<Integer> {
         if (enableProfiling) {
             profiling = new ProfilingConfig(profilerBin, parseOptions(profilerOpts));
         }
-        BenchmarkConfig config = new BenchmarkConfig(
-                title, runner, tasks, warmupTasks, simulateLatencyMs, bootstrapServers, params, profiling);
-
+        BenchmarkConfig config =
+                BenchmarkConfig.builder()
+                               .title(title)
+                               .runner(runner)
+                               .tasks(tasks)
+                               .warmupTasks(warmupTasks)
+                               .simulateLatencyMs(simulateLatencyMs)
+                               .bootstrapServers(bootstrapServers)
+                               .params(params)
+                               .profiling(profiling)
+                               .forking(true)
+                               .build();
         Benchmark benchmark = new Benchmark(config);
         BenchmarkResult result = benchmark.run();
         result.print(config, System.out);

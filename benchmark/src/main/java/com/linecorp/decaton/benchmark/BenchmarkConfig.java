@@ -62,6 +62,10 @@ public class BenchmarkConfig {
      * Profiling config that is optional and might be null.
      */
     ProfilingConfig profiling;
+    /**
+     * Whether to run benchmark in forked JVM or within the same JVM.
+     */
+    boolean forking;
 
     @Value
     public static class ProfilingConfig {
