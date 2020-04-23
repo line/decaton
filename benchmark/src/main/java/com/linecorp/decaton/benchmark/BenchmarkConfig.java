@@ -16,13 +16,17 @@
 
 package com.linecorp.decaton.benchmark;
 
+import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 
+import lombok.Builder;
 import lombok.Value;
 import lombok.experimental.Accessors;
 
 @Value
 @Accessors(fluent = true)
+@Builder
 public class BenchmarkConfig {
     /**
      * Title of this benchmark.
@@ -54,4 +58,14 @@ public class BenchmarkConfig {
      * Implementation specific key-value parameters that are supported by {@link Runner} implementation.
      */
     Map<String, String> params;
+    /**
+     * Profiling config that is optional and might be null.
+     */
+    ProfilingConfig profiling;
+
+    @Value
+    public static class ProfilingConfig {
+        Path profilerBin;
+        List<String> profilerOpts;
+    }
 }

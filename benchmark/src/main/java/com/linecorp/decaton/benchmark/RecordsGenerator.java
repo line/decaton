@@ -33,12 +33,6 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class RecordsGenerator {
-    private final int simulateLatencyMs;
-
-    public RecordsGenerator(int simulateLatencyMs) {
-        this.simulateLatencyMs = Math.max(0, simulateLatencyMs);
-    }
-
     private static void consumeResults(Deque<Future<RecordMetadata>> results, boolean await)
             throws InterruptedException {
         Future<RecordMetadata> future;
@@ -62,7 +56,7 @@ public class RecordsGenerator {
         return producer.send(record);
     }
 
-    public void generate(String bootstrapServers, String topic, int numTasks, int numWarmupTasks)
+    public void generate(String bootstrapServers, String topic, int numTasks, int simulateLatencyMs)
             throws InterruptedException {
         Properties props = new Properties();
         props.setProperty(ProducerConfig.CLIENT_ID_CONFIG, "decaton-benchmark");
@@ -75,11 +69,6 @@ public class RecordsGenerator {
         Deque<Future<RecordMetadata>> results = new ArrayDeque<>();
         try (Producer<byte[], Task> producer =
                      new KafkaProducer<>(props, new ByteArraySerializer(), new Task.KafkaSerializer())) {
-            for (int i = 0; i < numWarmupTasks; i++) {
-                results.addLast(produce(producer, topic, 0));
-                consumeResults(results, false);
-            }
-
             for (int i = 0; i < numTasks; i++) {
                 results.addLast(produce(producer, topic, simulateLatencyMs));
                 consumeResults(results, false);

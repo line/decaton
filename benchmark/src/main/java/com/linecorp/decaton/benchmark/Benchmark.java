@@ -16,15 +16,9 @@
 
 package com.linecorp.decaton.benchmark;
 
-import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
 
-import com.linecorp.decaton.benchmark.BenchmarkResult.Performance;
-import com.linecorp.decaton.benchmark.BenchmarkResult.ResourceUsage;
-import com.linecorp.decaton.benchmark.ResourceTracker.TrackingValues;
-import com.linecorp.decaton.benchmark.Runner.Config;
-import com.linecorp.decaton.benchmark.Task.KafkaDeserializer;
+import com.linecorp.decaton.benchmark.Execution.Stage;
 import com.linecorp.decaton.testing.EmbeddedKafkaCluster;
 import com.linecorp.decaton.testing.EmbeddedZooKeeper;
 
@@ -44,56 +38,29 @@ public class Benchmark {
         return TemporaryTopic.create(bootstrapServers, topic);
     }
 
-    private void generateWorkload(String bootstrapServers, String topic) throws InterruptedException {
-        RecordsGenerator generator = new RecordsGenerator(config.simulateLatencyMs());
-        log.info("Generate {} tasks and {} for warmup", config.tasks(), config.warmupTasks());
-        generator.generate(bootstrapServers, topic, config.tasks(), config.warmupTasks());
+    private static void generateWorkload(String bootstrapServers, String topic, int numTasks, int latencyMs) {
+        RecordsGenerator generator = new RecordsGenerator();
+        log.info("Generate {} tasks with latency {} ms", numTasks, latencyMs);
+        try {
+            generator.generate(bootstrapServers, topic, numTasks, latencyMs);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException(e);
+        }
     }
 
     private BenchmarkResult runRecording(String bootstrapServers, String topic) throws InterruptedException {
-        log.info("Loading runner {}", config.runner());
-        Runner runner = Runner.fromClassName(config.runner());
-        Config config = new Config(bootstrapServers,
-                                   topic,
-                                   new KafkaDeserializer(),
-                                   this.config.params());
-
-        Recording recording = new Recording(this.config.tasks(), this.config.warmupTasks());
-        ResourceTracker resourceTracker = new ResourceTracker();
-        log.info("Initializing runner {}", this.config.runner());
-        runner.init(config, recording, resourceTracker);
-        final Map<Long, TrackingValues> resourceUsageReport;
-        try {
-            generateWorkload(bootstrapServers, topic);
-            if (!recording.await(3, TimeUnit.MINUTES)) {
-                throw new RuntimeException("timeout on awaiting benchmark to complete");
+        Execution.Config config = new Execution.Config(bootstrapServers, topic, this.config);
+        Execution execution = new ForkingExecution();
+        return execution.execute(config, stage -> {
+            if (stage == Stage.READY_WARMUP) {
+                log.info("Start warmup with {} tasks", this.config.warmupTasks());
+                generateWorkload(bootstrapServers, topic, this.config.warmupTasks(), 0);
+            } else if (stage == Stage.READY) {
+                log.info("Start real run with {} tasks", this.config.tasks());
+                generateWorkload(bootstrapServers, topic, this.config.tasks(), this.config.simulateLatencyMs());
             }
-            resourceUsageReport = resourceTracker.report();
-        } finally {
-            try {
-                runner.close();
-            } catch (Exception e) {
-                log.warn("Failed to close runner - {}", runner.getClass(), e);
-            }
-        }
-
-        return assembleResult(recording, resourceUsageReport);
-    }
-
-    private static BenchmarkResult assembleResult(Recording recording,
-                                                  Map<Long, TrackingValues> resourceUsageReport) {
-        Performance performance = recording.computeResult();
-        int threads = resourceUsageReport.size();
-        TrackingValues resourceValues =
-                resourceUsageReport.values().stream()
-                                   .reduce(new TrackingValues(0, 0),
-                                           (a, b) -> new TrackingValues(
-                                                   a.cpuTime() + b.cpuTime(),
-                                                   a.allocatedBytes() + b.allocatedBytes()));
-        ResourceUsage resource = new ResourceUsage(threads,
-                                                   resourceValues.cpuTime(),
-                                                   resourceValues.allocatedBytes());
-        return new BenchmarkResult(performance, resource);
+        });
     }
 
     public BenchmarkResult run() throws InterruptedException {
