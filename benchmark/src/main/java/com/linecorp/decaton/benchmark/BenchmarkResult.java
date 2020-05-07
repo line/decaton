@@ -18,7 +18,6 @@ package com.linecorp.decaton.benchmark;
 
 import static java.util.stream.Collectors.toMap;
 
-import java.beans.ConstructorProperties;
 import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.nio.file.Path;
@@ -89,7 +88,7 @@ public class BenchmarkResult {
         }
     }
 
-    // TODO: WTF? using @Value here causes compilation error
+    @Value
     public static class JvmStats {
         @Value
         public static class GcStats {
@@ -98,15 +97,6 @@ public class BenchmarkResult {
         }
 
         Map<String, GcStats> gcStats;
-
-        @ConstructorProperties("gcStats")
-        public JvmStats(Map<String, GcStats> gcStats) {
-            this.gcStats = gcStats;
-        }
-
-        public Map<String, GcStats> gcStats() {
-            return gcStats;
-        }
 
         public JvmStats plus(JvmStats other) {
             Map<String, GcStats> merged = new HashMap<>(gcStats);
