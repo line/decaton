@@ -20,12 +20,15 @@ import static java.util.stream.Collectors.toMap;
 
 import java.lang.management.CompilationMXBean;
 import java.lang.management.ManagementFactory;
+import java.nio.file.Path;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 import com.linecorp.decaton.benchmark.BenchmarkConfig.ProfilingConfig;
+import com.linecorp.decaton.benchmark.BenchmarkResult.ExtraInfo;
 import com.linecorp.decaton.benchmark.BenchmarkResult.JvmStats;
 import com.linecorp.decaton.benchmark.BenchmarkResult.Performance;
 import com.linecorp.decaton.benchmark.BenchmarkResult.ResourceUsage;
@@ -60,6 +63,7 @@ public class InProcessExecution implements Execution {
         runner.init(runnerConfig, recording, resourceTracker);
         final Map<Long, TrackingValues> resourceUsageReport;
         final Map<String, GcStats> jvmReport;
+        final Optional<Path> profilerOutput;
         try {
             stageCallback.accept(Stage.READY_WARMUP);
             if (!recording.awaitWarmupComplete(3, TimeUnit.MINUTES)) {
@@ -75,8 +79,7 @@ public class InProcessExecution implements Execution {
             if (!recording.await(3, TimeUnit.MINUTES)) {
                 throw new RuntimeException("timeout on awaiting benchmark to complete");
             }
-            profiling.stop().ifPresent(
-                    outputPath -> log.info("Profiling output is available at {}", outputPath));
+            profilerOutput = profiling.stop();
             jvmReport = jvmTracker.report();
             resourceUsageReport = resourceTracker.report();
         } finally {
@@ -88,7 +91,7 @@ public class InProcessExecution implements Execution {
         }
 
         stageCallback.accept(Stage.FINISH);
-        return assembleResult(recording, resourceUsageReport, jvmReport);
+        return assembleResult(recording, resourceUsageReport, jvmReport, profilerOutput.orElse(null));
     }
 
     private static Profiling profiling(BenchmarkConfig bmConfig) {
@@ -117,7 +120,8 @@ public class InProcessExecution implements Execution {
 
     private static BenchmarkResult assembleResult(Recording recording,
                                                   Map<Long, TrackingValues> resourceUsageReport,
-                                                  Map<String, GcStats> jvmReport) {
+                                                  Map<String, GcStats> jvmReport,
+                                                  Path profilerOutput) {
         Performance performance = recording.computeResult();
         int threads = resourceUsageReport.size();
         TrackingValues resourceValues =
@@ -133,6 +137,6 @@ public class InProcessExecution implements Execution {
                 Entry::getKey,
                 e -> new JvmStats.GcStats(e.getValue().count(), e.getValue().time())));
         JvmStats jvmStats = new JvmStats(gcStats);
-        return new BenchmarkResult(performance, resource, jvmStats);
+        return new BenchmarkResult(performance, resource, jvmStats, new ExtraInfo(profilerOutput));
     }
 }

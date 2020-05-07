@@ -21,13 +21,12 @@ import static java.util.stream.Collectors.toMap;
 import java.beans.ConstructorProperties;
 import java.io.OutputStream;
 import java.io.PrintWriter;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-
-import com.linecorp.decaton.benchmark.BenchmarkResult.JvmStats.GcStats;
 
 import lombok.Value;
 import lombok.experimental.Accessors;
@@ -128,9 +127,16 @@ public class BenchmarkResult {
         }
     }
 
+    @Value
+    public static class ExtraInfo {
+        public static final ExtraInfo EMPTY = new ExtraInfo(null);
+        Path profilerOutput;
+    }
+
     Performance performance;
     ResourceUsage resource;
     JvmStats jvmStats;
+    ExtraInfo extraInfo;
 
     public void print(BenchmarkConfig config, OutputStream out) {
         PrintWriter pw = new PrintWriter(out);
@@ -141,6 +147,11 @@ public class BenchmarkResult {
         pw.printf("# Simulated Latency(ms): %d\n", config.simulateLatencyMs());
         for (Entry<String, String> e : config.params().entrySet()) {
             pw.printf("# Param: %s=%s\n", e.getKey(), e.getValue());
+        }
+        if (extraInfo != null) {
+            if (extraInfo.profilerOutput != null) {
+                pw.printf("# Profiler Output: %s\n", extraInfo.profilerOutput);
+            }
         }
 
         pw.printf("--- Performance ---\n");
@@ -155,7 +166,7 @@ public class BenchmarkResult {
 
         pw.printf("--- JVM ---\n");
         jvmStats.gcStats.keySet().stream().sorted().forEach(name -> {
-            GcStats values = jvmStats.gcStats.get(name);
+            JvmStats.GcStats values = jvmStats.gcStats.get(name);
             pw.printf("GC (%s) Count: %d\n", name, values.count);
             pw.printf("GC (%s) Time(ms): %d\n", name, values.time);
         });
@@ -166,11 +177,12 @@ public class BenchmarkResult {
     public BenchmarkResult plus(BenchmarkResult other) {
         return new BenchmarkResult(performance.plus(other.performance),
                                    resource.plus(other.resource),
-                                   jvmStats.plus(other.jvmStats));
+                                   jvmStats.plus(other.jvmStats),
+                                   ExtraInfo.EMPTY);
     }
 
     public BenchmarkResult div(int d) {
-        return new BenchmarkResult(performance.div(d), resource.div(d), jvmStats.div(d));
+        return new BenchmarkResult(performance.div(d), resource.div(d), jvmStats.div(d), ExtraInfo.EMPTY);
     }
 
     public static BenchmarkResult aggregateAverage(List<BenchmarkResult> results) {

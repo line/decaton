@@ -95,7 +95,11 @@ public class AsyncProfilerProfiling implements Profiling {
     private Optional<Path> findOutputPath() {
         for (int i = 0; i < asyncProfilerOpts.size() - 1; i++) {
             if ("-f".equals(asyncProfilerOpts.get(i))) {
-                return Optional.of(Paths.get(asyncProfilerOpts.get(i + 1)));
+                // Avoid printing absolute path expecting the result to be copy & pasted in public
+                // place by security concerns.
+                Path path = Paths.get("").toAbsolutePath().relativize(
+                        Paths.get("", asyncProfilerOpts.get(i + 1)));
+                return Optional.of(path);
             }
         }
         return Optional.empty();
