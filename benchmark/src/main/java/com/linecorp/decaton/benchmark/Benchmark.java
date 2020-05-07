@@ -55,7 +55,7 @@ public class Benchmark {
         if (this.config.forking()) {
             execution = new ForkingExecution();
         } else {
-            execution = new InProcessExecution(false);
+            execution = new InProcessExecution();
         }
         return execution.execute(config, stage -> {
             if (stage == Stage.READY_WARMUP) {

@@ -53,6 +53,7 @@ public class PerformanceBoundTest {
                                                 .simulateLatencyMs(0)
                                                 .params(params)
                                                 .forking(false)
+                                                .skipWaitingJIT(true)
                                                 .build();
         Benchmark benchmark = new Benchmark(config);
         List<BenchmarkResult> results = new ArrayList<>(ITERATIONS);
@@ -77,6 +78,7 @@ public class PerformanceBoundTest {
                                                 .simulateLatencyMs(10)
                                                 .params(params)
                                                 .forking(false)
+                                                .skipWaitingJIT(true)
                                                 .build();
         Benchmark benchmark = new Benchmark(config);
         List<BenchmarkResult> results = new ArrayList<>(ITERATIONS);

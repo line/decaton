@@ -42,12 +42,6 @@ import lombok.extern.slf4j.Slf4j;
 public class InProcessExecution implements Execution {
     private static final int COMPILE_TIME_CHECK_INTERVAL_MS = 5000;
 
-    private final boolean awaitJITStable;
-
-    public InProcessExecution(boolean awaitJITStable) {
-        this.awaitJITStable = awaitJITStable;
-    }
-
     @Override
     public BenchmarkResult execute(Config config, Consumer<Stage> stageCallback) throws InterruptedException {
         BenchmarkConfig bmConfig = config.benchmarkConfig();
@@ -71,7 +65,7 @@ public class InProcessExecution implements Execution {
             if (!recording.awaitWarmupComplete(3, TimeUnit.MINUTES)) {
                 throw new RuntimeException("timeout on awaiting benchmark to complete");
             }
-            if (awaitJITStable) {
+            if (!bmConfig.skipWaitingJIT()) {
                 awaitJITGetsSettled();
             }
 

@@ -59,6 +59,10 @@ public class BenchmarkConfig {
      */
     Map<String, String> params;
     /**
+     * Disable await on JIT stabilization before the actual run.
+     */
+    boolean skipWaitingJIT;
+    /**
      * Profiling config that is optional and might be null.
      */
     ProfilingConfig profiling;

@@ -63,6 +63,9 @@ public final class Main implements Callable<Integer> {
     @Option(names = "--param", description = "Key-value parameters to supply for runner")
     private Map<String, String> params = new HashMap<>();
 
+    @Option(names = "--no-wait-jit", description = "Do not await JIT compilation to get stable before moving onto actual run")
+    private boolean skipWaitingJIT;
+
     @Option(names = "--profile", description = "Enable profiling of execution with async-profiler")
     private boolean enableProfiling;
 
@@ -101,6 +104,7 @@ public final class Main implements Callable<Integer> {
                                .simulateLatencyMs(simulateLatencyMs)
                                .bootstrapServers(bootstrapServers)
                                .params(params)
+                               .skipWaitingJIT(skipWaitingJIT)
                                .profiling(profiling)
                                .forking(true)
                                .build();
