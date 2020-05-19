@@ -46,11 +46,11 @@ public class Metrics {
     }
 
     public class SubscriptionMetrics {
-        private Timer processDuration(String scope) {
+        private Timer processDuration(String section) {
             return Timer.builder("subscription.process.durations")
                         .description(String.format(
-                                "Time spent for processing %s in consuming loop", scope))
-                        .tags(availableTags.subscriptionScope().and("scope", scope))
+                                "Time spent for processing %s in consuming loop", section))
+                        .tags(availableTags.subscriptionScope().and("section", section))
                         .distributionStatisticExpiry(Duration.ofSeconds(60))
                         .publishPercentiles(0.5, 0.9, 0.99, 0.999)
                         .register(registry);
@@ -126,11 +126,11 @@ public class Metrics {
                           .tags(availableTags.partitionScope())
                           .register(registry);
 
-        public final Counter queueStarvedTime =
-                Counter.builder("partition.queue.starved.time")
-                       .description("Total duration of time the partition's queue was starving")
-                       .tags(availableTags.partitionScope())
-                       .register(registry);
+        public final Timer queueStarvedTime =
+                Timer.builder("partition.queue.starved.time")
+                     .description("Total duration of time the partition's queue was starving")
+                     .tags(availableTags.partitionScope())
+                     .register(registry);
 
         public final Timer partitionPausedTime =
                 Timer.builder("partition.paused.time")

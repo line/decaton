@@ -231,17 +231,9 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
             long lastCommittedMillis = System.currentTimeMillis();
             while (!terminated.get()) {
                 pollOnce(consumer);
-                if (System.currentTimeMillis() - lastCommittedMillis >= commitIntervalMillis.value()) {
-                    try {
-                        Timer timer = Utils.timer();
-                        commitCompletedOffsets(consumer);
-                        metrics.commitOffsetTime.record(timer.duration());
-                    } catch (CommitFailedException | TimeoutException e) {
-                        logger.warn("Offset commit failed, but continuing to consume", e);
-                        // Continue processing, assuming commit will be handled successfully in next attempt.
-                    }
-                    lastCommittedMillis = System.currentTimeMillis();
-                }
+                Timer timer = Utils.timer();
+                lastCommittedMillis = commitOffsetsIfNecessary(consumer, lastCommittedMillis);
+                metrics.commitOffsetTime.record(timer.duration());
             }
         } catch (RuntimeException e) {
             logger.error("ProcessorSubscription {} got exception while consuming, currently assigned: {}",
@@ -319,6 +311,19 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
         logger.debug("resuming partitions: {}", resumedPartitions);
         consumer.resume(resumedPartitions);
         resumedPartitions.forEach(tp -> contexts.get(tp).resume());
+    }
+
+    private long commitOffsetsIfNecessary(Consumer<String, byte[]> consumer, long lastCommittedMillis) {
+        if (System.currentTimeMillis() - lastCommittedMillis >= commitIntervalMillis.value()) {
+            try {
+                commitCompletedOffsets(consumer);
+            } catch (CommitFailedException | TimeoutException e) {
+                logger.warn("Offset commit failed, but continuing to consume", e);
+                // Continue processing, assuming commit will be handled successfully in next attempt.
+            }
+            lastCommittedMillis = System.currentTimeMillis();
+        }
+        return lastCommittedMillis;
     }
 
     @Override
