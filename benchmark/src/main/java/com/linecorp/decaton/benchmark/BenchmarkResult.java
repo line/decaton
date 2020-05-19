@@ -20,7 +20,6 @@ import static java.util.stream.Collectors.toMap;
 
 import java.io.OutputStream;
 import java.io.PrintWriter;
-import java.nio.file.Path;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
@@ -120,7 +119,7 @@ public class BenchmarkResult {
     @Value
     public static class ExtraInfo {
         public static final ExtraInfo EMPTY = new ExtraInfo(null);
-        Path profilerOutput;
+        String profilerOutput;
     }
 
     Performance performance;
