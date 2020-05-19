@@ -113,7 +113,7 @@ public class PartitionContext {
     public void addRequest(TaskRequest request) {
         partitionProcessor.addTask(request);
         if (lastQueueStarvedTime > 0) {
-            metrics.queueStarvedTime.increment(System.nanoTime() - lastQueueStarvedTime);
+            metrics.queueStarvedTime.record(System.nanoTime() - lastQueueStarvedTime, TimeUnit.NANOSECONDS);
             lastQueueStarvedTime = -1;
         }
     }
