@@ -29,6 +29,7 @@ public class Metrics {
     public static final String NAMESPACE = "decaton";
 
     private static final CompositeMeterRegistry registry = new CompositeMeterRegistry();
+
     static {
         registry.config().meterFilter(new MeterFilter() {
             @Override
@@ -42,6 +43,28 @@ public class Metrics {
 
     private Metrics(AvailableTags availableTags) {
         this.availableTags = availableTags;
+    }
+
+    public class SubscriptionMetrics {
+        private Timer processDuration(String section) {
+            return Timer.builder("subscription.process.durations")
+                        .description(String.format(
+                                "Time spent for processing %s in consuming loop", section))
+                        .tags(availableTags.subscriptionScope().and("section", section))
+                        .distributionStatisticExpiry(Duration.ofSeconds(60))
+                        .publishPercentiles(0.5, 0.9, 0.99, 0.999)
+                        .register(registry);
+        }
+
+        public final Timer consumerPollTime = processDuration("poll");
+
+        public final Timer handleRecordsTime = processDuration("records");
+
+        public final Timer reloadContextsTime = processDuration("reload");
+
+        public final Timer handlePausesTime = processDuration("pause");
+
+        public final Timer commitOffsetTime = processDuration("commit");
     }
 
     public class TaskMetrics {
@@ -102,6 +125,12 @@ public class Metrics {
                           .description("The number of pending tasks")
                           .tags(availableTags.partitionScope())
                           .register(registry);
+
+        public final Timer queueStarvedTime =
+                Timer.builder("partition.queue.starved.time")
+                     .description("Total duration of time the partition's queue was starving")
+                     .tags(availableTags.partitionScope())
+                     .register(registry);
 
         public final Timer partitionPausedTime =
                 Timer.builder("partition.paused.time")

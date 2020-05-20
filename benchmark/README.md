@@ -13,11 +13,11 @@ Build a shadowJar:
 
 Run with arbitrary parameters:
 ```sh
-java -cp build/libs/benchmark-VERSION-shadow.jar com.linecorp.decaton.benchmark.Main \
+./debm.sh
  --title "Decaton" \
  --runner com.linecorp.decaton.benchmark.DecatonRunner \
  --tasks 10000 \
  --warmup 100 \
- --max-latency=10 \
+ --simulate-latency=10 \
  --param=decaton.partition.concurrency=20 
 ```

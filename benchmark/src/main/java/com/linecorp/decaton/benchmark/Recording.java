@@ -63,6 +63,7 @@ public class Recording {
     private final int warmupTasks;
     private final List<ChildRecording> children;
     private final AtomicInteger processedCount;
+    private final CountDownLatch warmupLatch;
     private final CountDownLatch completeLatch;
     private volatile long startTimeMs;
     private volatile long completeTimeMs;
@@ -72,6 +73,10 @@ public class Recording {
         this.warmupTasks = warmupTasks;
         children = new ArrayList<>();
         processedCount = new AtomicInteger();
+        warmupLatch = new CountDownLatch(1);
+        if (warmupTasks == 0) {
+            warmupLatch.countDown();
+        }
         completeLatch = new CountDownLatch(1);
     }
 
@@ -90,7 +95,7 @@ public class Recording {
                 children.add(child);
             }
         }
-        if (seq == warmupTasks) {
+        if (seq == warmupTasks + 1) {
             startTimeMs = System.currentTimeMillis();
             log.debug("Start recording time: {}", startTimeMs);
         }
@@ -98,11 +103,18 @@ public class Recording {
         if (log.isTraceEnabled()) {
             log.trace("Task {} completed by thread: {}", seq, Thread.currentThread().getName());
         }
+        if (seq == warmupTasks) {
+            warmupLatch.countDown();
+        }
         if (seq == tasks + warmupTasks) {
             completeTimeMs = System.currentTimeMillis();
             log.debug("Finish recording time: {}", completeTimeMs);
             completeLatch.countDown();
         }
+    }
+
+    public boolean awaitWarmupComplete(long timeout, TimeUnit unit) throws InterruptedException {
+        return warmupLatch.await(timeout, unit);
     }
 
     public boolean await(long timeout, TimeUnit unit) throws InterruptedException {

@@ -41,13 +41,20 @@ public class PerformanceBoundTest {
         Assume.assumeTrue(System.getProperty("it.test-perf") != null);
     }
 
-    @Test
+    @Test(timeout = 300000)
     public void testPerformanceBoundBusy() throws InterruptedException {
         Map<String, String> params = new HashMap<>();
         params.put(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY.name(), "8");
-        BenchmarkConfig config = new BenchmarkConfig(
-                "PerformanceBoundBusy", DecatonRunner.class.getName(),
-                10_000, 10_000, 0, null, params);
+        BenchmarkConfig config = BenchmarkConfig.builder()
+                                                .title("PerformanceBoundBusy")
+                                                .runner(DecatonRunner.class.getName())
+                                                .tasks(10_000)
+                                                .warmupTasks(10_000)
+                                                .simulateLatencyMs(0)
+                                                .params(params)
+                                                .forking(false)
+                                                .skipWaitingJIT(true)
+                                                .build();
         Benchmark benchmark = new Benchmark(config);
         List<BenchmarkResult> results = new ArrayList<>(ITERATIONS);
         for (int i = 0; i < ITERATIONS; i++) {
@@ -59,13 +66,20 @@ public class PerformanceBoundTest {
         assertThat((int) result.performance().throughput(), greaterThanOrEqualTo(10000));
     }
 
-    @Test
+    @Test(timeout = 300000)
     public void testPerformanceBoundWithLatency() throws InterruptedException {
         Map<String, String> params = new HashMap<>();
         params.put(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY.name(), "10");
-        BenchmarkConfig config = new BenchmarkConfig(
-                "PerformanceBoundWithLatency", DecatonRunner.class.getName(),
-                10_000, 10_000, 10, null, params);
+        BenchmarkConfig config = BenchmarkConfig.builder()
+                                                .title("PerformanceBoundWithLatency")
+                                                .runner(DecatonRunner.class.getName())
+                                                .tasks(10_000)
+                                                .warmupTasks(10_000)
+                                                .simulateLatencyMs(10)
+                                                .params(params)
+                                                .forking(false)
+                                                .skipWaitingJIT(true)
+                                                .build();
         Benchmark benchmark = new Benchmark(config);
         List<BenchmarkResult> results = new ArrayList<>(ITERATIONS);
         for (int i = 0; i < ITERATIONS; i++) {

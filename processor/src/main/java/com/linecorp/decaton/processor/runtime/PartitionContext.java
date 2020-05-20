@@ -38,6 +38,7 @@ public class PartitionContext {
     // The offset committed successfully at last commit
     private long lastCommittedOffset;
     private long pausedTimeNanos;
+    private long lastQueueStarvedTime;
 
     public PartitionContext(PartitionScope scope, Processors<?> processors, int maxPendingRecords) {
         this.scope = scope;
@@ -55,6 +56,7 @@ public class PartitionContext {
 
         lastCommittedOffset = -1;
         pausedTimeNanos = -1;
+        lastQueueStarvedTime = -1;
     }
 
     /**
@@ -88,7 +90,11 @@ public class PartitionContext {
 
     public void updateHighWatermark() {
         commitControl.updateHighWatermark();
-        metrics.tasksPending.set(commitControl.pendingOffsetsCount());
+        int pendingCount = commitControl.pendingOffsetsCount();
+        metrics.tasksPending.set(pendingCount);
+        if (pendingCount == 0 && lastQueueStarvedTime < 0) {
+            lastQueueStarvedTime = System.nanoTime();
+        }
     }
 
     public int pendingTasksCount() {
@@ -106,6 +112,10 @@ public class PartitionContext {
 
     public void addRequest(TaskRequest request) {
         partitionProcessor.addTask(request);
+        if (lastQueueStarvedTime > 0) {
+            metrics.queueStarvedTime.record(System.nanoTime() - lastQueueStarvedTime, TimeUnit.NANOSECONDS);
+            lastQueueStarvedTime = -1;
+        }
     }
 
     public DeferredCompletion registerOffset(long offset) {

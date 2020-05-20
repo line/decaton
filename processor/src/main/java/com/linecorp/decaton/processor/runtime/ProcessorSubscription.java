@@ -44,6 +44,8 @@ import com.linecorp.decaton.processor.DeferredCompletion;
 import com.linecorp.decaton.processor.ProcessorProperties;
 import com.linecorp.decaton.processor.Property;
 import com.linecorp.decaton.processor.SubscriptionStateListener;
+import com.linecorp.decaton.processor.metrics.Metrics;
+import com.linecorp.decaton.processor.metrics.Metrics.SubscriptionMetrics;
 import com.linecorp.decaton.processor.runtime.Utils.Timer;
 
 public class ProcessorSubscription extends Thread implements AsyncShutdownable {
@@ -60,6 +62,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
     private final Property<Long> commitIntervalMillis;
     private final Property<Long> rebalanceTimeoutMillis;
     private final SubscriptionStateListener stateListener;
+    private final SubscriptionMetrics metrics;
 
     public ProcessorSubscription(SubscriptionScope scope,
                                  Supplier<Consumer<String, byte[]>> consumerSupplier,
@@ -72,6 +75,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
         this.stateListener = stateListener;
         terminated = new AtomicBoolean();
         contexts = new PartitionContexts(scope, processors);
+        metrics = Metrics.withTags("subscription", scope.subscriptionId()).new SubscriptionMetrics();
 
         blacklistedKeysFilter = new BlacklistedKeysFilter(props);
         commitIntervalMillis = props.get(ProcessorProperties.CONFIG_COMMIT_INTERVAL_MS);
@@ -227,15 +231,9 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
             long lastCommittedMillis = System.currentTimeMillis();
             while (!terminated.get()) {
                 pollOnce(consumer);
-                if (System.currentTimeMillis() - lastCommittedMillis >= commitIntervalMillis.value()) {
-                    try {
-                        commitCompletedOffsets(consumer);
-                    } catch (CommitFailedException | TimeoutException e) {
-                        logger.warn("Offset commit failed, but continuing to consume", e);
-                        // Continue processing, assuming commit will be handled successfully in next attempt.
-                    }
-                    lastCommittedMillis = System.currentTimeMillis();
-                }
+                Timer timer = Utils.timer();
+                lastCommittedMillis = commitOffsetsIfNecessary(consumer, lastCommittedMillis);
+                metrics.commitOffsetTime.record(timer.duration());
             }
         } catch (RuntimeException e) {
             logger.error("ProcessorSubscription {} got exception while consuming, currently assigned: {}",
@@ -261,8 +259,11 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
     }
 
     private void pollOnce(Consumer<String, byte[]> consumer) {
+        Timer timer = Utils.timer();
         ConsumerRecords<String, byte[]> records = consumer.poll(POLL_TIMEOUT_MILLIS);
+        metrics.consumerPollTime.record(timer.duration());
 
+        timer = Utils.timer();
         records.forEach(record -> {
             TopicPartition tp = new TopicPartition(record.topic(), record.partition());
             PartitionContext context = contexts.get(tp);
@@ -276,10 +277,18 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
                 completion.complete();
             }
         });
-        contexts.updateHighWatermarks();
+        metrics.handleRecordsTime.record(timer.duration());
+
+        timer = Utils.timer();
         contexts.maybeHandlePropertyReload();
+        metrics.reloadContextsTime.record(timer.duration());
+
+        contexts.updateHighWatermarks();
+
+        timer = Utils.timer();
         pausePartitions(consumer);
         resumePartitions(consumer);
+        metrics.handlePausesTime.record(timer.duration());
     }
 
     private void pausePartitions(Consumer<?, ?> consumer) {
@@ -302,6 +311,19 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
         logger.debug("resuming partitions: {}", resumedPartitions);
         consumer.resume(resumedPartitions);
         resumedPartitions.forEach(tp -> contexts.get(tp).resume());
+    }
+
+    private long commitOffsetsIfNecessary(Consumer<String, byte[]> consumer, long lastCommittedMillis) {
+        if (System.currentTimeMillis() - lastCommittedMillis >= commitIntervalMillis.value()) {
+            try {
+                commitCompletedOffsets(consumer);
+            } catch (CommitFailedException | TimeoutException e) {
+                logger.warn("Offset commit failed, but continuing to consume", e);
+                // Continue processing, assuming commit will be handled successfully in next attempt.
+            }
+            lastCommittedMillis = System.currentTimeMillis();
+        }
+        return lastCommittedMillis;
     }
 
     @Override

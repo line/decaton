@@ -16,10 +16,14 @@
 
 package com.linecorp.decaton.benchmark;
 
+import static java.util.stream.Collectors.toMap;
+
 import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.time.Duration;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
 
 import lombok.Value;
@@ -83,8 +87,45 @@ public class BenchmarkResult {
         }
     }
 
+    @Value
+    public static class JvmStats {
+        @Value
+        public static class GcStats {
+            long count;
+            long time;
+        }
+
+        Map<String, GcStats> gcStats;
+
+        public JvmStats plus(JvmStats other) {
+            Map<String, GcStats> merged = new HashMap<>(gcStats);
+            for (Entry<String, GcStats> e : other.gcStats.entrySet()) {
+                GcStats ovs = e.getValue();
+                merged.compute(e.getKey(),
+                               (k, v) -> new GcStats((v == null ? 0 : v.count) + ovs.count,
+                                                     (v == null ? 0 : v.time) + ovs.time));
+            }
+            return new JvmStats(merged);
+        }
+
+        public JvmStats div(int d) {
+            Map<String, GcStats> newStats = gcStats.entrySet().stream().collect(toMap(
+                    Entry::getKey,
+                    e -> new GcStats(e.getValue().count / d, e.getValue().time / d)));
+            return new JvmStats(newStats);
+        }
+    }
+
+    @Value
+    public static class ExtraInfo {
+        public static final ExtraInfo EMPTY = new ExtraInfo(null);
+        String profilerOutput;
+    }
+
     Performance performance;
     ResourceUsage resource;
+    JvmStats jvmStats;
+    ExtraInfo extraInfo;
 
     public void print(BenchmarkConfig config, OutputStream out) {
         PrintWriter pw = new PrintWriter(out);
@@ -95,6 +136,11 @@ public class BenchmarkResult {
         pw.printf("# Simulated Latency(ms): %d\n", config.simulateLatencyMs());
         for (Entry<String, String> e : config.params().entrySet()) {
             pw.printf("# Param: %s=%s\n", e.getKey(), e.getValue());
+        }
+        if (extraInfo != null) {
+            if (extraInfo.profilerOutput != null) {
+                pw.printf("# Profiler Output: %s\n", extraInfo.profilerOutput);
+            }
         }
 
         pw.printf("--- Performance ---\n");
@@ -107,15 +153,25 @@ public class BenchmarkResult {
         pw.printf("Cpu Time(ms): %.2f\n", resource.totalCpuTimeNs / 1_000_000.0);
         pw.printf("Allocated Heap(KiB): %.2f\n", resource.totalAllocatedBytes / 1024.0);
 
+        pw.printf("--- JVM ---\n");
+        jvmStats.gcStats.keySet().stream().sorted().forEach(name -> {
+            JvmStats.GcStats values = jvmStats.gcStats.get(name);
+            pw.printf("GC (%s) Count: %d\n", name, values.count);
+            pw.printf("GC (%s) Time(ms): %d\n", name, values.time);
+        });
+
         pw.flush();
     }
 
     public BenchmarkResult plus(BenchmarkResult other) {
-        return new BenchmarkResult(performance.plus(other.performance), resource.plus(other.resource));
+        return new BenchmarkResult(performance.plus(other.performance),
+                                   resource.plus(other.resource),
+                                   jvmStats.plus(other.jvmStats),
+                                   ExtraInfo.EMPTY);
     }
 
     public BenchmarkResult div(int d) {
-        return new BenchmarkResult(performance.div(d), resource.div(d));
+        return new BenchmarkResult(performance.div(d), resource.div(d), jvmStats.div(d), ExtraInfo.EMPTY);
     }
 
     public static BenchmarkResult aggregateAverage(List<BenchmarkResult> results) {
