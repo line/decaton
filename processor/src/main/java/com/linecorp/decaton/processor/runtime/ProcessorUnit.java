@@ -89,5 +89,6 @@ public class ProcessorUnit implements AsyncShutdownable {
     @Override
     public void awaitShutdown() throws InterruptedException {
         executor.awaitTermination(Long.MAX_VALUE, TimeUnit.SECONDS);
+        metrics.close();
     }
 }

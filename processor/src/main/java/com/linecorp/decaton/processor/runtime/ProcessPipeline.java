@@ -151,5 +151,7 @@ public class ProcessPipeline<T> implements AutoCloseable {
     public void close() {
         terminated = true;
         scheduler.close();
+        processMetrics.close();
+        taskMetrics.close();
     }
 }

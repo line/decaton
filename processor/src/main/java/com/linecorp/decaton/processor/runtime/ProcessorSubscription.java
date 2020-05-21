@@ -335,6 +335,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
     @Override
     public void awaitShutdown() throws InterruptedException {
         join();
+        metrics.close();
         logger.info("Subscription thread terminated: {}", getName());
     }
 }
