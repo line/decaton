@@ -18,7 +18,11 @@ package com.linecorp.decaton.processor.metrics;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Meter;
@@ -49,17 +53,25 @@ public class Metrics {
     }
 
     /**
-     * Superclass of all *Metrics classes just to implement {@link #close()} to cleanup
-     * metrics instances altogether.
+     * Superclass of all *Metrics classes managing lifecycle of meter instances.
+     * This class implements refcounting for meters identified by {@link Meter.Id} and make sure to remove
+     * the instance from {@link MeterRegistry} when the last reference to the meter closed and disappeared.
      */
     abstract static class AbstractMetrics implements AutoCloseable {
+        private static final Map<Meter.Id, AtomicInteger> meterRefCounts = new HashMap<>();
         private final List<Meter> meters;
 
         protected AbstractMetrics() {
             meters = new ArrayList<>();
         }
 
-        <T extends Meter> T meter(T meter) {
+        <T extends Meter> T meter(Supplier<T> ctor) {
+            final T meter;
+            synchronized (meterRefCounts) {
+                meter = ctor.get();
+                meterRefCounts.computeIfAbsent(meter.getId(), key -> new AtomicInteger())
+                              .incrementAndGet();
+            }
             meters.add(meter);
             return meter;
         }
@@ -67,21 +79,28 @@ public class Metrics {
         @Override
         public void close() {
             for (Meter meter : meters) {
-                registry.remove(meter);
                 meter.close();
+                synchronized (meterRefCounts) {
+                    Meter.Id id = meter.getId();
+                    int count = meterRefCounts.get(id).decrementAndGet();
+                    if (count == 0) {
+                        meterRefCounts.remove(id);
+                        registry.remove(meter);
+                    }
+                }
             }
         }
     }
 
     public class SubscriptionMetrics extends AbstractMetrics {
         private Timer processDuration(String section) {
-            return meter(Timer.builder("subscription.process.durations")
-                              .description(String.format(
-                                      "Time spent for processing %s in consuming loop", section))
-                              .tags(availableTags.subscriptionScope().and("section", section))
-                              .distributionStatisticExpiry(Duration.ofSeconds(60))
-                              .publishPercentiles(0.5, 0.9, 0.99, 0.999)
-                              .register(registry));
+            return meter(() -> Timer.builder("subscription.process.durations")
+                                    .description(String.format(
+                                            "Time spent for processing %s in consuming loop", section))
+                                    .tags(availableTags.subscriptionScope().and("section", section))
+                                    .distributionStatisticExpiry(Duration.ofSeconds(60))
+                                    .publishPercentiles(0.5, 0.9, 0.99, 0.999)
+                                    .register(registry));
         }
 
         public final Timer consumerPollTime = processDuration("poll");
@@ -97,111 +116,112 @@ public class Metrics {
 
     public class TaskMetrics extends AbstractMetrics {
         public final Counter tasksProcessed =
-                meter(Counter.builder("tasks.processed")
-                             .description("The number of tasks processed")
-                             .tags(availableTags.partitionScope())
-                             .register(registry));
+                meter(() -> Counter.builder("tasks.processed")
+                                   .description("The number of tasks processed")
+                                   .tags(availableTags.partitionScope())
+                                   .register(registry));
 
         public final Counter tasksDiscarded =
-                meter(Counter.builder("tasks.discarded")
-                             .description("The number of tasks discarded")
-                             .tags(availableTags.partitionScope())
-                             .register(registry));
+                meter(() -> Counter.builder("tasks.discarded")
+                                   .description("The number of tasks discarded")
+                                   .tags(availableTags.partitionScope())
+                                   .register(registry));
 
         public final Counter tasksError =
-                meter(Counter.builder("tasks.error")
-                             .description("The number of tasks thrown exception by process")
-                             .tags(availableTags.partitionScope())
-                             .register(registry));
+                meter(() -> Counter.builder("tasks.error")
+                                   .description("The number of tasks thrown exception by process")
+                                   .tags(availableTags.partitionScope())
+                                   .register(registry));
     }
 
     public class ProcessMetrics extends AbstractMetrics {
         public final Timer tasksCompleteDuration =
-                meter(Timer.builder("tasks.complete.duration")
-                           .description("Time of a task taken to be completed")
-                           .tags(availableTags.partitionScope())
-                           .distributionStatisticExpiry(Duration.ofSeconds(60))
-                           .publishPercentiles(0.5, 0.9, 0.99, 0.999)
-                           .register(registry));
+                meter(() -> Timer.builder("tasks.complete.duration")
+                                 .description("Time of a task taken to be completed")
+                                 .tags(availableTags.partitionScope())
+                                 .distributionStatisticExpiry(Duration.ofSeconds(60))
+                                 .publishPercentiles(0.5, 0.9, 0.99, 0.999)
+                                 .register(registry));
 
         public final Timer tasksProcessDuration =
-                meter(Timer.builder("tasks.process.duration")
-                           .description("The time a task taken to be processed")
-                           .tags(availableTags.partitionScope())
-                           .distributionStatisticExpiry(Duration.ofSeconds(60))
-                           .publishPercentiles(0.5, 0.9, 0.99, 0.999)
-                           .register(registry));
+                meter(() -> Timer.builder("tasks.process.duration")
+                                 .description("The time a task taken to be processed")
+                                 .tags(availableTags.partitionScope())
+                                 .distributionStatisticExpiry(Duration.ofSeconds(60))
+                                 .publishPercentiles(0.5, 0.9, 0.99, 0.999)
+                                 .register(registry));
     }
 
     public class ResourceUtilizationMetrics extends AbstractMetrics {
         public final Timer processorProcessedTime =
-                meter(Timer.builder("processor.processed.time")
-                           .description("The accumulated time the processor were processing tasks")
-                           .tags(availableTags.subpartitionScope())
-                           .register(registry));
+                meter(() -> Timer.builder("processor.processed.time")
+                                 .description("The accumulated time the processor were processing tasks")
+                                 .tags(availableTags.subpartitionScope())
+                                 .register(registry));
 
         public final Counter tasksQueued =
-                meter(Counter.builder("tasks.queued")
-                             .description("The number of tasks queued per sub partitions")
-                             .tags(availableTags.subpartitionScope())
-                             .register(registry));
+                meter(() -> Counter.builder("tasks.queued")
+                                   .description("The number of tasks queued per sub partitions")
+                                   .tags(availableTags.subpartitionScope())
+                                   .register(registry));
     }
 
     public class PartitionStateMetrics extends AbstractMetrics {
         public final ValueGauge tasksPending =
-                meter(ValueGauge.builder("tasks.pending")
-                                .description("The number of pending tasks")
-                                .tags(availableTags.partitionScope())
-                                .register(registry));
+                meter(() -> ValueGauge.builder("tasks.pending")
+                                      .description("The number of pending tasks")
+                                      .tags(availableTags.partitionScope())
+                                      .register(registry));
 
         public final Timer queueStarvedTime =
-                meter(Timer.builder("partition.queue.starved.time")
-                           .description("Total duration of time the partition's queue was starving")
-                           .tags(availableTags.partitionScope())
-                           .register(registry));
+                meter(() -> Timer.builder("partition.queue.starved.time")
+                                 .description("Total duration of time the partition's queue was starving")
+                                 .tags(availableTags.partitionScope())
+                                 .register(registry));
 
         public final Timer partitionPausedTime =
-                meter(Timer.builder("partition.paused.time")
-                           .description(
-                                   "The accumulated time the partition paused awaiting pending tasks' completion")
-                           .tags(availableTags.partitionScope())
-                           .register(registry));
+                meter(() -> Timer.builder("partition.paused.time")
+                                 .description(
+                                         "The accumulated time the partition paused awaiting pending tasks' completion")
+                                 .tags(availableTags.partitionScope())
+                                 .register(registry));
 
         public final ValueGauge partitionsPaused =
-                meter(ValueGauge.builder("partitions.paused")
-                                .description("The number of partitions currently paused for back pressure")
-                                .tags(availableTags.topicScope())
-                                .register(registry));
+                meter(() -> ValueGauge.builder("partitions.paused")
+                                      .description(
+                                              "The number of partitions currently paused for back pressure")
+                                      .tags(availableTags.topicScope())
+                                      .register(registry));
     }
 
     public class SchedulerMetrics extends AbstractMetrics {
         public final Timer tasksSchedulingDelay =
-                meter(Timer.builder("tasks.scheduling.delay")
-                           .description("The time a task waiting for scheduled time")
-                           .tags(availableTags.partitionScope())
-                           .distributionStatisticExpiry(Duration.ofSeconds(60))
-                           .publishPercentiles(0.5, 0.9, 0.99, 0.999)
-                           .register(registry));
+                meter(() -> Timer.builder("tasks.scheduling.delay")
+                                 .description("The time a task waiting for scheduled time")
+                                 .tags(availableTags.partitionScope())
+                                 .distributionStatisticExpiry(Duration.ofSeconds(60))
+                                 .publishPercentiles(0.5, 0.9, 0.99, 0.999)
+                                 .register(registry));
 
         public final Timer partitionThrottledTime =
-                meter(Timer.builder("partition.throttled.time")
-                           .description("The accumulated time the partition throttled by rate limiter")
-                           .tags(availableTags.partitionScope())
-                           .register(registry));
+                meter(() -> Timer.builder("partition.throttled.time")
+                                 .description("The accumulated time the partition throttled by rate limiter")
+                                 .tags(availableTags.partitionScope())
+                                 .register(registry));
     }
 
     public class RetryMetrics extends AbstractMetrics {
         public final Counter retryQueuedTasks =
-                meter(Counter.builder("retry.queued.tasks")
-                             .description("The number of tasks queued to retry topic")
-                             .tags(availableTags.subscriptionScope())
-                             .register(registry));
+                meter(() -> Counter.builder("retry.queued.tasks")
+                                   .description("The number of tasks queued to retry topic")
+                                   .tags(availableTags.subscriptionScope())
+                                   .register(registry));
 
         public final Counter retryQueueingFailed =
-                meter(Counter.builder("retry.queueing.failed")
-                             .description("The number of tasks failed to enqueue in retry topic")
-                             .tags(availableTags.subscriptionScope())
-                             .register(registry));
+                meter(() -> Counter.builder("retry.queueing.failed")
+                                   .description("The number of tasks failed to enqueue in retry topic")
+                                   .tags(availableTags.subscriptionScope())
+                                   .register(registry));
     }
 
     public static Metrics withTags(String... keyValues) {
