@@ -79,13 +79,13 @@ public class Metrics {
         @Override
         public void close() {
             for (Meter meter : meters) {
-                meter.close();
                 synchronized (meterRefCounts) {
                     Meter.Id id = meter.getId();
                     int count = meterRefCounts.get(id).decrementAndGet();
                     if (count == 0) {
                         meterRefCounts.remove(id);
                         registry.remove(meter);
+                        meter.close();
                     }
                 }
             }

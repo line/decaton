@@ -88,10 +88,10 @@ public class ValueGauge implements Meter {
         public ValueGauge register(MeterRegistry registry) {
             AtomicInteger underlying = new AtomicInteger(0);
             Gauge gauge = Gauge.builder(name, underlying::get)
-                                  .description(description)
-                                  .baseUnit(baseUnit)
-                                  .tags(tags)
-                                  .register(registry);
+                               .description(description)
+                               .baseUnit(baseUnit)
+                               .tags(tags)
+                               .register(registry);
             return new ValueGauge(gauge, underlying);
         }
     }
