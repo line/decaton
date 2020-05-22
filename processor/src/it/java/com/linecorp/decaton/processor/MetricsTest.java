@@ -101,11 +101,12 @@ public class MetricsTest {
                 client.put(String.valueOf(i), HelloTask.getDefaultInstance());
             }
             processLatch.await();
+            Thread.sleep(1000);
             long pausedCount = (long) Metrics.registry()
-                                      .find("decaton.partition.paused")
-                                      .tags("topic", topicName)
-                                      .gauges().stream()
-                                      .mapToDouble(Gauge::value).sum();
+                                             .find("decaton.partition.paused")
+                                             .tags("topic", topicName)
+                                             .gauges().stream()
+                                             .mapToDouble(Gauge::value).sum();
             assertEquals(PARTITIONS, pausedCount);
         }
     }
