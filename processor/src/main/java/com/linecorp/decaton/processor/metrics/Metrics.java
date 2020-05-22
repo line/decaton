@@ -25,6 +25,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
 import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.Meter.Id;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -166,11 +167,7 @@ public class Metrics {
     }
 
     public class PartitionStateMetrics extends AbstractMetrics {
-        public final ValueGauge tasksPending =
-                meter(() -> ValueGauge.builder("tasks.pending")
-                                      .description("The number of pending tasks")
-                                      .tags(availableTags.partitionScope())
-                                      .register(registry));
+        public final Gauge tasksPending;
 
         public final Timer queueStarvedTime =
                 meter(() -> Timer.builder("partition.queue.starved.time")
@@ -185,12 +182,18 @@ public class Metrics {
                                  .tags(availableTags.partitionScope())
                                  .register(registry));
 
-        public final ValueGauge partitionsPaused =
-                meter(() -> ValueGauge.builder("partitions.paused")
-                                      .description(
-                                              "The number of partitions currently paused for back pressure")
-                                      .tags(availableTags.topicScope())
-                                      .register(registry));
+        public final Gauge partitionPaused;
+
+        public PartitionStateMetrics(Supplier<Number> pendingTasksFn, Supplier<Number> partitionPausedFn) {
+            tasksPending = meter(() -> Gauge.builder("tasks.pending", pendingTasksFn)
+                                            .description("The number of pending tasks")
+                                            .tags(availableTags.partitionScope())
+                                            .register(registry));
+            partitionPaused = meter(() -> Gauge.builder("partition.paused", partitionPausedFn)
+                                               .description("Whether the partition is paused. 1 if paused, 0 otherwise")
+                                               .tags(availableTags.partitionScope())
+                                               .register(registry));
+        }
     }
 
     public class SchedulerMetrics extends AbstractMetrics {

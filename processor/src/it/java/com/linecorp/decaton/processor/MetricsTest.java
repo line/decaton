@@ -35,17 +35,22 @@ import com.linecorp.decaton.protocol.Sample.HelloTask;
 import com.linecorp.decaton.testing.KafkaClusterRule;
 import com.linecorp.decaton.testing.TestUtils;
 
+import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Meter;
+import io.micrometer.prometheus.PrometheusConfig;
+import io.micrometer.prometheus.PrometheusMeterRegistry;
 
-public class MetricsCleanupTest {
+public class MetricsTest {
     @ClassRule
     public static KafkaClusterRule rule = new KafkaClusterRule();
+
+    private static final int PARTITIONS = 3;
 
     private String topicName;
 
     @Before
     public void setUp() {
-        topicName = rule.admin().createRandomTopic(3, 3);
+        topicName = rule.admin().createRandomTopic(PARTITIONS, 3);
     }
 
     @After
@@ -69,5 +74,39 @@ public class MetricsCleanupTest {
 
         List<Meter> meters = Metrics.registry().getMeters();
         assertEquals(emptyList(), meters);
+    }
+
+    @Test(timeout = 30000)
+    public void testDetectStuckPartitions() throws Exception {
+        // Micrometer doesn't track values without at least one register implementation added
+        Metrics.register(new PrometheusMeterRegistry(PrometheusConfig.DEFAULT));
+
+        CountDownLatch processLatch = new CountDownLatch(PARTITIONS * 2);
+        DecatonProcessor<HelloTask> processor = (context, task) -> {
+            context.deferCompletion(); // Leak defer completion
+            processLatch.countDown();
+        };
+        try (ProcessorSubscription subscription = TestUtils.subscription(
+                rule.bootstrapServers(),
+                ProcessorsBuilder.consuming(topicName, new ProtocolBuffersDeserializer<>(HelloTask.parser()))
+                                 .thenProcess(processor),
+                null,
+                StaticPropertySupplier.of(
+                        Property.ofStatic(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY, 1),
+                        Property.ofStatic(ProcessorProperties.CONFIG_MAX_PENDING_RECORDS, 1)));
+             DecatonClient<HelloTask> client = TestUtils.client(topicName, rule.bootstrapServers())) {
+            for (int i = 0; i < PARTITIONS * 10; i++) {
+                // What we need here is just simple round-robin but it's not possible with null keys anymore
+                // since https://cwiki.apache.org/confluence/display/KAFKA/KIP-480%3A+Sticky+Partitioner
+                client.put(String.valueOf(i), HelloTask.getDefaultInstance());
+            }
+            processLatch.await();
+            long pausedCount = (long) Metrics.registry()
+                                      .find("decaton.partition.paused")
+                                      .tags("topic", topicName)
+                                      .gauges().stream()
+                                      .mapToDouble(Gauge::value).sum();
+            assertEquals(PARTITIONS, pausedCount);
+        }
     }
 }
