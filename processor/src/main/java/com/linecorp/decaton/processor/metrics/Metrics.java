@@ -66,20 +66,19 @@ public class Metrics {
         }
 
         <T extends Meter> T meter(Supplier<T> ctor) {
-            final T meter;
             synchronized (meterRefCounts) {
-                meter = ctor.get();
+                T meter = ctor.get();
                 meterRefCounts.computeIfAbsent(meter.getId(), key -> new AtomicInteger())
                               .incrementAndGet();
+                meters.add(meter);
+                return meter;
             }
-            meters.add(meter);
-            return meter;
         }
 
         @Override
         public void close() {
-            for (Meter meter : meters) {
-                synchronized (meterRefCounts) {
+            synchronized (meterRefCounts) {
+                for (Meter meter : meters) {
                     Meter.Id id = meter.getId();
                     int count = meterRefCounts.get(id).decrementAndGet();
                     if (count == 0) {
