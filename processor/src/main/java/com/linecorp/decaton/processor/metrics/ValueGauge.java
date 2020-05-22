@@ -19,6 +19,8 @@ package com.linecorp.decaton.processor.metrics;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.Measurement;
+import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
 import lombok.RequiredArgsConstructor;
@@ -33,11 +35,13 @@ import lombok.experimental.Accessors;
  * <p>The reason why we introduce this class against 'heisen-gauge' principle is, once we adopt heisen-gauge
  * we have to maintain a lot of concurrent-access aware fields which might be a bit risky to take just for the metrics.
  */
-public class ValueGauge {
+public class ValueGauge implements Meter {
+    private final Gauge gauge;
     private final AtomicInteger underlying;
 
-    private ValueGauge(AtomicInteger value) {
-        this.underlying = value;
+    private ValueGauge(Gauge gauge, AtomicInteger underlying) {
+        this.gauge = gauge;
+        this.underlying = underlying;
     }
 
     public void increment() {
@@ -56,6 +60,21 @@ public class ValueGauge {
         return new Builder(name);
     }
 
+    @Override
+    public Id getId() {
+        return gauge.getId();
+    }
+
+    @Override
+    public Iterable<Measurement> measure() {
+        return gauge.measure();
+    }
+
+    @Override
+    public void close() {
+        gauge.close();
+    }
+
     @Setter
     @Accessors(fluent = true, chain = true)
     @RequiredArgsConstructor
@@ -68,12 +87,12 @@ public class ValueGauge {
 
         public ValueGauge register(MeterRegistry registry) {
             AtomicInteger underlying = new AtomicInteger(0);
-            Gauge.builder(name, underlying::get)
-                 .description(description)
-                 .baseUnit(baseUnit)
-                 .tags(tags)
-                 .register(registry);
-            return new ValueGauge(underlying);
+            Gauge gauge = Gauge.builder(name, underlying::get)
+                               .description(description)
+                               .baseUnit(baseUnit)
+                               .tags(tags)
+                               .register(registry);
+            return new ValueGauge(gauge, underlying);
         }
     }
 }

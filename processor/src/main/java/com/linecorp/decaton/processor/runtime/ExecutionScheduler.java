@@ -103,5 +103,6 @@ public class ExecutionScheduler implements AutoCloseable {
     @Override
     public void close() {
         terminateLatch.countDown();
+        metrics.close();
     }
 }

@@ -77,5 +77,6 @@ class DecatonTaskRetryQueueingProcessor implements DecatonProcessor<byte[]> {
     @Override
     public void close() throws Exception {
         producer.close();
+        metrics.close();
     }
 }

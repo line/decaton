@@ -104,6 +104,7 @@ public class PartitionContext {
     public void destroyProcessors() throws Exception {
         partitionProcessor.close();
         processors.destroyPartitionScope(scope.subscriptionId(), scope.topicPartition());
+        metrics.close();
     }
 
     public boolean isOffsetRegressing(long offset) {
