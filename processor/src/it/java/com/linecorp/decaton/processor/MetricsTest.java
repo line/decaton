@@ -20,17 +20,25 @@ import static java.util.Collections.emptyList;
 import static org.junit.Assert.assertEquals;
 
 import java.util.List;
+import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Test;
 
 import com.linecorp.decaton.client.DecatonClient;
+import com.linecorp.decaton.client.kafka.PrintableAsciiStringSerializer;
+import com.linecorp.decaton.client.kafka.ProtocolBuffersKafkaSerializer;
 import com.linecorp.decaton.processor.metrics.Metrics;
 import com.linecorp.decaton.processor.runtime.ProcessorSubscription;
 import com.linecorp.decaton.protobuf.ProtocolBuffersDeserializer;
+import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
 import com.linecorp.decaton.protocol.Sample.HelloTask;
 import com.linecorp.decaton.testing.KafkaClusterRule;
 import com.linecorp.decaton.testing.TestUtils;
@@ -81,11 +89,14 @@ public class MetricsTest {
         // Micrometer doesn't track values without at least one register implementation added
         Metrics.register(new PrometheusMeterRegistry(PrometheusConfig.DEFAULT));
 
-        CountDownLatch processLatch = new CountDownLatch(PARTITIONS * 2);
+        CountDownLatch firstLatch = new CountDownLatch(PARTITIONS);
         DecatonProcessor<HelloTask> processor = (context, task) -> {
             context.deferCompletion(); // Leak defer completion
-            processLatch.countDown();
+            firstLatch.countDown();
         };
+
+        Properties props = new Properties();
+        props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, rule.bootstrapServers());
         try (ProcessorSubscription subscription = TestUtils.subscription(
                 rule.bootstrapServers(),
                 ProcessorsBuilder.consuming(topicName, new ProtocolBuffersDeserializer<>(HelloTask.parser()))
@@ -94,14 +105,22 @@ public class MetricsTest {
                 StaticPropertySupplier.of(
                         Property.ofStatic(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY, 1),
                         Property.ofStatic(ProcessorProperties.CONFIG_MAX_PENDING_RECORDS, 1)));
-             DecatonClient<HelloTask> client = TestUtils.client(topicName, rule.bootstrapServers())) {
-            for (int i = 0; i < PARTITIONS * 10; i++) {
+             Producer<String, DecatonTaskRequest> producer =
+                     new KafkaProducer<>(props,
+                                         new PrintableAsciiStringSerializer(),
+                                         new ProtocolBuffersKafkaSerializer<>())) {
+
+            DecatonTaskRequest req = DecatonTaskRequest.newBuilder()
+                                                       .setSerializedTask(
+                                                               HelloTask.getDefaultInstance().toByteString())
+                                                       .build();
+            for (int i = 0; i < PARTITIONS; i++) {
                 // What we need here is just simple round-robin but it's not possible with null keys anymore
                 // since https://cwiki.apache.org/confluence/display/KAFKA/KIP-480%3A+Sticky+Partitioner
-                client.put(String.valueOf(i), HelloTask.getDefaultInstance());
+                producer.send(new ProducerRecord<>(topicName, i, null, req));
             }
-            processLatch.await();
-            Thread.sleep(1000);
+            firstLatch.await();
+
             long pausedCount = (long) Metrics.registry()
                                              .find("decaton.partition.paused")
                                              .tags("topic", topicName)
