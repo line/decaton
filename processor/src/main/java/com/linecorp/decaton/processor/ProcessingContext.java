@@ -51,7 +51,7 @@ public interface ProcessingContext<T> {
     /**
      * Tells the completion of this processing should be postponed and processor can accept next task.
      * Once this method called within {@link DecatonProcessor#process} method, caller *MUST* call
-     * {@link DeferredCompletion#complete()} method in any cases.
+     * {@link DeferredCompletion#complete()} or {@link ProcessingContext#retry()} method in any cases.
      * Otherwise consumption will stuck in short future and no new task will be given to the processor.
      * @return a {@link DeferredCompletion} which can be used to tell the result of processing asynchronously.
      */
@@ -80,6 +80,8 @@ public interface ProcessingContext<T> {
      * Schedule the currently processing task for retrying.
      * The task currently being processed is queued for future retrying, and processed again in the future
      * *at least after* configured backoff elapsed.
+     * If {@link ProcessingContext#deferCompletion()} was called before, {@link ProcessingContext#retry()}
+     * will automatically complete deferred processing after the currect task is queued for retrying.
      * @return a {@link CompletableFuture} that completes on the producer completed or failed to produce
      * retry task.
      * @throws InterruptedException when processing gets interrupted.
