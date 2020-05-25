@@ -158,7 +158,7 @@ public class PartitionContextsTest {
         assertTrue(needPause.isEmpty());
 
         // Pause 1 partition.
-        doReturn(PENDING_RECORDS_TO_PAUSE + 1).when(cts.get(0)).pendingTasksCount();
+        doReturn(PENDING_RECORDS_TO_PAUSE).when(cts.get(0)).pendingTasksCount();
         needPause = contexts.partitionsNeedsPause();
         assertEquals(1, needPause.size());
         assertEquals(cts.get(0).topicPartition(), needPause.iterator().next());
@@ -198,7 +198,7 @@ public class PartitionContextsTest {
         assertTrue(needsResume.isEmpty());
 
         // Pause 1 partition.
-        doReturn(PENDING_RECORDS_TO_PAUSE + 1).when(cts.get(0)).pendingTasksCount();
+        doReturn(PENDING_RECORDS_TO_PAUSE).when(cts.get(0)).pendingTasksCount();
         needsResume = contexts.partitionsNeedsResume();
         assertTrue(needsResume.isEmpty());
 
@@ -208,7 +208,7 @@ public class PartitionContextsTest {
         assertTrue(needsResume.isEmpty());
 
         // Task count is now lower than threshold. Should appear in resume response.
-        doReturn(PENDING_RECORDS_TO_PAUSE).when(cts.get(0)).pendingTasksCount();
+        doReturn(PENDING_RECORDS_TO_PAUSE - 1).when(cts.get(0)).pendingTasksCount();
         needsResume = contexts.partitionsNeedsResume();
         assertEquals(1, needsResume.size());
         assertEquals(cts.get(0).topicPartition(), needsResume.iterator().next());
