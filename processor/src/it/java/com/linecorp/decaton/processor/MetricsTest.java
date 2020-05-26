@@ -89,10 +89,10 @@ public class MetricsTest {
         // Micrometer doesn't track values without at least one register implementation added
         Metrics.register(new PrometheusMeterRegistry(PrometheusConfig.DEFAULT));
 
-        CountDownLatch firstLatch = new CountDownLatch(PARTITIONS);
+        CountDownLatch processLatch = new CountDownLatch(PARTITIONS);
         DecatonProcessor<HelloTask> processor = (context, task) -> {
             context.deferCompletion(); // Leak defer completion
-            firstLatch.countDown();
+            processLatch.countDown();
         };
 
         Properties props = new Properties();
@@ -119,14 +119,21 @@ public class MetricsTest {
                 // since https://cwiki.apache.org/confluence/display/KAFKA/KIP-480%3A+Sticky+Partitioner
                 producer.send(new ProducerRecord<>(topicName, i, null, req));
             }
-            firstLatch.await();
+            processLatch.await();
 
-            long pausedCount = (long) Metrics.registry()
-                                             .find("decaton.partition.paused")
-                                             .tags("topic", topicName)
-                                             .gauges().stream()
-                                             .mapToDouble(Gauge::value).sum();
-            assertEquals(PARTITIONS, pausedCount);
+            // Wait in loop until the total pause count becomes the number of partitions.
+            // Fail by test timeout if it doesn't.
+            while (true) {
+                long pausedCount = (long) Metrics.registry()
+                                                 .find("decaton.partition.paused")
+                                                 .tags("topic", topicName)
+                                                 .gauges().stream()
+                                                 .mapToDouble(Gauge::value).sum();
+                if (pausedCount == PARTITIONS) {
+                    break;
+                }
+                Thread.sleep(100);
+            }
         }
     }
 }
