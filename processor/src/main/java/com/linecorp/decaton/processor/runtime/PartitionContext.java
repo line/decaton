@@ -37,7 +37,7 @@ public class PartitionContext {
 
     // The offset committed successfully at last commit
     private long lastCommittedOffset;
-    private long pausedTimeNanos;
+    private volatile long pausedTimeNanos;
     private long lastQueueStarvedTime;
 
     public PartitionContext(PartitionScope scope, Processors<?> processors, int maxPendingRecords) {
@@ -52,7 +52,7 @@ public class PartitionContext {
         metrics = Metrics.withTags("subscription", scope.subscriptionId(),
                                    "topic", tp.topic(),
                                    "partition", String.valueOf(tp.partition()))
-                .new PartitionStateMetrics();
+                .new PartitionStateMetrics(commitControl::pendingOffsetsCount, () -> paused() ? 1 : 0);
 
         lastCommittedOffset = -1;
         pausedTimeNanos = -1;
@@ -91,7 +91,6 @@ public class PartitionContext {
     public void updateHighWatermark() {
         commitControl.updateHighWatermark();
         int pendingCount = commitControl.pendingOffsetsCount();
-        metrics.tasksPending.set(pendingCount);
         if (pendingCount == 0 && lastQueueStarvedTime < 0) {
             lastQueueStarvedTime = System.nanoTime();
         }
@@ -132,7 +131,6 @@ public class PartitionContext {
             return;
         }
         pausedTimeNanos = System.nanoTime();
-        metrics.partitionsPaused.increment();
     }
 
     public void resume() {
@@ -142,6 +140,5 @@ public class PartitionContext {
         long pausedNanos = System.nanoTime() - pausedTimeNanos;
         pausedTimeNanos = -1;
         metrics.partitionPausedTime.record(pausedNanos, TimeUnit.NANOSECONDS);
-        metrics.partitionsPaused.decrement();
     }
 }

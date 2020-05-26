@@ -140,7 +140,7 @@ public class PartitionContexts {
     }
 
     private boolean shouldPartitionPaused(int pendingRecords) {
-        return pendingRecords > maxPendingRecords;
+        return pendingRecords >= maxPendingRecords;
     }
 
     // visible for testing
