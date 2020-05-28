@@ -18,7 +18,6 @@ package com.linecorp.decaton.benchmark;
 
 import java.io.File;
 import java.lang.ProcessBuilder.Redirect;
-import java.lang.management.ManagementFactory;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -54,13 +53,8 @@ public class AsyncProfilerProfiling implements Profiling {
         }
     }
 
-    private static long currentPid() {
-        String[] names = ManagementFactory.getRuntimeMXBean().getName().split("@", 2);
-        return Long.parseLong(names[0]);
-    }
-
     private static String outputFileName() {
-        return "profile-" + currentPid() + ".svg";
+        return "profile-" + JvmUtils.currentPid() + ".svg";
     }
 
     private void exec(String subCommand) {
@@ -68,7 +62,7 @@ public class AsyncProfilerProfiling implements Profiling {
         cmd.add(asyncProfilerBin.toString());
         cmd.addAll(asyncProfilerOpts);
         cmd.add(subCommand);
-        cmd.add(String.valueOf(currentPid()));
+        cmd.add(String.valueOf(JvmUtils.currentPid()));
         try {
             Process process = new ProcessBuilder(cmd)
                     .redirectOutput(new File("/dev/stderr"))

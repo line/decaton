@@ -118,8 +118,9 @@ public class BenchmarkResult {
 
     @Value
     public static class ExtraInfo {
-        public static final ExtraInfo EMPTY = new ExtraInfo(null);
+        public static final ExtraInfo EMPTY = new ExtraInfo(null, null);
         String profilerOutput;
+        String taskstatsOutput;
     }
 
     Performance performance;
@@ -140,6 +141,9 @@ public class BenchmarkResult {
         if (extraInfo != null) {
             if (extraInfo.profilerOutput != null) {
                 pw.printf("# Profiler Output: %s\n", extraInfo.profilerOutput);
+            }
+            if (extraInfo.taskstatsOutput != null) {
+                pw.printf("# Taskstats Output: %s\n", extraInfo.taskstatsOutput);
             }
         }
 
