@@ -18,8 +18,6 @@ package com.linecorp.decaton.benchmark;
 
 import static java.util.stream.Collectors.toMap;
 
-import java.io.OutputStream;
-import java.io.PrintWriter;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
@@ -127,45 +125,6 @@ public class BenchmarkResult {
     ResourceUsage resource;
     JvmStats jvmStats;
     ExtraInfo extraInfo;
-
-    public void print(BenchmarkConfig config, OutputStream out) {
-        PrintWriter pw = new PrintWriter(out);
-
-        pw.printf("=== %s (%d tasks) ===\n", config.title(), performance.totalTasks);
-        pw.printf("# Runner: %s\n", config.runner());
-        pw.printf("# Tasks: %d (warmup: %d)\n", config.tasks(), config.warmupTasks());
-        pw.printf("# Simulated Latency(ms): %d\n", config.simulateLatencyMs());
-        for (Entry<String, String> e : config.params().entrySet()) {
-            pw.printf("# Param: %s=%s\n", e.getKey(), e.getValue());
-        }
-        if (extraInfo != null) {
-            if (extraInfo.profilerOutput != null) {
-                pw.printf("# Profiler Output: %s\n", extraInfo.profilerOutput);
-            }
-            if (extraInfo.taskstatsOutput != null) {
-                pw.printf("# Taskstats Output: %s\n", extraInfo.taskstatsOutput);
-            }
-        }
-
-        pw.printf("--- Performance ---\n");
-        pw.printf("Execution Time(ms): %.2f\n", performance.executionTime.toNanos() / 1_000_000.0);
-        pw.printf("Throughput: %.2f tasks/sec\n", performance.throughput);
-        pw.printf("Delivery Latency(ms): mean=%d max=%d\n",
-                  performance.deliveryLatency.avg.toMillis(), performance.deliveryLatency.max.toMillis());
-
-        pw.printf("--- Resource Usage (%d threads observed) ---\n", resource.threads);
-        pw.printf("Cpu Time(ms): %.2f\n", resource.totalCpuTimeNs / 1_000_000.0);
-        pw.printf("Allocated Heap(KiB): %.2f\n", resource.totalAllocatedBytes / 1024.0);
-
-        pw.printf("--- JVM ---\n");
-        jvmStats.gcStats.keySet().stream().sorted().forEach(name -> {
-            JvmStats.GcStats values = jvmStats.gcStats.get(name);
-            pw.printf("GC (%s) Count: %d\n", name, values.count);
-            pw.printf("GC (%s) Time(ms): %d\n", name, values.time);
-        });
-
-        pw.flush();
-    }
 
     public BenchmarkResult plus(BenchmarkResult other) {
         return new BenchmarkResult(performance.plus(other.performance),

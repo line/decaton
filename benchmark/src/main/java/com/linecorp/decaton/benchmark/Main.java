@@ -64,7 +64,8 @@ public final class Main implements Callable<Integer> {
     @Option(names = "--param", description = "Key-value parameters to supply for runner")
     private Map<String, String> params = new HashMap<>();
 
-    @Option(names = "--no-wait-jit", description = "Do not await JIT compilation to get stable before moving onto actual run")
+    @Option(names = "--no-wait-jit",
+            description = "Do not await JIT compilation to get stable before moving onto actual run")
     private boolean skipWaitingJIT;
 
     @Option(names = "--profile", description = "Enable profiling of execution with async-profiler")
@@ -83,6 +84,10 @@ public final class Main implements Callable<Integer> {
     @Option(names = "--taskstats-bin", description = "Path to jtaskstats", defaultValue = "jtaskstats")
     private Path jtaskstatsBin;
 
+    @Option(names = "--format", description = "Result format, one of: text(default), json",
+            defaultValue = "text")
+    private String resultFormat;
+
     private static List<String> parseOptions(String opts) {
         if (opts == null) {
             return emptyList();
@@ -96,6 +101,17 @@ public final class Main implements Callable<Integer> {
         return items;
     }
 
+    private ResultFormat resultFormat() {
+        switch (resultFormat) {
+            case "text":
+                return new TextResultFormat();
+            case "json":
+                return new JsonResultFormat();
+            default:
+                throw new IllegalArgumentException("unknown format: " + resultFormat);
+        }
+    }
+
     @Override
     public Integer call() throws Exception {
         BenchmarkConfig.ProfilingConfig profiling = null;
@@ -106,6 +122,7 @@ public final class Main implements Callable<Integer> {
         if (enableTaskstats) {
             taskstats = new TaskStatsConfig(jtaskstatsBin);
         }
+        ResultFormat resultFormat = resultFormat();
         BenchmarkConfig config =
                 BenchmarkConfig.builder()
                                .title(title)
@@ -122,7 +139,7 @@ public final class Main implements Callable<Integer> {
                                .build();
         Benchmark benchmark = new Benchmark(config);
         BenchmarkResult result = benchmark.run();
-        result.print(config, System.out);
+        resultFormat.print(config, System.out, result);
         return 0;
     }
 
