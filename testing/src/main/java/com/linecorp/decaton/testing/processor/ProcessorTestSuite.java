@@ -40,9 +40,9 @@ import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Test suite that checks Decaton's core functionality, such like processing semantics.
+ * Test suite that checks Decaton's core functionality, especially for processing semantics.
  *
- * A test will perform following procedure:
+ * Test suite will perform following procedure:
  *   1. Start multiple subscription instances
  *   2. Produce tasks
  *   3. When half of tasks are processed, restart subscriptions one by one
@@ -197,7 +197,7 @@ public class ProcessorTestSuite {
      * Generate and produce {@link #NUM_TASKS} tasks
      * @param producer Producer instance to be used
      * @param topic Topic to be sent tasks
-     * @param onProduce Callback which is called when a task is produced (!= completed to send)
+     * @param onProduce Callback which is called when a task is complete to be sent
      * @return A CompletableFuture of Map, which holds partition as the key and max offset as the value
      */
     private static CompletableFuture<Map<Integer, Long>> produceTasks(
@@ -230,11 +230,14 @@ public class ProcessorTestSuite {
             producer.send(record, (metadata, exception) -> {
                 if (exception == null) {
                     future.complete(metadata);
+                    onProduce.accept(new ProducedRecord(key,
+                                                        new TopicPartition(metadata.topic(), metadata.partition()),
+                                                        metadata.offset(),
+                                                        task));
                 } else {
                     future.completeExceptionally(exception);
                 }
             });
-            onProduce.accept(new ProducedRecord(key, task));
         }
 
         return CompletableFuture.allOf(produceFutures).thenApply(notUsed -> {

@@ -23,27 +23,22 @@ import java.util.HashSet;
 import java.util.Set;
 
 public class AtLeastOnceDelivery implements ProcessingGuarantee {
-    private final Set<String> producedIds;
-    private final Set<String> processedIds;
-
-    public AtLeastOnceDelivery() {
-        producedIds = Collections.synchronizedSet(new HashSet<>());
-        processedIds = Collections.synchronizedSet(new HashSet<>());
-    }
+    private final Set<String> producedIds = Collections.synchronizedSet(new HashSet<>());
+    private final Set<String> processedIds = Collections.synchronizedSet(new HashSet<>());
 
     @Override
-    public synchronized void onProduce(ProducedRecord record) {
+    public void onProduce(ProducedRecord record) {
         producedIds.add(record.task().getId());
     }
 
     @Override
-    public synchronized void onProcess(ProcessedRecord record) {
+    public void onProcess(ProcessedRecord record) {
         processedIds.add(record.task().getId());
     }
 
     @Override
     public void doAssert() {
         producedIds.removeAll(processedIds);
-        assertEquals("Some tasks haven't been processed", Collections.emptySet(), producedIds);
+        assertEquals(Collections.emptySet(), producedIds);
     }
 }

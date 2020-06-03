@@ -26,10 +26,10 @@ import com.linecorp.decaton.common.Deserializer;
 import com.linecorp.decaton.common.Serializer;
 
 import lombok.Value;
-import lombok.experimental.Accessors;
 
 /**
- * A test task for Decaton core-functionality testing.
+ * A test task for {@link ProcessorTestSuite}.
+ *
  * Intended to be assigned unique id for each tasks so that every task can be differentiated.
  */
 @Value

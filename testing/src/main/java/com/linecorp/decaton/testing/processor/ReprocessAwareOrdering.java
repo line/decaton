@@ -16,61 +16,97 @@
 
 package com.linecorp.decaton.testing.processor;
 
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Deque;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 
 public class ReprocessAwareOrdering implements ProcessingGuarantee {
+    private final List<ProducedRecord> producedRecords =
+            Collections.synchronizedList(new ArrayList<>());
+    private final List<ProcessedRecord> processedRecords =
+            Collections.synchronizedList(new ArrayList<>());
+
     @Override
     public void onProduce(ProducedRecord record) {
-        // TBD
+        producedRecords.add(record);
     }
 
     @Override
     public void onProcess(ProcessedRecord record) {
-        // TBD
+        processedRecords.add(record);
     }
 
     @Override
     public void doAssert() {
-//        // trivial checking
-//        if (produced.isEmpty() && processed.isEmpty()) {
-//            return true;
-//        }
-//        if (produced.isEmpty()) {
-//            return false;
-//        }
-//        if (produced.size() > processed.size()) {
-//            return false;
-//        }
-//        Map<T, Integer> toIndex = new HashMap<>();
-//        for (int i = 0; i < produced.size(); i++) {
-//            toIndex.putIfAbsent(produced.get(i), i);
-//        }
-//
-//        // offset in produced tasks which is currently being processed
-//        // ("offset" here means "sequence in subpartition" rather than Kafka's offset)
-//        int offset = -1;
-//        for (int i = 0; i < processed.size(); i++) {
-//            // if there is a room, advance the offset
-//            if (offset < produced.size() - 1) {
-//                offset++;
-//            }
-//
-//            T x = produced.get(offset);
-//            T y = processed.get(i);
-//            if (!x.equals(y)) {
-//                // if processing task doesn't match to produced task, it means re-consuming happens.
-//                // lookup the offset to rewind
-//                Integer lookup = toIndex.get(y);
-//
-//                // rewound offset cannot be greater than current offset
-//                if (lookup == null || lookup > offset) {
-//                    return false;
-//                }
-//                offset = lookup;
-//            }
-//        }
-//        // must be processed until the end of produced tasks
-//        return offset == produced.size() - 1;
+        Map<String, List<TestTask>> perKeyProducedRecords = new HashMap<>();
+        Map<String, List<TestTask>> perKeyProcessedRecords = new HashMap<>();
+        Map<TestTask, Long> offsetForTask = new HashMap<>();
+
+        for (ProducedRecord record : producedRecords) {
+            offsetForTask.put(record.task(), record.offset());
+            perKeyProducedRecords.computeIfAbsent(record.key(),
+                                                  key -> new ArrayList<>()).add(record.task());
+        }
+
+        for (ProcessedRecord record : processedRecords) {
+            perKeyProcessedRecords.computeIfAbsent(record.key(),
+                                                   key -> new ArrayList<>()).add(record.task());
+        }
+
+        for (Entry<String, List<TestTask>> entry : perKeyProducedRecords.entrySet()) {
+            String key = entry.getKey();
+            List<TestTask> produced = entry.getValue();
+            List<TestTask> processed = perKeyProducedRecords.get(key);
+
+            assertNotNull(processed);
+            assertOrdering(offsetForTask, produced, processed);
+        }
+    }
+
+    static void assertOrdering(Map<TestTask, Long> offsetForTask,
+                               List<TestTask> produced,
+                               List<TestTask> processed) {
+        Deque<TestTask> excludeReprocess = new ArrayDeque<>();
+
+        TestTask headTask = processed.get(0);
+        excludeReprocess.addLast(headTask);
+        long currentOffset = offsetForTask.get(headTask);
+
+        long committed = -1L;
+        for (int i = 1; i < processed.size(); i++) {
+            TestTask task = processed.get(i);
+            long offset = offsetForTask.get(task);
+
+            if (offset < committed) {
+                fail("offset cannot be regressed beyond committed offset");
+            }
+            if (offset <= currentOffset) {
+                // offset regression implies reprocessing from committed offset happened
+                committed = offset;
+
+                // rewind records to committed offset
+                TestTask last;
+                while ((last = excludeReprocess.peekLast()) != null) {
+                    if (offsetForTask.get(last) == offset) {
+                        break;
+                    }
+                    excludeReprocess.removeLast();
+                }
+            } else {
+                excludeReprocess.add(task);
+            }
+            currentOffset = offset;
+        }
+
+        assertTrue(produced.equals(new ArrayList<>(excludeReprocess)));
     }
 }

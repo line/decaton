@@ -16,19 +16,52 @@
 
 package com.linecorp.decaton.testing.processor;
 
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.lessThan;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+
 public class SerialProcessing implements ProcessingGuarantee {
+    private final List<ProcessedRecord> records =
+            Collections.synchronizedList(new ArrayList<>());
+
     @Override
     public void onProduce(ProducedRecord record) {
-        // TBD
+        // noop
     }
 
     @Override
     public void onProcess(ProcessedRecord record) {
-        // TBD
+        records.add(record);
     }
 
     @Override
     public void doAssert() {
-        // TBD
+        Map<String, List<ProcessedRecord>> recordsMap = new HashMap<>();
+
+        for (ProcessedRecord record : records) {
+            recordsMap.computeIfAbsent(record.key(),
+                                       key -> new ArrayList<>()).add(record);
+        }
+
+        // Checks there's no overlap between two consecutive records' processing time
+        for (Entry<String, List<ProcessedRecord>> entry : recordsMap.entrySet()) {
+            List<ProcessedRecord> perKeyRecords = entry.getValue();
+            perKeyRecords.sort(Comparator.comparingLong(ProcessedRecord::startTimeNanos));
+
+            for (int i = 1; i < perKeyRecords.size(); i++) {
+                ProcessedRecord prev = perKeyRecords.get(i - 1);
+                ProcessedRecord current = perKeyRecords.get(i);
+
+                assertThat("Process time shouldn't overlap. key: " + entry.getKey(),
+                           prev.completeTimeNanos(), lessThan(current.startTimeNanos()));
+            }
+        }
     }
 }

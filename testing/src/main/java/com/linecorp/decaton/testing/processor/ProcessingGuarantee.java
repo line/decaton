@@ -19,8 +19,16 @@ package com.linecorp.decaton.testing.processor;
 import java.util.EnumSet;
 import java.util.function.Supplier;
 
+import org.apache.kafka.clients.producer.KafkaProducer;
+
+import com.linecorp.decaton.processor.runtime.ProcessorSubscription;
+
 /**
  * Interface for processing guarantee in Decaton stream-processing.
+ *
+ * Implementation classes should store produced records and processed records
+ * when {@link #onProduce(ProducedRecord)} and {@link #onProcess(ProcessedRecord)} are invoked respectively,
+ * and checks if the guarantee is met in {@link #doAssert()}
  */
 public interface ProcessingGuarantee {
     /**
@@ -53,10 +61,11 @@ public interface ProcessingGuarantee {
          *     - [1,3,2,4,5] => gapping
          *     - [1,2,3,4,5,4,3] => re-consuming from 4 implies offset 3 is committed. 3 cannot appear after processing 4
          * }
+         * </pre>
          */
         REPROCESS_AWARE_ORDERING,
         /**
-         * Tasks which have same key never be processed at same time
+         * Tasks which have same key never be processed simultaneously
          */
         SERIAL_PROCESSING;
 
@@ -75,19 +84,25 @@ public interface ProcessingGuarantee {
     }
 
     /**
-     * Called when a task is produced
+     * Called when a task is produced.
+     *
+     * Implementation must be concurrent aware since this method will be called from
+     * {@link KafkaProducer}'s I/O thread
      */
     void onProduce(ProducedRecord record);
 
     /**
-     * Called when a task has been completed to process
+     * Called when a task has been completed to process.
+     *
+     * Implementation must be concurrent aware since this method will be called from
+     * multiple threads of multiple {@link ProcessorSubscription}
      */
     void onProcess(ProcessedRecord record);
 
     /**
      * Checks if the processing guarantee is satisfied.
      *
-     * Called after all produced offsets are committed.
+     * Implementation classes should throw {@link AssertionError} if the guarantee is not met
      */
     void doAssert();
 }

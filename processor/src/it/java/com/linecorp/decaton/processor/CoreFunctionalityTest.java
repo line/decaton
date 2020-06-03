@@ -16,6 +16,7 @@
 
 package com.linecorp.decaton.processor;
 
+import java.util.EnumSet;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -23,11 +24,27 @@ import org.junit.ClassRule;
 import org.junit.Test;
 
 import com.linecorp.decaton.testing.KafkaClusterRule;
+import com.linecorp.decaton.testing.processor.ProcessingGuarantee.GuaranteeType;
 import com.linecorp.decaton.testing.processor.ProcessorTestSuite;
 
 public class CoreFunctionalityTest {
     @ClassRule
     public static KafkaClusterRule rule = new KafkaClusterRule();
+
+    @Test(timeout = 30000)
+    public void testProcessConcurrent() {
+        ProcessorTestSuite
+                .builder(rule)
+                .configureProcessorsBuilder(builder -> builder.thenProcess((ctx, task) -> {
+                    // adding some random delay to generate out-of-order completion
+                    Thread.sleep(ThreadLocalRandom.current().nextLong(5));
+                }))
+                .propertySupplier(StaticPropertySupplier.of(
+                        Property.ofStatic(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY, 16)
+                ))
+                .build()
+                .run();
+    }
 
     @Test(timeout = 30000)
     public void testAsyncTaskCompletion() {
@@ -46,20 +63,10 @@ public class CoreFunctionalityTest {
                         }
                     });
                 }))
-                .build()
-                .run();
-    }
-
-    @Test(timeout = 30000)
-    public void testProcessConcurrent() {
-        ProcessorTestSuite
-                .builder(rule)
-                .configureProcessorsBuilder(builder -> builder.thenProcess((ctx, task) -> {
-                    // adding some random delay to generate out-of-order completion
-                    Thread.sleep(ThreadLocalRandom.current().nextLong(5));
-                }))
-                .propertySupplier(StaticPropertySupplier.of(
-                        Property.ofStatic(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY, 16)
+                // If task is completed asynchronously
+                // there's no guarantee about per-key ordering nor serial-processing
+                .semantics(EnumSet.of(
+                        GuaranteeType.AT_LEAST_ONCE_DELIVERY
                 ))
                 .build()
                 .run();

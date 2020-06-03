@@ -16,16 +16,31 @@
 
 package com.linecorp.decaton.testing.processor;
 
+import org.apache.kafka.common.TopicPartition;
+
 import lombok.Value;
 import lombok.experimental.Accessors;
 
 /**
- * Key-task pair of {@link TestTask}.
+ * A class which holds produced task along with produce metadata
  */
 @Value
 @Accessors(fluent = true)
 public class ProducedRecord {
+    /**
+     * Key of the task
+     */
     String key;
-
+    /**
+     * Topic partition the record was sent to
+     */
+    TopicPartition topicPartition;
+    /**
+     * Offset in the partition
+     */
+    long offset;
+    /**
+     * Produced task
+     */
     TestTask task;
 }
