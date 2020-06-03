@@ -18,12 +18,15 @@ package com.linecorp.decaton.testing;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
 
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.common.TopicPartition;
 
 /**
  * A wrapper of {@link AdminClient} for providing easy operation to manage topics
@@ -62,6 +65,14 @@ public class KafkaAdmin implements AutoCloseable {
     public void deleteTopics(String... topicNames) {
         try {
             adminClient.deleteTopics(Arrays.asList(topicNames)).all().get();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public Map<TopicPartition, OffsetAndMetadata> consumerGroupOffsets(String groupId) {
+        try {
+            return adminClient.listConsumerGroupOffsets(groupId).partitionsToOffsetAndMetadata().get();
         } catch (Exception e) {
             throw new RuntimeException(e);
         }

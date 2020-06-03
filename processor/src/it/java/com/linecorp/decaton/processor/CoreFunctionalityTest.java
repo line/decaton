@@ -17,16 +17,13 @@
 package com.linecorp.decaton.processor;
 
 import java.util.concurrent.CompletableFuture;
-import java.util.stream.IntStream;
+import java.util.concurrent.ThreadLocalRandom;
 
 import org.junit.ClassRule;
 import org.junit.Test;
 
-import com.linecorp.decaton.protocol.Sample.HelloTask;
 import com.linecorp.decaton.testing.KafkaClusterRule;
 import com.linecorp.decaton.testing.processor.ProcessorTestSuite;
-import com.linecorp.decaton.testing.processor.ProcessorTestSuite.DecatonProducerRecord;
-import com.linecorp.decaton.testing.processor.ProcessorTestSuite.ProcessOrdering;
 
 public class CoreFunctionalityTest {
     @ClassRule
@@ -34,18 +31,13 @@ public class CoreFunctionalityTest {
 
     @Test(timeout = 30000)
     public void testAsyncTaskCompletion() {
-        int numTasks = 10000;
         ProcessorTestSuite
-                .builder(rule, HelloTask.parser())
-                .produce(numTasks, IntStream.range(0, numTasks).mapToObj(i -> {
-                    String key = String.valueOf(i % 100);
-                    return new DecatonProducerRecord<>(key, HelloTask.newBuilder().setAge(i).build());
-                }).iterator())
+                .builder(rule)
                 .configureProcessorsBuilder(builder -> builder.thenProcess((ctx, task) -> {
                     DeferredCompletion completion = ctx.deferCompletion();
                     CompletableFuture.runAsync(() -> {
                         try {
-                            Thread.sleep(task.getAge() % 5);
+                            Thread.sleep(5);
                         } catch (InterruptedException e) {
                             Thread.currentThread().interrupt();
                             throw new RuntimeException(e);
@@ -60,48 +52,15 @@ public class CoreFunctionalityTest {
 
     @Test(timeout = 30000)
     public void testProcessConcurrent() {
-        int numTasks = 10000;
         ProcessorTestSuite
-                .builder(rule, HelloTask.parser())
-                .produce(numTasks, IntStream.range(0, numTasks).mapToObj(i -> {
-                    String key = String.valueOf(i % 100);
-                    return new DecatonProducerRecord<>(key, HelloTask.newBuilder().setAge(i).build());
-                }).iterator())
+                .builder(rule)
                 .configureProcessorsBuilder(builder -> builder.thenProcess((ctx, task) -> {
-                    // adding some delay to generate out-of-order completion
-                    Thread.sleep(task.getAge() % 5);
+                    // adding some random delay to generate out-of-order completion
+                    Thread.sleep(ThreadLocalRandom.current().nextLong(5));
                 }))
                 .propertySupplier(StaticPropertySupplier.of(
                         Property.ofStatic(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY, 16)
                 ))
-                .build()
-                .run();
-    }
-
-    /**
-     * Check all produced tasks will be processed in order only once
-     * if we set partition concurrency to 1 as vanilla KafkaConsumer.
-     *
-     * We can also make sure that offset commit is working properly during rebalance by this test
-     * since the test involves rolling restart
-     */
-    @Test(timeout = 30000)
-    public void testProcessSerial() {
-        int numTasks = 10000;
-        ProcessorTestSuite
-                .builder(rule, HelloTask.parser())
-                .produce(numTasks, IntStream.range(0, numTasks).mapToObj(i -> {
-                    String key = String.valueOf(i % 100);
-                    return new DecatonProducerRecord<>(key, HelloTask.newBuilder().setAge(i).build());
-                }).iterator())
-                .configureProcessorsBuilder(builder -> builder.thenProcess((ctx, task) -> {
-                    // adding some latency not to finish all tasks too early
-                    Thread.sleep(task.getAge() % 3);
-                }))
-                .propertySupplier(StaticPropertySupplier.of(
-                        Property.ofStatic(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY, 1)
-                ))
-                .expectOrdering(ProcessOrdering.STRICT)
                 .build()
                 .run();
     }

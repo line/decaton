@@ -1,251 +1,132 @@
 package com.linecorp.decaton.testing.processor;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-
-import java.util.ArrayList;
-import java.util.Collections;
+import java.util.EnumSet;
 import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
-import com.google.protobuf.MessageLite;
-import com.google.protobuf.Parser;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.TopicPartition;
 
-import com.linecorp.decaton.client.DecatonClient;
+import com.google.protobuf.ByteString;
+
 import com.linecorp.decaton.processor.DecatonProcessor;
+import com.linecorp.decaton.processor.ProcessorProperties;
 import com.linecorp.decaton.processor.ProcessorsBuilder;
 import com.linecorp.decaton.processor.PropertySupplier;
 import com.linecorp.decaton.processor.runtime.ProcessorSubscription;
 import com.linecorp.decaton.processor.runtime.RetryConfig;
-import com.linecorp.decaton.protobuf.ProtocolBuffersDeserializer;
+import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
+import com.linecorp.decaton.protocol.Decaton.TaskMetadataProto;
 import com.linecorp.decaton.testing.KafkaClusterRule;
 import com.linecorp.decaton.testing.TestUtils;
+import com.linecorp.decaton.testing.processor.ProcessingGuarantee.GuaranteeType;
+import com.linecorp.decaton.testing.processor.TestTask.TestTaskDeserializer;
+import com.linecorp.decaton.testing.processor.TestTask.TestTaskSerializer;
 
-import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
-import lombok.Value;
 import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Checks basic functionality which Decaton processor should satisfy in whatever type of processing.
+ * Test suite that checks Decaton's core functionality, such like processing semantics.
  *
- * Basic functionality here includes:
- * - All produced tasks are processed without leaking
- * - Preserve key based ordering
- * - Rebalance doesn't break above functionalities
+ * A test will perform following procedure:
+ *   1. Start multiple subscription instances
+ *   2. Produce tasks
+ *   3. When half of tasks are processed, restart subscriptions one by one
+ *   4. Await all produced offsets are committed
+ *   5. Assert processing semantics
  *
- * Note that this class holds entire produced tasks and processed tasks during test.
- * Supplying huge amount of tasks may pressure JVM heap quite a lot.
+ * Expected semantics can be customized according to each test instance.
+ * (e.g. process ordering will be no longer kept if the processor uses retry-queueing feature)
  */
 @Slf4j
 @RequiredArgsConstructor
-public class ProcessorTestSuite<T extends MessageLite> {
+public class ProcessorTestSuite {
     private final KafkaClusterRule rule;
-    private final Parser<T> parser;
-    private final int numSubscriptionInstance;
-    private final int numTasks;
-    private final Iterator<DecatonProducerRecord<T>> tasks;
-    private final Function<ProcessorsBuilder<T>, ProcessorsBuilder<T>> configureProcessorsBuilder;
+    private final Function<ProcessorsBuilder<TestTask>, ProcessorsBuilder<TestTask>> configureProcessorsBuilder;
     private final RetryConfig retryConfig;
     private final PropertySupplier propertySuppliers;
-    private final ProcessOrdering processOrdering;
+    private final EnumSet<GuaranteeType> semantics;
 
+    private static final int NUM_TASKS = 10000;
+    private static final int NUM_SUBSCRIPTION_INSTANCES = 3;
     private static final int NUM_PARTITIONS = 8;
-
-    /**
-     * Process ordering the test should satisfy
-     */
-    public enum ProcessOrdering {
-        /**
-         * All produced tasks are processed in order only once
-         */
-        STRICT,
-
-        /**
-         * All produced tasks are processed in order, but allowing duplication.
-         * Example:
-         * <pre>
-         * {@code
-         *   say produced offsets are: [1,2,3,4,5]
-         *   valid processing order:
-         *     - [1,2,3,4,5]
-         *     - [1,2,1,2,3,4,5] => when processor restarted after processed 2 before committing offset 1
-         *     - [1,2,3,4,5,5] => when processor restarted after processed 5 and committed 4 before committing offset 5
-         *   invalid processing order:
-         *     - [1,3,2,4,5] => gapping
-         *     - [1,2,3,4,5,4,3] => reconsumed from 4 implies offset 3 is committed. 3 cannot appear after processing 4
-         * }
-         * </pre>
-         */
-        ALLOW_DUPLICATE;
-
-        public <T> boolean inOrder(List<T> produced,
-                                   List<T> processed) {
-            switch (this) {
-                case STRICT:
-                    return produced.equals(processed);
-                case ALLOW_DUPLICATE:
-                    // trivial checking
-                    if (produced.isEmpty() && processed.isEmpty()) {
-                        return true;
-                    }
-                    if (produced.isEmpty()) {
-                        return false;
-                    }
-                    if (produced.size() > processed.size()) {
-                        return false;
-                    }
-                    Map<T, Integer> toIndex = new HashMap<>();
-                    for (int i = 0; i < produced.size(); i++) {
-                        toIndex.putIfAbsent(produced.get(i), i);
-                    }
-
-                    // offset in produced tasks which is currently being processed
-                    // ("offset" here means "sequence in subpartition" rather than Kafka's offset)
-                    int offset = -1;
-                    for (int i = 0; i < processed.size(); i++) {
-                        // if there is a room, advance the offset
-                        if (offset < produced.size() - 1) {
-                            offset++;
-                        }
-
-                        T x = produced.get(offset);
-                        T y = processed.get(i);
-                        if (!x.equals(y)) {
-                            // if processing task doesn't match to produced task, it means re-consuming happens.
-                            // lookup the offset to rewind
-                            Integer lookup = toIndex.get(y);
-
-                            // rewound offset cannot be greater than current offset
-                            if (lookup == null || lookup > offset) {
-                                return false;
-                            }
-                            offset = lookup;
-                        }
-                    }
-                    // must be processed until the end of produced tasks
-                    return offset == produced.size() - 1;
-            }
-            throw new RuntimeException("Unreachable");
-        }
-    }
-
-    @Value
-    @Accessors(fluent = true)
-    public static class DecatonProducerRecord<T> {
-        String key;
-        T task;
-    }
 
     @Setter
     @Accessors(fluent = true)
-    public static class Builder<T extends MessageLite> {
+    public static class Builder {
         private final KafkaClusterRule rule;
-        private final Parser<T> parser;
 
-        /**
-         * Number of subscription instances which consumes tasks
-         */
-        private int numSubscriptionInstances = 3;
         /**
          * Configure test-specific processing logic
          */
-        private Function<ProcessorsBuilder<T>, ProcessorsBuilder<T>> configureProcessorsBuilder;
+        private Function<ProcessorsBuilder<TestTask>, ProcessorsBuilder<TestTask>> configureProcessorsBuilder;
+        /**
+         * Configure retry-queueing feature for the subscription
+         */
         private RetryConfig retryConfig;
+        /**
+         * Supply additional {@link ProcessorProperties} through {@link PropertySupplier}
+         */
         private PropertySupplier propertySupplier;
         /**
-         * Expected process ordering for this test
+         * Processing semantics the processor should satisfy
          */
-        private ProcessOrdering expectOrdering = ProcessOrdering.ALLOW_DUPLICATE;
+        private EnumSet<GuaranteeType> semantics = ProcessingGuarantee.defaultSemantics();
 
-        @Setter(AccessLevel.NONE)
-        private int numTasks;
-        @Setter(AccessLevel.NONE)
-        private Iterator<DecatonProducerRecord<T>> taskIterator;
-
-        private Builder(KafkaClusterRule rule, Parser<T> parser) {
+        private Builder(KafkaClusterRule rule) {
             this.rule = rule;
-            this.parser = parser;
         }
 
-        /**
-         * Configure tasks which are produced to the topic.
-         * Note that all tasks should be differentiated from others (i.e. equals() never be true between tasks)
-         * since message ordering will be verified by checking produced task equals to processed task one by one.
-         *
-         * @param numTasks number of tasks
-         * @param taskIterator iterator which generates tasks
-         */
-        public Builder<T> produce(int numTasks,
-                                  Iterator<DecatonProducerRecord<T>> taskIterator) {
-            this.numTasks = numTasks;
-            this.taskIterator = taskIterator;
-            return this;
-        }
-
-        public ProcessorTestSuite<T> build() {
-            return new ProcessorTestSuite<>(rule,
-                                            parser,
-                                            numSubscriptionInstances,
-                                            numTasks,
-                                            taskIterator,
-                                            configureProcessorsBuilder,
-                                            retryConfig,
-                                            propertySupplier,
-                                            expectOrdering);
+        public ProcessorTestSuite build() {
+            return new ProcessorTestSuite(rule,
+                                          configureProcessorsBuilder,
+                                          retryConfig,
+                                          propertySupplier,
+                                          semantics);
         }
     }
 
-    public static <T extends MessageLite> Builder<T> builder(KafkaClusterRule rule,
-                                                             Parser<T> parser) {
-        return new Builder<>(rule, parser);
+    public static Builder builder(KafkaClusterRule rule) {
+        return new Builder(rule);
     }
 
-    /**
-     * Checks processor's basic functionality.
-     * scenario:
-     *   1. Start multiple subscription instances
-     *   2. Produce tasks
-     *   3. When half of tasks are processed, restart subscriptions one by one
-     *   4. Await all tasks be processed
-     *   5. Check process ordering
-     */
     public void run() {
-        String topicName = rule.admin().createRandomTopic(NUM_PARTITIONS, 3);
+        String topic = rule.admin().createRandomTopic(NUM_PARTITIONS, 3);
+        CountDownLatch rollingRestartLatch = new CountDownLatch(NUM_TASKS / 2);
+        List<ProcessingGuarantee> semantics = this.semantics.stream()
+                                                            .map(GuaranteeType::get)
+                                                            .collect(Collectors.toList());
 
-        CountDownLatch processLatch = new CountDownLatch(numTasks);
-        CountDownLatch rollingRestartLatch = new CountDownLatch(numTasks / 2);
-
-        List<DecatonProducerRecord<T>> processedTasks = Collections.synchronizedList(new ArrayList<>());
-        Set<T> processedTaskSet = Collections.synchronizedSet(new HashSet<>());
-
-        DecatonProcessor<T> globalProcessor = (context, task) -> {
-            // If a task is retried, ordering is no longer preserved
-            if (context.metadata().retryCount() == 0) {
-                rollingRestartLatch.countDown();
-                processedTasks.add(new DecatonProducerRecord<>(context.key(), task));
-                if (processedTaskSet.add(task)) {
-                    processLatch.countDown();
-                }
-            }
-            context.deferCompletion().completeWith(context.push(task));
+        DecatonProcessor<TestTask> preprocessor = (context, task) -> {
+            long startTime = System.nanoTime();
+            context.push(task).whenComplete((r, e) -> semantics.forEach(
+                    g -> g.onProcess(new ProcessedRecord(context.key(),
+                                                         task,
+                                                         startTime,
+                                                         System.nanoTime())))
+            );
+            rollingRestartLatch.countDown();
         };
 
         Supplier<ProcessorSubscription> subscriptionSupplier = () -> {
-            ProcessorsBuilder<T> processorsBuilder =
-                    ProcessorsBuilder.consuming(topicName,
-                                                new ProtocolBuffersDeserializer<>(parser))
-                                     .thenProcess(globalProcessor);
+            ProcessorsBuilder<TestTask> processorsBuilder =
+                    configureProcessorsBuilder.apply(
+                            ProcessorsBuilder.consuming(topic, new TestTaskDeserializer())
+                                             .thenProcess(preprocessor));
 
             return TestUtils.subscription(rule.bootstrapServers(),
                                           configureProcessorsBuilder.apply(processorsBuilder),
@@ -253,56 +134,52 @@ public class ProcessorTestSuite<T extends MessageLite> {
                                           propertySuppliers);
         };
 
-        DecatonClient<T> client = null;
-        ProcessorSubscription[] subscriptions = new ProcessorSubscription[numSubscriptionInstance];
+        Producer<String, DecatonTaskRequest> producer = null;
+        ProcessorSubscription[] subscriptions = new ProcessorSubscription[NUM_SUBSCRIPTION_INSTANCES];
         try {
-            client = TestUtils.client(topicName, rule.bootstrapServers());
-            for (int i = 0; i < numSubscriptionInstance; i++) {
+            producer = TestUtils.producer(rule.bootstrapServers());
+            for (int i = 0; i < NUM_SUBSCRIPTION_INSTANCES; i++) {
                 subscriptions[i] = subscriptionSupplier.get();
             }
+            CompletableFuture<Map<Integer, Long>> produceFuture =
+                    produceTasks(producer, topic, record -> semantics.forEach(g -> g.onProduce(record)));
 
-            Map<String, List<T>> producedTasks = new HashMap<>();
-            while(tasks.hasNext()) {
-                DecatonProducerRecord<T> record = tasks.next();
-                client.put(record.key(), record.task());
-                List<T> tasks = producedTasks.computeIfAbsent(record.key(), key -> new ArrayList<>());
-                tasks.add(record.task());
-            }
-
+            // perform rolling restart
             rollingRestartLatch.await();
-            for (int i = 0; i < numSubscriptionInstance; i++) {
+            for (int i = 0; i < NUM_SUBSCRIPTION_INSTANCES; i++) {
                 subscriptions[i].close();
                 subscriptions[i] = subscriptionSupplier.get();
             }
 
-            processLatch.await();
-            for (int i = 0; i < numSubscriptionInstance; i++) {
-                subscriptions[i].close();
-            }
+            // await all produced offsets are committed indefinitely
+            Map<Integer, Long> producedOffsets = produceFuture.join();
+            TestUtils.awaitCondition("all produced offsets should be committed", () -> {
+                Map<TopicPartition, OffsetAndMetadata> committed =
+                        rule.admin().consumerGroupOffsets(TestUtils.DEFAULT_GROUP_ID);
 
-            Map<String, List<T>> processedTasksPerKey = new HashMap<>();
-            for (DecatonProducerRecord<T> record : processedTasks) {
-                processedTasksPerKey.computeIfAbsent(record.key(),
-                                                     key -> new ArrayList<>()).add(record.task());
-            }
+                for (Entry<Integer, Long> entry : producedOffsets.entrySet()) {
+                    int partition = entry.getKey();
+                    long produced = entry.getValue();
 
-            assertEquals("all produced keys must be processed",
-                         producedTasks.size(), processedTasksPerKey.size());
-            for (Entry<String, List<T>> entry : producedTasks.entrySet()) {
-                List<T> produced = entry.getValue();
-                List<T> processed = processedTasksPerKey.get(entry.getKey());
+                    OffsetAndMetadata metadata = committed.get(new TopicPartition(topic, partition));
+                    if (metadata == null || metadata.offset() <= produced) {
+                        return false;
+                    }
+                }
+                return true;
+            });
 
-                assertTrue("all produced tasks must be processed in order per key",
-                           processOrdering.inOrder(produced, processed));
+            for (ProcessingGuarantee guarantee : semantics) {
+                guarantee.doAssert();
             }
         } catch (Exception e) {
             throw new RuntimeException(e);
         } finally {
-            safeClose(client);
+            safeClose(producer);
             for (ProcessorSubscription subscription : subscriptions) {
                 safeClose(subscription);
             }
-            rule.admin().deleteTopics(topicName);
+            rule.admin().deleteTopics(topic);
         }
     }
 
@@ -314,5 +191,62 @@ public class ProcessorTestSuite<T extends MessageLite> {
         } catch (Exception e) {
             log.warn("Failed to close the resource", e);
         }
+    }
+
+    /**
+     * Generate and produce {@link #NUM_TASKS} tasks
+     * @param producer Producer instance to be used
+     * @param topic Topic to be sent tasks
+     * @param onProduce Callback which is called when a task is produced (!= completed to send)
+     * @return A CompletableFuture of Map, which holds partition as the key and max offset as the value
+     */
+    private static CompletableFuture<Map<Integer, Long>> produceTasks(
+            Producer<String, DecatonTaskRequest> producer,
+            String topic,
+            Consumer<ProducedRecord> onProduce) {
+        @SuppressWarnings("unchecked")
+        CompletableFuture<RecordMetadata>[] produceFutures = new CompletableFuture[NUM_TASKS];
+
+        TestTaskSerializer serializer = new TestTaskSerializer();
+        for (int i = 0; i < produceFutures.length; i++) {
+            TestTask task = new TestTask(String.valueOf(i));
+            String key = String.valueOf(i % 100);
+            TaskMetadataProto taskMetadata =
+                    TaskMetadataProto.newBuilder()
+                                     .setTimestampMillis(System.currentTimeMillis())
+                                     .setSourceApplicationId("test-application")
+                                     .setSourceInstanceId("test-instance")
+                                     .build();
+            DecatonTaskRequest request =
+                    DecatonTaskRequest.newBuilder()
+                                      .setMetadata(taskMetadata)
+                                      .setSerializedTask(ByteString.copyFrom(serializer.serialize(task)))
+                                      .build();
+            ProducerRecord<String, DecatonTaskRequest> record =
+                    new ProducerRecord<>(topic, null, taskMetadata.getTimestampMillis(), key, request);
+            CompletableFuture<RecordMetadata> future = new CompletableFuture<>();
+            produceFutures[i] = future;
+
+            producer.send(record, (metadata, exception) -> {
+                if (exception == null) {
+                    future.complete(metadata);
+                } else {
+                    future.completeExceptionally(exception);
+                }
+            });
+            onProduce.accept(new ProducedRecord(key, task));
+        }
+
+        return CompletableFuture.allOf(produceFutures).thenApply(notUsed -> {
+            Map<Integer, Long> result = new HashMap<>();
+            for (CompletableFuture<RecordMetadata> future : produceFutures) {
+                RecordMetadata metadata = future.join();
+                long offset = result.getOrDefault(metadata.partition(), -1L);
+                if (offset < metadata.offset()) {
+                    result.put(metadata.partition(), metadata.offset());
+                }
+            }
+            return result;
+        });
     }
 }
