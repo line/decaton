@@ -22,6 +22,7 @@ function run_with_opts() {
         --profile \
         --profiler-bin="$PROFILER_BIN"  \
         --profiler-opts="-f $out_dir/$name-profile.svg" \
+        --file-name-only \
         --warmup 100000 \
         --param=decaton.max.pending.records=10000 \
         "$@" \

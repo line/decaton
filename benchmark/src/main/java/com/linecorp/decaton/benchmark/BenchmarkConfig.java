@@ -74,6 +74,10 @@ public class BenchmarkConfig {
      * Taskstats config is optional and might be null.
      */
     TaskStatsConfig taskstats;
+    /**
+     * Trim file paths in result from its path to filename only.
+     */
+    boolean fileNameOnly;
 
     @Value
     public static class ProfilingConfig {
