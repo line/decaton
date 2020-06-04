@@ -86,15 +86,14 @@ public interface ProcessingGuarantee {
     /**
      * Called when a task is produced.
      *
-     * Implementation must be concurrent aware since this method will be called from
-     * {@link KafkaProducer}'s I/O thread
+     * Must be thread safe since this method will be called from {@link KafkaProducer}'s I/O thread
      */
     void onProduce(ProducedRecord record);
 
     /**
      * Called when a task has been completed to process.
      *
-     * Implementation must be concurrent aware since this method will be called from
+     * Must be thread safe since this method will be called from
      * multiple threads of multiple {@link ProcessorSubscription}
      */
     void onProcess(ProcessedRecord record);
@@ -102,7 +101,7 @@ public interface ProcessingGuarantee {
     /**
      * Checks if the processing guarantee is satisfied.
      *
-     * Implementation classes should throw {@link AssertionError} if the guarantee is not met
+     * Should throw {@link AssertionError} if the guarantee is not met
      */
     void doAssert();
 }

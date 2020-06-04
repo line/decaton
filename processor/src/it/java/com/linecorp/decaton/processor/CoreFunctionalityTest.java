@@ -18,7 +18,8 @@ package com.linecorp.decaton.processor;
 
 import java.util.EnumSet;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import org.junit.ClassRule;
 import org.junit.Test;
@@ -36,8 +37,8 @@ public class CoreFunctionalityTest {
         ProcessorTestSuite
                 .builder(rule)
                 .configureProcessorsBuilder(builder -> builder.thenProcess((ctx, task) -> {
-                    // adding some random delay to generate out-of-order completion
-                    Thread.sleep(ThreadLocalRandom.current().nextLong(5));
+                    // adding some pseudo random delay to generate out-of-order completion
+                    Thread.sleep(Math.abs(task.hashCode()) % 10);
                 }))
                 .propertySupplier(StaticPropertySupplier.of(
                         Property.ofStatic(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY, 16)
@@ -48,23 +49,24 @@ public class CoreFunctionalityTest {
 
     @Test(timeout = 30000)
     public void testAsyncTaskCompletion() {
+        ExecutorService executorService = Executors.newFixedThreadPool(16);
         ProcessorTestSuite
                 .builder(rule)
                 .configureProcessorsBuilder(builder -> builder.thenProcess((ctx, task) -> {
                     DeferredCompletion completion = ctx.deferCompletion();
                     CompletableFuture.runAsync(() -> {
                         try {
-                            Thread.sleep(5);
+                            Thread.sleep(Math.abs(task.hashCode()) % 10);
                         } catch (InterruptedException e) {
                             Thread.currentThread().interrupt();
                             throw new RuntimeException(e);
                         } finally {
                             completion.complete();
                         }
-                    });
+                    }, executorService);
                 }))
-                // If task is completed asynchronously
-                // there's no guarantee about per-key ordering nor serial-processing
+                // If task is completed asynchronously there's no guarantee about
+                // completion ordering nor serial processing
                 .semantics(EnumSet.of(
                         GuaranteeType.AT_LEAST_ONCE_DELIVERY
                 ))

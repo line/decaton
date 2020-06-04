@@ -62,6 +62,7 @@ public class ProcessorTestSuite {
     private final EnumSet<GuaranteeType> semantics;
 
     private static final int NUM_TASKS = 10000;
+    private static final int NUM_KEYS = 100;
     private static final int NUM_SUBSCRIPTION_INSTANCES = 3;
     private static final int NUM_PARTITIONS = 8;
 
@@ -113,12 +114,15 @@ public class ProcessorTestSuite {
 
         DecatonProcessor<TestTask> preprocessor = (context, task) -> {
             long startTime = System.nanoTime();
-            context.push(task).whenComplete((r, e) -> semantics.forEach(
-                    g -> g.onProcess(new ProcessedRecord(context.key(),
-                                                         task,
-                                                         startTime,
-                                                         System.nanoTime())))
-            );
+            context.deferCompletion()
+                   .completeWith(context.push(task))
+                   .whenComplete((r, e) -> {
+                       semantics.forEach(
+                               g -> g.onProcess(new ProcessedRecord(context.key(),
+                                                                    task,
+                                                                    startTime,
+                                                                    System.nanoTime())));
+                   });
             rollingRestartLatch.countDown();
         };
 
@@ -129,7 +133,7 @@ public class ProcessorTestSuite {
                                              .thenProcess(preprocessor));
 
             return TestUtils.subscription(rule.bootstrapServers(),
-                                          configureProcessorsBuilder.apply(processorsBuilder),
+                                          processorsBuilder,
                                           retryConfig,
                                           propertySuppliers);
         };
@@ -138,7 +142,7 @@ public class ProcessorTestSuite {
         ProcessorSubscription[] subscriptions = new ProcessorSubscription[NUM_SUBSCRIPTION_INSTANCES];
         try {
             producer = TestUtils.producer(rule.bootstrapServers());
-            for (int i = 0; i < NUM_SUBSCRIPTION_INSTANCES; i++) {
+            for (int i = 0; i < subscriptions.length; i++) {
                 subscriptions[i] = subscriptionSupplier.get();
             }
             CompletableFuture<Map<Integer, Long>> produceFuture =
@@ -146,12 +150,14 @@ public class ProcessorTestSuite {
 
             // perform rolling restart
             rollingRestartLatch.await();
-            for (int i = 0; i < NUM_SUBSCRIPTION_INSTANCES; i++) {
+            for (int i = 0; i < subscriptions.length; i++) {
+                log.info("Start restarting subscription-{} (threadId: {})", i, subscriptions[i].getId());
                 subscriptions[i].close();
                 subscriptions[i] = subscriptionSupplier.get();
+                log.info("Finished restarting subscription-{} (threadId: {})", i, subscriptions[i].getId());
             }
 
-            // await all produced offsets are committed indefinitely
+            // await all produced offsets are committed
             Map<Integer, Long> producedOffsets = produceFuture.join();
             TestUtils.awaitCondition("all produced offsets should be committed", () -> {
                 Map<TopicPartition, OffsetAndMetadata> committed =
@@ -169,6 +175,11 @@ public class ProcessorTestSuite {
                 return true;
             });
 
+            for (int i = 0; i < subscriptions.length; i++) {
+                log.info("Closing subscription-{} (threadId: {})", i, subscriptions[i].getId());
+                subscriptions[i].close();
+            }
+
             for (ProcessingGuarantee guarantee : semantics) {
                 guarantee.doAssert();
             }
@@ -177,7 +188,9 @@ public class ProcessorTestSuite {
         } finally {
             safeClose(producer);
             for (ProcessorSubscription subscription : subscriptions) {
-                safeClose(subscription);
+                if (subscription != null && subscription.isAlive()) {
+                    safeClose(subscription);
+                }
             }
             rule.admin().deleteTopics(topic);
         }
@@ -210,7 +223,7 @@ public class ProcessorTestSuite {
         TestTaskSerializer serializer = new TestTaskSerializer();
         for (int i = 0; i < produceFutures.length; i++) {
             TestTask task = new TestTask(String.valueOf(i));
-            String key = String.valueOf(i % 100);
+            String key = String.valueOf(i % NUM_KEYS);
             TaskMetadataProto taskMetadata =
                     TaskMetadataProto.newBuilder()
                                      .setTimestampMillis(System.currentTimeMillis())

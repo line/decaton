@@ -180,8 +180,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
                 @Override
                 public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
                     // KafkaConsumer#close has been changed to invoke onPartitionRevoked since Kafka 2.4.0.
-                    // But we don't want to await pending tasks on shutdown by design, and we're doing cleanup
-                    // procedure on shutdown separately so just immediately return if terminated
+                    // Since we're doing cleanup procedure on shutdown individually so just immediately return if terminated
                     if (terminated.get()) {
                         return;
                     }

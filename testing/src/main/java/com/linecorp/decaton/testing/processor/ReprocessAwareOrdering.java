@@ -49,10 +49,10 @@ public class ReprocessAwareOrdering implements ProcessingGuarantee {
     public void doAssert() {
         Map<String, List<TestTask>> perKeyProducedRecords = new HashMap<>();
         Map<String, List<TestTask>> perKeyProcessedRecords = new HashMap<>();
-        Map<TestTask, Long> offsetForTask = new HashMap<>();
+        Map<TestTask, Long> taskToOffset = new HashMap<>();
 
         for (ProducedRecord record : producedRecords) {
-            offsetForTask.put(record.task(), record.offset());
+            taskToOffset.put(record.task(), record.offset());
             perKeyProducedRecords.computeIfAbsent(record.key(),
                                                   key -> new ArrayList<>()).add(record.task());
         }
@@ -65,26 +65,26 @@ public class ReprocessAwareOrdering implements ProcessingGuarantee {
         for (Entry<String, List<TestTask>> entry : perKeyProducedRecords.entrySet()) {
             String key = entry.getKey();
             List<TestTask> produced = entry.getValue();
-            List<TestTask> processed = perKeyProducedRecords.get(key);
+            List<TestTask> processed = perKeyProcessedRecords.get(key);
 
             assertNotNull(processed);
-            assertOrdering(offsetForTask, produced, processed);
+            assertOrdering(taskToOffset, produced, processed);
         }
     }
 
-    static void assertOrdering(Map<TestTask, Long> offsetForTask,
+    static void assertOrdering(Map<TestTask, Long> taskToOffset,
                                List<TestTask> produced,
                                List<TestTask> processed) {
         Deque<TestTask> excludeReprocess = new ArrayDeque<>();
 
         TestTask headTask = processed.get(0);
         excludeReprocess.addLast(headTask);
-        long currentOffset = offsetForTask.get(headTask);
+        long currentOffset = taskToOffset.get(headTask);
 
         long committed = -1L;
         for (int i = 1; i < processed.size(); i++) {
             TestTask task = processed.get(i);
-            long offset = offsetForTask.get(task);
+            long offset = taskToOffset.get(task);
 
             if (offset < committed) {
                 fail("offset cannot be regressed beyond committed offset");
@@ -96,7 +96,7 @@ public class ReprocessAwareOrdering implements ProcessingGuarantee {
                 // rewind records to committed offset
                 TestTask last;
                 while ((last = excludeReprocess.peekLast()) != null) {
-                    if (offsetForTask.get(last) == offset) {
+                    if (taskToOffset.get(last) == offset) {
                         break;
                     }
                     excludeReprocess.removeLast();
