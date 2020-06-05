@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Usage:
+# $ ./run-bm-docker.sh ./debm.sh --title "xxx" --tasks 10000 ...
+
 opts=""
 while [[ "$1" == '-'* ]]; do
     opts="$opts $1"
