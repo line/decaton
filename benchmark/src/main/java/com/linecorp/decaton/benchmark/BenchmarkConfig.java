@@ -70,10 +70,21 @@ public class BenchmarkConfig {
      * Whether to run benchmark in forked JVM or within the same JVM.
      */
     boolean forking;
+    /**
+     * Taskstats config is optional and might be null.
+     */
+    TaskStatsConfig taskstats;
 
     @Value
     public static class ProfilingConfig {
         Path profilerBin;
         List<String> profilerOpts;
+    }
+    @Value
+    public static class TaskStatsConfig {
+        /**
+         * jtaskstats binary path (available only at Linux machines) that is optional and might be null.
+         */
+        Path jtaskstatsBin;
     }
 }

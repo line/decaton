@@ -28,6 +28,7 @@ import java.util.StringTokenizer;
 import java.util.concurrent.Callable;
 
 import com.linecorp.decaton.benchmark.BenchmarkConfig.ProfilingConfig;
+import com.linecorp.decaton.benchmark.BenchmarkConfig.TaskStatsConfig;
 
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
@@ -76,6 +77,12 @@ public final class Main implements Callable<Integer> {
     @Option(names = "--profiler-opts", description = "Options to pass for async-profiler's profiler.sh")
     private String profilerOpts;
 
+    @Option(names = "--taskstats", description = "Enable taskstats metric for the execution")
+    private boolean enableTaskstats;
+
+    @Option(names = "--taskstats-bin", description = "Path to jtaskstats", defaultValue = "jtaskstats")
+    private Path jtaskstatsBin;
+
     private static List<String> parseOptions(String opts) {
         if (opts == null) {
             return emptyList();
@@ -95,6 +102,10 @@ public final class Main implements Callable<Integer> {
         if (enableProfiling) {
             profiling = new ProfilingConfig(profilerBin, parseOptions(profilerOpts));
         }
+        BenchmarkConfig.TaskStatsConfig taskstats = null;
+        if (enableTaskstats) {
+            taskstats = new TaskStatsConfig(jtaskstatsBin);
+        }
         BenchmarkConfig config =
                 BenchmarkConfig.builder()
                                .title(title)
@@ -107,6 +118,7 @@ public final class Main implements Callable<Integer> {
                                .skipWaitingJIT(skipWaitingJIT)
                                .profiling(profiling)
                                .forking(true)
+                               .taskstats(taskstats)
                                .build();
         Benchmark benchmark = new Benchmark(config);
         BenchmarkResult result = benchmark.run();

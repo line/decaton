@@ -28,6 +28,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 import com.linecorp.decaton.benchmark.BenchmarkConfig.ProfilingConfig;
+import com.linecorp.decaton.benchmark.BenchmarkConfig.TaskStatsConfig;
 import com.linecorp.decaton.benchmark.BenchmarkResult.ExtraInfo;
 import com.linecorp.decaton.benchmark.BenchmarkResult.JvmStats;
 import com.linecorp.decaton.benchmark.BenchmarkResult.Performance;
@@ -60,10 +61,12 @@ public class InProcessExecution implements Execution {
                                                        new KafkaDeserializer(),
                                                        bmConfig.params());
         Profiling profiling = profiling(bmConfig);
+        Taskstats taskstats = taskstats(bmConfig);
         runner.init(runnerConfig, recording, resourceTracker);
         final Map<Long, TrackingValues> resourceUsageReport;
         final Map<String, GcStats> jvmReport;
         final Optional<Path> profilerOutput;
+        final Optional<Path> taskstatsOutput;
         try {
             stageCallback.accept(Stage.READY_WARMUP);
             if (!recording.awaitWarmupComplete(3, TimeUnit.MINUTES)) {
@@ -80,6 +83,7 @@ public class InProcessExecution implements Execution {
                 throw new RuntimeException("timeout on awaiting benchmark to complete");
             }
             profilerOutput = profiling.stop();
+            taskstatsOutput = taskstats.reportStats();
             jvmReport = jvmTracker.report();
             resourceUsageReport = resourceTracker.report();
         } finally {
@@ -91,7 +95,7 @@ public class InProcessExecution implements Execution {
         }
 
         stageCallback.accept(Stage.FINISH);
-        return assembleResult(recording, resourceUsageReport, jvmReport, profilerOutput);
+        return assembleResult(recording, resourceUsageReport, jvmReport, profilerOutput, taskstatsOutput);
     }
 
     private static Profiling profiling(BenchmarkConfig bmConfig) {
@@ -100,6 +104,20 @@ public class InProcessExecution implements Execution {
             return Profiling.NOOP;
         } else {
             return new AsyncProfilerProfiling(config.profilerBin(), config.profilerOpts());
+        }
+    }
+
+    private static Taskstats taskstats(BenchmarkConfig bmConfig) {
+        if (!JvmUtils.isOsLinux()) {
+            log.debug("Not enabling taskstats for unsupported operating system: {}",
+                      System.getProperty("os.name"));
+            return Taskstats.NOOP;
+        }
+        TaskStatsConfig config = bmConfig.taskstats();
+        if (config == null) {
+            return Taskstats.NOOP;
+        } else {
+            return new Taskstats(config.jtaskstatsBin());
         }
     }
 
@@ -121,7 +139,8 @@ public class InProcessExecution implements Execution {
     private static BenchmarkResult assembleResult(Recording recording,
                                                   Map<Long, TrackingValues> resourceUsageReport,
                                                   Map<String, GcStats> jvmReport,
-                                                  Optional<Path> profilerOutput) {
+                                                  Optional<Path> profilerOutput,
+                                                  Optional<Path> taskstatsOutput) {
         Performance performance = recording.computeResult();
         int threads = resourceUsageReport.size();
         TrackingValues resourceValues =
@@ -137,6 +156,9 @@ public class InProcessExecution implements Execution {
                 Entry::getKey,
                 e -> new JvmStats.GcStats(e.getValue().count(), e.getValue().time())));
         JvmStats jvmStats = new JvmStats(gcStats);
-        return new BenchmarkResult(performance, resource, jvmStats, new ExtraInfo(profilerOutput.map(String::valueOf).orElse(null)));
+        ExtraInfo extraInfo = new ExtraInfo(
+                profilerOutput.map(String::valueOf).orElse(null),
+                taskstatsOutput.map(String::valueOf).orElse(null));
+        return new BenchmarkResult(performance, resource, jvmStats, extraInfo);
     }
 }
