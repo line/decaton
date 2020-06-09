@@ -50,9 +50,9 @@ public interface ProcessingGuarantee {
          * Decaton doesn't wait all pending tasks till complete before rebalance (and it's a design choice)
          *
          * Hence, what Decaton guarantees for process ordering can be formulated as below:
-         * - if a task (offset:N) gets (re)processed, offset:N+M (M > 0) always gets processed
+         * - if a task (offset:N) gets (re)processed, offset:N+M (M ≥ 1) always gets processed
          *
-         * Additionally, it's also be checked that if a task is committed, the task and preceding tasks never be reprocessed.
+         * In addition, it's also be checked that if a task is committed, the task and preceding tasks never be reprocessed.
          *
          * Example:
          * <pre>

@@ -23,7 +23,6 @@ import static org.junit.Assert.fail;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
@@ -31,42 +30,29 @@ import java.util.Map;
 import java.util.Map.Entry;
 
 public class ProcessOrdering implements ProcessingGuarantee {
-    private final List<ProducedRecord> producedRecords =
-            Collections.synchronizedList(new ArrayList<>());
-    private final List<ProcessedRecord> processedRecords =
-            Collections.synchronizedList(new ArrayList<>());
+    private final Map<TestTask, Long> taskToOffset = new HashMap<>();
+    private final Map<String, List<TestTask>> producedRecords = new HashMap<>();
+    private final Map<String, List<TestTask>> processedRecords = new HashMap<>();
 
     @Override
-    public void onProduce(ProducedRecord record) {
-        producedRecords.add(record);
+    public synchronized void onProduce(ProducedRecord record) {
+        taskToOffset.put(record.task(), record.offset());
+        producedRecords.computeIfAbsent(record.key(),
+                                        key -> new ArrayList<>()).add(record.task());
     }
 
     @Override
-    public void onProcess(ProcessedRecord record) {
-        processedRecords.add(record);
+    public synchronized void onProcess(ProcessedRecord record) {
+        processedRecords.computeIfAbsent(record.key(),
+                                         key -> new ArrayList<>()).add(record.task());
     }
 
     @Override
     public void doAssert() {
-        Map<String, List<TestTask>> perKeyProducedRecords = new HashMap<>();
-        Map<String, List<TestTask>> perKeyProcessedRecords = new HashMap<>();
-        Map<TestTask, Long> taskToOffset = new HashMap<>();
-
-        for (ProducedRecord record : producedRecords) {
-            taskToOffset.put(record.task(), record.offset());
-            perKeyProducedRecords.computeIfAbsent(record.key(),
-                                                  key -> new ArrayList<>()).add(record.task());
-        }
-
-        for (ProcessedRecord record : processedRecords) {
-            perKeyProcessedRecords.computeIfAbsent(record.key(),
-                                                   key -> new ArrayList<>()).add(record.task());
-        }
-
-        for (Entry<String, List<TestTask>> entry : perKeyProducedRecords.entrySet()) {
+        for (Entry<String, List<TestTask>> entry : producedRecords.entrySet()) {
             String key = entry.getKey();
             List<TestTask> produced = entry.getValue();
-            List<TestTask> processed = perKeyProcessedRecords.get(key);
+            List<TestTask> processed = processedRecords.get(key);
 
             assertNotNull(processed);
             assertOrdering(taskToOffset, produced, processed);

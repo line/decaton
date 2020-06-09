@@ -20,7 +20,6 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.lessThan;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -28,8 +27,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 
 public class SerialProcessing implements ProcessingGuarantee {
-    private final List<ProcessedRecord> records =
-            Collections.synchronizedList(new ArrayList<>());
+    private final Map<String, List<ProcessedRecord>> records = new HashMap<>();
 
     @Override
     public void onProduce(ProducedRecord record) {
@@ -37,21 +35,15 @@ public class SerialProcessing implements ProcessingGuarantee {
     }
 
     @Override
-    public void onProcess(ProcessedRecord record) {
-        records.add(record);
+    public synchronized void onProcess(ProcessedRecord record) {
+        records.computeIfAbsent(record.key(),
+                                key -> new ArrayList<>()).add(record);
     }
 
     @Override
     public void doAssert() {
-        Map<String, List<ProcessedRecord>> recordsMap = new HashMap<>();
-
-        for (ProcessedRecord record : records) {
-            recordsMap.computeIfAbsent(record.key(),
-                                       key -> new ArrayList<>()).add(record);
-        }
-
         // Checks there's no overlap between two consecutive records' processing time
-        for (Entry<String, List<ProcessedRecord>> entry : recordsMap.entrySet()) {
+        for (Entry<String, List<ProcessedRecord>> entry : records.entrySet()) {
             List<ProcessedRecord> perKeyRecords = entry.getValue();
             perKeyRecords.sort(Comparator.comparingLong(ProcessedRecord::startTimeNanos));
 
