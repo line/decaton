@@ -16,6 +16,7 @@
 
 package com.linecorp.decaton.testing.processor;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 import java.util.Collections;
@@ -38,6 +39,8 @@ public class AtLeastOnceDelivery implements ProcessingGuarantee {
 
     @Override
     public void doAssert() {
+        assertEquals(producedIds.size(), processedIds.size());
+        //noinspection SimplifiableJUnitAssertion
         assertTrue(producedIds.equals(processedIds));
     }
 }

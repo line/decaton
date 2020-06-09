@@ -18,6 +18,7 @@ package com.linecorp.decaton.testing;
 
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
@@ -61,11 +62,28 @@ public class TestUtils {
 
     public static final String DEFAULT_GROUP_ID = "test-group";
 
+    /**
+     * A helper to instantiate {@link DecatonClient} for producing protobuf tasks with preset configurations
+     *
+     * @param topic destination topic
+     * @param bootstrapServers bootstrap servers to connect
+     * @param <T> type of tasks
+     * @return {@link DecatonClient} instance
+     */
     public static <T extends MessageLite> DecatonClient<T> client(String topic,
                                                                   String bootstrapServers) {
         return client(topic, bootstrapServers, new ProtocolBuffersSerializer<>());
     }
 
+    /**
+     * A helper to instantiate {@link DecatonClient} for arbitrary task type with preset configurations
+     *
+     * @param topic destination topic
+     * @param bootstrapServers bootstrap servers to connect
+     * @param serializer {@link Serializer} for the task
+     * @param <T> type of tasks
+     * @return {@link DecatonClient} instance
+     */
     public static <T> DecatonClient<T> client(String topic,
                                               String bootstrapServers,
                                               Serializer<T> serializer) {
@@ -76,23 +94,64 @@ public class TestUtils {
                             .build();
     }
 
+    /**
+     * A helper to instantiate {@link Producer} with preset configurations
+     *
+     * @param bootstrapServers bootstrap servers to connect
+     * @return {@link Producer} instance with preset configurations
+     */
     public static Producer<String, DecatonTaskRequest> producer(String bootstrapServers) {
         return new KafkaProducer<>(defaultProducerProps(bootstrapServers),
                                    new PrintableAsciiStringSerializer(),
                                    new ProtocolBuffersKafkaSerializer<>());
     }
 
+    /**
+     * A helper to instantiate {@link ProcessorSubscription} with preset configuration
+     * with unique subscription id assigned
+     *
+     * @param bootstrapServers bootstrap servers to connect
+     * @param processorsBuilder actual processing logic. This parameter is mandatory
+     * @param retryConfig can be null if you don't enable retry queueing feature
+     * @param propertySupplier can be null if you don't supply extra Decaton configs
+     * @param <T> type of tasks
+     * @return {@link ProcessorSubscription} instance which is already running with unique subscription id assigned
+     */
     public static <T> ProcessorSubscription subscription(String bootstrapServers,
+                                                         ProcessorsBuilder<T> processorsBuilder,
+                                                         RetryConfig retryConfig,
+                                                         PropertySupplier propertySupplier) {
+        return subscription("subscription-" + sequence(),
+                            bootstrapServers,
+                            processorsBuilder,
+                            retryConfig,
+                            propertySupplier);
+    }
+
+    /**
+     * A helper to instantiate {@link ProcessorSubscription} with preset configuration.
+     * This method returns after a subscription has been transitioned to {@link State#RUNNING}.
+     *
+     * @param subscriptionId subscription id of the instance
+     * @param bootstrapServers bootstrap servers to connect
+     * @param processorsBuilder actual processing logic. This parameter is mandatory
+     * @param retryConfig can be null if you don't enable retry queueing feature
+     * @param propertySupplier can be null if you don't supply extra Decaton configs
+     * @param <T> type of tasks
+     * @return {@link ProcessorSubscription} instance which is already running
+     */
+    public static <T> ProcessorSubscription subscription(String subscriptionId,
+                                                         String bootstrapServers,
                                                          ProcessorsBuilder<T> processorsBuilder,
                                                          RetryConfig retryConfig,
                                                          PropertySupplier propertySupplier) {
         Properties props = new Properties();
         props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        props.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, "test-processor" + sequence());
+        props.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, "test-" + subscriptionId);
         props.setProperty(ConsumerConfig.GROUP_ID_CONFIG, DEFAULT_GROUP_ID);
         props.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         CountDownLatch initializationLatch = new CountDownLatch(1);
-        SubscriptionBuilder builder = SubscriptionBuilder.newBuilder("test-subscription")
+        SubscriptionBuilder builder = SubscriptionBuilder.newBuilder(subscriptionId)
                                                          .consumerConfig(props)
                                                          .processorsBuilder(processorsBuilder)
                                                          .stateListener(state -> {
@@ -117,20 +176,29 @@ public class TestUtils {
         return subscription;
     }
 
+    /**
+     * Wait for a condition to be met indefinitely
+     * @param message assertion message
+     * @param condition expected condition to be met
+     */
     public static void awaitCondition(String message,
                                       Supplier<Boolean> condition) {
         awaitCondition(message, condition, Long.MAX_VALUE);
     }
 
+    /**
+     * Wait for a condition to be met up to specified timeout
+     * @param message assertion message
+     * @param condition expected condition to be met
+     * @param timeoutMillis max duration to wait
+     */
     public static void awaitCondition(String message,
                                       Supplier<Boolean> condition,
                                       long timeoutMillis) {
-        long t = System.currentTimeMillis();
+        long start = System.nanoTime();
         while (!condition.get()) {
-            long now = System.currentTimeMillis();
-            timeoutMillis -= now - t;
-            t = now;
-            if (timeoutMillis <= 0) {
+            long elapsedMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start);
+            if (elapsedMillis >= timeoutMillis) {
                 throw new AssertionError(message);
             }
             try {

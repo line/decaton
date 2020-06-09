@@ -16,6 +16,7 @@
 
 package com.linecorp.decaton.testing.processor;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -29,7 +30,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
-public class ReprocessAwareOrdering implements ProcessingGuarantee {
+public class ProcessOrdering implements ProcessingGuarantee {
     private final List<ProducedRecord> producedRecords =
             Collections.synchronizedList(new ArrayList<>());
     private final List<ProcessedRecord> processedRecords =
@@ -107,6 +108,8 @@ public class ReprocessAwareOrdering implements ProcessingGuarantee {
             currentOffset = offset;
         }
 
+        assertEquals(produced.size(), excludeReprocess.size());
+        //noinspection SimplifiableJUnitAssertion
         assertTrue(produced.equals(new ArrayList<>(excludeReprocess)));
     }
 }

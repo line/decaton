@@ -1,15 +1,33 @@
+/*
+ * Copyright 2020 LINE Corporation
+ *
+ * LINE Corporation licenses this file to you under the Apache License,
+ * version 2.0 (the "License"); you may not use this file except in compliance
+ * with the License. You may obtain a copy of the License at:
+ *
+ *   https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ */
+
 package com.linecorp.decaton.testing.processor;
 
+import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.function.Consumer;
 import java.util.function.Function;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -49,7 +67,7 @@ import lombok.extern.slf4j.Slf4j;
  *   4. Await all produced offsets are committed
  *   5. Assert processing semantics
  *
- * Expected semantics can be customized according to each test instance.
+ * Expected processing guarantees can be customized according to each test instance.
  * (e.g. process ordering will be no longer kept if the processor uses retry-queueing feature)
  */
 @Slf4j
@@ -59,7 +77,7 @@ public class ProcessorTestSuite {
     private final Function<ProcessorsBuilder<TestTask>, ProcessorsBuilder<TestTask>> configureProcessorsBuilder;
     private final RetryConfig retryConfig;
     private final PropertySupplier propertySuppliers;
-    private final EnumSet<GuaranteeType> semantics;
+    private final Set<ProcessingGuarantee> semantics;
 
     private static final int NUM_TASKS = 10000;
     private static final int NUM_KEYS = 100;
@@ -70,6 +88,9 @@ public class ProcessorTestSuite {
     @Accessors(fluent = true)
     public static class Builder {
         private final KafkaClusterRule rule;
+
+        private final Set<GuaranteeType> defaultSemantics = EnumSet.allOf(GuaranteeType.class);
+        private final Set<ProcessingGuarantee> customSemantics = new HashSet<>();
 
         /**
          * Configure test-specific processing logic
@@ -84,15 +105,35 @@ public class ProcessorTestSuite {
          */
         private PropertySupplier propertySupplier;
         /**
-         * Processing semantics the processor should satisfy
+         * Exclude semantics from assertion.
+         * Intended to be used when we test a feature which breaks subset of semantics
          */
-        private EnumSet<GuaranteeType> semantics = ProcessingGuarantee.defaultSemantics();
+        public Builder excludeSemantics(GuaranteeType... guarantees) {
+            for (GuaranteeType guarantee : guarantees) {
+                defaultSemantics.remove(guarantee);
+            }
+            return this;
+        }
+        /**
+         * Include additional semantics in assertion.
+         * Feature-specific processing guarantee will be injected through this method
+         */
+        public Builder customSemantics(ProcessingGuarantee... guarantees) {
+            customSemantics.addAll(Arrays.asList(guarantees));
+            return this;
+        }
 
         private Builder(KafkaClusterRule rule) {
             this.rule = rule;
         }
 
         public ProcessorTestSuite build() {
+            Set<ProcessingGuarantee> semantics = new HashSet<>();
+            for (GuaranteeType guaranteeType : defaultSemantics) {
+                semantics.add(guaranteeType.get());
+            }
+            semantics.addAll(customSemantics);
+
             return new ProcessorTestSuite(rule,
                                           configureProcessorsBuilder,
                                           retryConfig,
@@ -108,9 +149,6 @@ public class ProcessorTestSuite {
     public void run() {
         String topic = rule.admin().createRandomTopic(NUM_PARTITIONS, 3);
         CountDownLatch rollingRestartLatch = new CountDownLatch(NUM_TASKS / 2);
-        List<ProcessingGuarantee> semantics = this.semantics.stream()
-                                                            .map(GuaranteeType::get)
-                                                            .collect(Collectors.toList());
 
         DecatonProcessor<TestTask> preprocessor = (context, task) -> {
             long startTime = System.nanoTime();
@@ -126,13 +164,14 @@ public class ProcessorTestSuite {
             rollingRestartLatch.countDown();
         };
 
-        Supplier<ProcessorSubscription> subscriptionSupplier = () -> {
+        Function<Integer, ProcessorSubscription> subscriptionConstructor = sequence -> {
             ProcessorsBuilder<TestTask> processorsBuilder =
                     configureProcessorsBuilder.apply(
                             ProcessorsBuilder.consuming(topic, new TestTaskDeserializer())
                                              .thenProcess(preprocessor));
 
-            return TestUtils.subscription(rule.bootstrapServers(),
+            return TestUtils.subscription("subscription-" + sequence,
+                                          rule.bootstrapServers(),
                                           processorsBuilder,
                                           retryConfig,
                                           propertySuppliers);
@@ -143,7 +182,7 @@ public class ProcessorTestSuite {
         try {
             producer = TestUtils.producer(rule.bootstrapServers());
             for (int i = 0; i < subscriptions.length; i++) {
-                subscriptions[i] = subscriptionSupplier.get();
+                subscriptions[i] = subscriptionConstructor.apply(i);
             }
             CompletableFuture<Map<Integer, Long>> produceFuture =
                     produceTasks(producer, topic, record -> semantics.forEach(g -> g.onProduce(record)));
@@ -153,7 +192,7 @@ public class ProcessorTestSuite {
             for (int i = 0; i < subscriptions.length; i++) {
                 log.info("Start restarting subscription-{} (threadId: {})", i, subscriptions[i].getId());
                 subscriptions[i].close();
-                subscriptions[i] = subscriptionSupplier.get();
+                subscriptions[i] = subscriptionConstructor.apply(i);
                 log.info("Finished restarting subscription-{} (threadId: {})", i, subscriptions[i].getId());
             }
 

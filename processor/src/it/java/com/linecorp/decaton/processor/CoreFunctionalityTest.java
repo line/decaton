@@ -16,10 +16,9 @@
 
 package com.linecorp.decaton.processor;
 
-import java.util.EnumSet;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadLocalRandom;
 
 import org.junit.ClassRule;
 import org.junit.Test;
@@ -37,8 +36,8 @@ public class CoreFunctionalityTest {
         ProcessorTestSuite
                 .builder(rule)
                 .configureProcessorsBuilder(builder -> builder.thenProcess((ctx, task) -> {
-                    // adding some pseudo random delay to generate out-of-order completion
-                    Thread.sleep(Math.abs(task.hashCode()) % 10);
+                    // adding some random delay to simulate realistic usage
+                    Thread.sleep(ThreadLocalRandom.current().nextLong(10L));
                 }))
                 .propertySupplier(StaticPropertySupplier.of(
                         Property.ofStatic(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY, 16)
@@ -54,22 +53,23 @@ public class CoreFunctionalityTest {
                 .builder(rule)
                 .configureProcessorsBuilder(builder -> builder.thenProcess((ctx, task) -> {
                     DeferredCompletion completion = ctx.deferCompletion();
-                    CompletableFuture.runAsync(() -> {
+                    executorService.execute(() -> {
                         try {
-                            Thread.sleep(Math.abs(task.hashCode()) % 10);
+                            Thread.sleep(ThreadLocalRandom.current().nextLong(10L));
                         } catch (InterruptedException e) {
                             Thread.currentThread().interrupt();
                             throw new RuntimeException(e);
                         } finally {
                             completion.complete();
                         }
-                    }, executorService);
+                    });
                 }))
                 // If task is completed asynchronously there's no guarantee about
                 // completion ordering nor serial processing
-                .semantics(EnumSet.of(
-                        GuaranteeType.AT_LEAST_ONCE_DELIVERY
-                ))
+                .excludeSemantics(
+                        GuaranteeType.PROCESS_ORDERING,
+                        GuaranteeType.SERIAL_PROCESSING
+                )
                 .build()
                 .run();
     }

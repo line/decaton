@@ -39,13 +39,13 @@ public class TestTask {
      */
     String id;
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper mapper = new ObjectMapper();
 
     public static class TestTaskSerializer implements Serializer<TestTask> {
         @Override
         public byte[] serialize(TestTask data) {
             try {
-                return MAPPER.writeValueAsBytes(data);
+                return mapper.writeValueAsBytes(data);
             } catch (JsonProcessingException e) {
                 throw new UncheckedIOException(e);
             }
@@ -56,7 +56,7 @@ public class TestTask {
         @Override
         public TestTask deserialize(byte[] bytes) {
             try {
-                return MAPPER.readValue(bytes, TestTask.class);
+                return mapper.readValue(bytes, TestTask.class);
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
             }
