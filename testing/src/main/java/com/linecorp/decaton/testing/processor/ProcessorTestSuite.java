@@ -20,7 +20,6 @@ import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
@@ -28,7 +27,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.function.Consumer;
 import java.util.function.Function;
-import java.util.stream.Collectors;
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.Producer;
@@ -152,16 +150,18 @@ public class ProcessorTestSuite {
 
         DecatonProcessor<TestTask> preprocessor = (context, task) -> {
             long startTime = System.nanoTime();
-            context.deferCompletion()
-                   .completeWith(context.push(task))
-                   .whenComplete((r, e) -> {
-                       semantics.forEach(
-                               g -> g.onProcess(new ProcessedRecord(context.key(),
-                                                                    task,
-                                                                    startTime,
-                                                                    System.nanoTime())));
-                   });
-            rollingRestartLatch.countDown();
+            try {
+                context.deferCompletion()
+                       .completeWith(context.push(task));
+            } finally {
+                long endTime = System.nanoTime();
+                semantics.forEach(
+                        g -> g.onProcess(new ProcessedRecord(context.key(),
+                                                             task,
+                                                             startTime,
+                                                             endTime)));
+                rollingRestartLatch.countDown();
+            }
         };
 
         Function<Integer, ProcessorSubscription> subscriptionConstructor = sequence -> {

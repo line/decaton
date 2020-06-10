@@ -52,7 +52,7 @@ public class SerialProcessing implements ProcessingGuarantee {
                 ProcessedRecord current = perKeyRecords.get(i);
 
                 assertThat("Process time shouldn't overlap. key: " + entry.getKey(),
-                           prev.completeTimeNanos(), lessThan(current.startTimeNanos()));
+                           prev.endTimeNanos(), lessThan(current.startTimeNanos()));
             }
         }
     }

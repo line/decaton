@@ -24,7 +24,6 @@ import org.junit.ClassRule;
 import org.junit.Test;
 
 import com.linecorp.decaton.testing.KafkaClusterRule;
-import com.linecorp.decaton.testing.processor.ProcessingGuarantee.GuaranteeType;
 import com.linecorp.decaton.testing.processor.ProcessorTestSuite;
 
 public class CoreFunctionalityTest {
@@ -64,12 +63,6 @@ public class CoreFunctionalityTest {
                         }
                     });
                 }))
-                // If task is completed asynchronously there's no guarantee about
-                // completion ordering nor serial processing
-                .excludeSemantics(
-                        GuaranteeType.PROCESS_ORDERING,
-                        GuaranteeType.SERIAL_PROCESSING
-                )
                 .build()
                 .run();
     }

@@ -16,6 +16,8 @@
 
 package com.linecorp.decaton.testing.processor;
 
+import com.linecorp.decaton.processor.DecatonProcessor;
+
 import lombok.Value;
 import lombok.experimental.Accessors;
 
@@ -39,7 +41,7 @@ public class ProcessedRecord {
     long startTimeNanos;
 
     /**
-     * {@link System#nanoTime()} at the time when completed to process the task
+     * {@link System#nanoTime()} at the time when {@link DecatonProcessor#process} for the task returned
      */
-    long completeTimeNanos;
+    long endTimeNanos;
 }

@@ -20,6 +20,7 @@ import java.util.function.Supplier;
 
 import org.apache.kafka.clients.producer.KafkaProducer;
 
+import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.runtime.ProcessorSubscription;
 
 /**
@@ -96,7 +97,7 @@ public interface ProcessingGuarantee {
     void onProduce(ProducedRecord record);
 
     /**
-     * Called when a task has been completed to process.
+     * Called when {@link DecatonProcessor#process} returned from processing a task.
      *
      * Must be thread safe since this method will be called from
      * multiple threads of multiple {@link ProcessorSubscription}
