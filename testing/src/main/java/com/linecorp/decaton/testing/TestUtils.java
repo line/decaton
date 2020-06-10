@@ -107,8 +107,8 @@ public class TestUtils {
     }
 
     /**
-     * A helper to instantiate {@link ProcessorSubscription} with preset configuration
-     * with unique subscription id assigned
+     * A helper to instantiate {@link ProcessorSubscription} with preset configurations
+     * and unique subscription id assigned
      *
      * @param bootstrapServers bootstrap servers to connect
      * @param processorsBuilder actual processing logic. This parameter is mandatory
@@ -129,8 +129,8 @@ public class TestUtils {
     }
 
     /**
-     * A helper to instantiate {@link ProcessorSubscription} with preset configuration.
-     * This method returns after a subscription has been transitioned to {@link State#RUNNING}.
+     * A helper to instantiate {@link ProcessorSubscription} with preset configurations.
+     * This method returns after a subscription has been transitioned to {@link State#RUNNING} state.
      *
      * @param subscriptionId subscription id of the instance
      * @param bootstrapServers bootstrap servers to connect
@@ -177,7 +177,7 @@ public class TestUtils {
     }
 
     /**
-     * Wait for a condition to be met indefinitely
+     * Wait indefinitely for a condition to be met
      * @param message assertion message
      * @param condition expected condition to be met
      */
