@@ -23,6 +23,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import org.junit.ClassRule;
 import org.junit.Test;
 
+import com.linecorp.decaton.processor.runtime.ProcessorScope;
 import com.linecorp.decaton.testing.KafkaClusterRule;
 import com.linecorp.decaton.testing.processor.ProcessorTestSuite;
 
@@ -38,6 +39,34 @@ public class CoreFunctionalityTest {
                     // adding some random delay to simulate realistic usage
                     Thread.sleep(ThreadLocalRandom.current().nextLong(10L));
                 }))
+                .propertySupplier(StaticPropertySupplier.of(
+                        Property.ofStatic(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY, 16)
+                ))
+                .build()
+                .run();
+    }
+
+    @Test(timeout = 30000)
+    public void testProcessConcurrent_PartitionScopeProcessor() {
+        ProcessorTestSuite
+                .builder(rule)
+                .configureProcessorsBuilder(builder -> builder.thenProcess(() -> (ctx, task) -> {
+                    Thread.sleep(ThreadLocalRandom.current().nextLong(10L));
+                }, ProcessorScope.PARTITION))
+                .propertySupplier(StaticPropertySupplier.of(
+                        Property.ofStatic(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY, 16)
+                ))
+                .build()
+                .run();
+    }
+
+    @Test(timeout = 30000)
+    public void testProcessConcurrent_ThreadScopeProcessor() {
+        ProcessorTestSuite
+                .builder(rule)
+                .configureProcessorsBuilder(builder -> builder.thenProcess(() -> (ctx, task) -> {
+                    Thread.sleep(ThreadLocalRandom.current().nextLong(10L));
+                }, ProcessorScope.THREAD))
                 .propertySupplier(StaticPropertySupplier.of(
                         Property.ofStatic(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY, 16)
                 ))
