@@ -16,28 +16,33 @@
 
 package com.linecorp.decaton.processor;
 
+import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadLocalRandom;
 
 import org.junit.ClassRule;
+import org.junit.Rule;
 import org.junit.Test;
 
 import com.linecorp.decaton.processor.runtime.ProcessorScope;
 import com.linecorp.decaton.testing.KafkaClusterRule;
+import com.linecorp.decaton.testing.RandomRule;
 import com.linecorp.decaton.testing.processor.ProcessorTestSuite;
 
 public class CoreFunctionalityTest {
     @ClassRule
     public static KafkaClusterRule rule = new KafkaClusterRule();
+    @Rule
+    public RandomRule randomRule = new RandomRule();
 
     @Test(timeout = 30000)
     public void testProcessConcurrent() {
+        Random rand = randomRule.random();
         ProcessorTestSuite
                 .builder(rule)
                 .configureProcessorsBuilder(builder -> builder.thenProcess((ctx, task) -> {
                     // adding some random delay to simulate realistic usage
-                    Thread.sleep(ThreadLocalRandom.current().nextLong(10L));
+                    Thread.sleep(rand.nextInt(10));
                 }))
                 .propertySupplier(StaticPropertySupplier.of(
                         Property.ofStatic(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY, 16)
@@ -48,10 +53,11 @@ public class CoreFunctionalityTest {
 
     @Test(timeout = 30000)
     public void testProcessConcurrent_PartitionScopeProcessor() {
+        Random rand = randomRule.random();
         ProcessorTestSuite
                 .builder(rule)
                 .configureProcessorsBuilder(builder -> builder.thenProcess(() -> (ctx, task) -> {
-                    Thread.sleep(ThreadLocalRandom.current().nextLong(10L));
+                    Thread.sleep(rand.nextInt(10));
                 }, ProcessorScope.PARTITION))
                 .propertySupplier(StaticPropertySupplier.of(
                         Property.ofStatic(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY, 16)
@@ -62,10 +68,11 @@ public class CoreFunctionalityTest {
 
     @Test(timeout = 30000)
     public void testProcessConcurrent_ThreadScopeProcessor() {
+        Random rand = randomRule.random();
         ProcessorTestSuite
                 .builder(rule)
                 .configureProcessorsBuilder(builder -> builder.thenProcess(() -> (ctx, task) -> {
-                    Thread.sleep(ThreadLocalRandom.current().nextLong(10L));
+                    Thread.sleep(rand.nextInt(10));
                 }, ProcessorScope.THREAD))
                 .propertySupplier(StaticPropertySupplier.of(
                         Property.ofStatic(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY, 16)
@@ -77,13 +84,14 @@ public class CoreFunctionalityTest {
     @Test(timeout = 30000)
     public void testAsyncTaskCompletion() {
         ExecutorService executorService = Executors.newFixedThreadPool(16);
+        Random rand = randomRule.random();
         ProcessorTestSuite
                 .builder(rule)
                 .configureProcessorsBuilder(builder -> builder.thenProcess((ctx, task) -> {
                     DeferredCompletion completion = ctx.deferCompletion();
                     executorService.execute(() -> {
                         try {
-                            Thread.sleep(ThreadLocalRandom.current().nextLong(10L));
+                            Thread.sleep(rand.nextInt(10));
                         } catch (InterruptedException e) {
                             Thread.currentThread().interrupt();
                             throw new RuntimeException(e);
