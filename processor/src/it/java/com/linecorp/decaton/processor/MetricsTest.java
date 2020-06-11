@@ -123,17 +123,12 @@ public class MetricsTest {
 
             // Wait in loop until the total pause count becomes the number of partitions.
             // Fail by test timeout if it doesn't.
-            while (true) {
-                long pausedCount = (long) Metrics.registry()
-                                                 .find("decaton.partition.paused")
-                                                 .tags("topic", topicName)
-                                                 .gauges().stream()
-                                                 .mapToDouble(Gauge::value).sum();
-                if (pausedCount == PARTITIONS) {
-                    break;
-                }
-                Thread.sleep(100);
-            }
+            TestUtils.awaitCondition("total pause count should becomes " + PARTITIONS,
+                                     () -> (long) Metrics.registry()
+                                                         .find("decaton.partition.paused")
+                                                         .tags("topic", topicName)
+                                                         .gauges().stream()
+                                                         .mapToDouble(Gauge::value).sum() == PARTITIONS);
         }
     }
 }
