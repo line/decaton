@@ -23,6 +23,8 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 
+import com.linecorp.decaton.processor.TaskMetadata;
+
 public class AtLeastOnceDelivery implements ProcessingGuarantee {
     private final Set<String> producedIds = Collections.synchronizedSet(new HashSet<>());
     private final Set<String> processedIds = Collections.synchronizedSet(new HashSet<>());
@@ -33,7 +35,7 @@ public class AtLeastOnceDelivery implements ProcessingGuarantee {
     }
 
     @Override
-    public void onProcess(ProcessedRecord record) {
+    public void onProcess(TaskMetadata metadata, ProcessedRecord record) {
         processedIds.add(record.task().getId());
     }
 

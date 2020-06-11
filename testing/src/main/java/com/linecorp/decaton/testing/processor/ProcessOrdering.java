@@ -29,6 +29,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
+import com.linecorp.decaton.processor.TaskMetadata;
+
 public class ProcessOrdering implements ProcessingGuarantee {
     private final Map<TestTask, Long> taskToOffset = new HashMap<>();
     private final Map<String, List<TestTask>> producedRecords = new HashMap<>();
@@ -42,7 +44,7 @@ public class ProcessOrdering implements ProcessingGuarantee {
     }
 
     @Override
-    public synchronized void onProcess(ProcessedRecord record) {
+    public synchronized void onProcess(TaskMetadata metadata, ProcessedRecord record) {
         processedRecords.computeIfAbsent(record.key(),
                                          key -> new ArrayList<>()).add(record.task());
     }

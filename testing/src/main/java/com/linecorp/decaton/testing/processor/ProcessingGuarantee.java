@@ -21,13 +21,14 @@ import java.util.function.Supplier;
 import org.apache.kafka.clients.producer.KafkaProducer;
 
 import com.linecorp.decaton.processor.DecatonProcessor;
+import com.linecorp.decaton.processor.TaskMetadata;
 import com.linecorp.decaton.processor.runtime.ProcessorSubscription;
 
 /**
  * Interface for processing guarantee in Decaton stream-processing.
  *
  * Implementation classes should store produced records and processed records
- * when {@link #onProduce(ProducedRecord)} and {@link #onProcess(ProcessedRecord)} are invoked respectively,
+ * when {@link #onProduce(ProducedRecord)} and {@link #onProcess(TaskMetadata, ProcessedRecord)} are invoked respectively,
  * and checks if the guarantee is met in {@link #doAssert()}
  */
 public interface ProcessingGuarantee {
@@ -102,7 +103,7 @@ public interface ProcessingGuarantee {
      * Must be thread safe since this method will be called from
      * multiple threads of multiple {@link ProcessorSubscription}
      */
-    void onProcess(ProcessedRecord record);
+    void onProcess(TaskMetadata metadata, ProcessedRecord record);
 
     /**
      * Checks if the processing guarantee is satisfied.

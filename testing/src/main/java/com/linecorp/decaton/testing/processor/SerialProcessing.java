@@ -26,6 +26,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
+import com.linecorp.decaton.processor.TaskMetadata;
+
 public class SerialProcessing implements ProcessingGuarantee {
     private final Map<String, List<ProcessedRecord>> records = new HashMap<>();
 
@@ -35,7 +37,7 @@ public class SerialProcessing implements ProcessingGuarantee {
     }
 
     @Override
-    public synchronized void onProcess(ProcessedRecord record) {
+    public synchronized void onProcess(TaskMetadata metadata, ProcessedRecord record) {
         records.computeIfAbsent(record.key(),
                                 key -> new ArrayList<>()).add(record);
     }

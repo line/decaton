@@ -165,13 +165,9 @@ public class ProcessorTestSuite {
             CompletableFuture<Map<Integer, Long>> produceFuture =
                     produceTasks(producer, topic, record -> semantics.forEach(g -> g.onProduce(record)));
 
+            rollingRestartLatch.await();
             performRollingRestart(subscriptions, i -> newSubscription(i, topic, Optional.empty()));
             awaitAllOffsetsCommitted(topic, produceFuture);
-
-            for (int i = 0; i < subscriptions.length; i++) {
-                log.info("Closing subscription-{} (threadId: {})", i, subscriptions[i].getId());
-                subscriptions[i].close();
-            }
 
             for (ProcessingGuarantee guarantee : semantics) {
                 guarantee.doAssert();
@@ -180,10 +176,9 @@ public class ProcessorTestSuite {
             throw new RuntimeException(e);
         } finally {
             safeClose(producer);
-            for (ProcessorSubscription subscription : subscriptions) {
-                if (subscription != null && subscription.isAlive()) {
-                    safeClose(subscription);
-                }
+            for (int i = 0; i < subscriptions.length; i++) {
+                log.info("Closing subscription-{} (threadId: {})", i, subscriptions[i].getId());
+                safeClose(subscriptions[i]);
             }
             rule.admin().deleteTopics(topic);
         }
@@ -196,7 +191,7 @@ public class ProcessorTestSuite {
                 context.deferCompletion().completeWith(context.push(task));
             } finally {
                 ProcessedRecord record = new ProcessedRecord(context.key(), task, startTime, System.nanoTime());
-                semantics.forEach(g -> g.onProcess(record));
+                semantics.forEach(g -> g.onProcess(context.metadata(), record));
                 processLatch.ifPresent(CountDownLatch::countDown);
             }
         };
