@@ -22,6 +22,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
@@ -144,75 +145,28 @@ public class ProcessorTestSuite {
         return new Builder(rule);
     }
 
+    /**
+     * Run the test.
+     *
+     * Can be called only once per {@link ProcessorTestSuite} instance since
+     * running the test possibly mutates {@link ProcessingGuarantee}'s internal state
+     */
     public void run() {
         String topic = rule.admin().createRandomTopic(NUM_PARTITIONS, 3);
         CountDownLatch rollingRestartLatch = new CountDownLatch(NUM_TASKS / 2);
-
-        DecatonProcessor<TestTask> preprocessor = (context, task) -> {
-            long startTime = System.nanoTime();
-            try {
-                context.deferCompletion()
-                       .completeWith(context.push(task));
-            } finally {
-                long endTime = System.nanoTime();
-                semantics.forEach(
-                        g -> g.onProcess(new ProcessedRecord(context.key(),
-                                                             task,
-                                                             startTime,
-                                                             endTime)));
-                rollingRestartLatch.countDown();
-            }
-        };
-
-        Function<Integer, ProcessorSubscription> subscriptionConstructor = sequence -> {
-            ProcessorsBuilder<TestTask> processorsBuilder =
-                    configureProcessorsBuilder.apply(
-                            ProcessorsBuilder.consuming(topic, new TestTaskDeserializer())
-                                             .thenProcess(preprocessor));
-
-            return TestUtils.subscription("subscription-" + sequence,
-                                          rule.bootstrapServers(),
-                                          processorsBuilder,
-                                          retryConfig,
-                                          propertySuppliers);
-        };
-
         Producer<String, DecatonTaskRequest> producer = null;
         ProcessorSubscription[] subscriptions = new ProcessorSubscription[NUM_SUBSCRIPTION_INSTANCES];
+
         try {
             producer = TestUtils.producer(rule.bootstrapServers());
             for (int i = 0; i < subscriptions.length; i++) {
-                subscriptions[i] = subscriptionConstructor.apply(i);
+                subscriptions[i] = newSubscription(i, topic, Optional.of(rollingRestartLatch));
             }
             CompletableFuture<Map<Integer, Long>> produceFuture =
                     produceTasks(producer, topic, record -> semantics.forEach(g -> g.onProduce(record)));
 
-            // perform rolling restart
-            rollingRestartLatch.await();
-            for (int i = 0; i < subscriptions.length; i++) {
-                log.info("Start restarting subscription-{} (threadId: {})", i, subscriptions[i].getId());
-                subscriptions[i].close();
-                subscriptions[i] = subscriptionConstructor.apply(i);
-                log.info("Finished restarting subscription-{} (threadId: {})", i, subscriptions[i].getId());
-            }
-
-            // await all produced offsets are committed
-            Map<Integer, Long> producedOffsets = produceFuture.join();
-            TestUtils.awaitCondition("all produced offsets should be committed", () -> {
-                Map<TopicPartition, OffsetAndMetadata> committed =
-                        rule.admin().consumerGroupOffsets(TestUtils.DEFAULT_GROUP_ID);
-
-                for (Entry<Integer, Long> entry : producedOffsets.entrySet()) {
-                    int partition = entry.getKey();
-                    long produced = entry.getValue();
-
-                    OffsetAndMetadata metadata = committed.get(new TopicPartition(topic, partition));
-                    if (metadata == null || metadata.offset() <= produced) {
-                        return false;
-                    }
-                }
-                return true;
-            });
+            performRollingRestart(subscriptions, i -> newSubscription(i, topic, Optional.empty()));
+            awaitAllOffsetsCommitted(topic, produceFuture);
 
             for (int i = 0; i < subscriptions.length; i++) {
                 log.info("Closing subscription-{} (threadId: {})", i, subscriptions[i].getId());
@@ -233,6 +187,61 @@ public class ProcessorTestSuite {
             }
             rule.admin().deleteTopics(topic);
         }
+    }
+
+    private ProcessorSubscription newSubscription(int id, String topic, Optional<CountDownLatch> processLatch) {
+        DecatonProcessor<TestTask> preprocessor = (context, task) -> {
+            long startTime = System.nanoTime();
+            try {
+                context.deferCompletion().completeWith(context.push(task));
+            } finally {
+                ProcessedRecord record = new ProcessedRecord(context.key(), task, startTime, System.nanoTime());
+                semantics.forEach(g -> g.onProcess(record));
+                processLatch.ifPresent(CountDownLatch::countDown);
+            }
+        };
+
+        ProcessorsBuilder<TestTask> processorsBuilder =
+                configureProcessorsBuilder.apply(
+                        ProcessorsBuilder.consuming(topic, new TestTaskDeserializer())
+                                         .thenProcess(preprocessor));
+
+        return TestUtils.subscription("subscription-" + id,
+                                      rule.bootstrapServers(),
+                                      processorsBuilder,
+                                      retryConfig,
+                                      propertySuppliers);
+    }
+
+    private static void performRollingRestart(ProcessorSubscription[] subscriptions,
+                                              Function<Integer, ProcessorSubscription> subscriptionConstructor)
+            throws Exception {
+        for (int i = 0; i < subscriptions.length; i++) {
+            log.info("Start restarting subscription-{} (threadId: {})", i, subscriptions[i].getId());
+            subscriptions[i].close();
+            subscriptions[i] = subscriptionConstructor.apply(i);
+            log.info("Finished restarting subscription-{} (threadId: {})", i, subscriptions[i].getId());
+        }
+    }
+
+    private void awaitAllOffsetsCommitted(String topic,
+                                          CompletableFuture<Map<Integer, Long>> produceFuture) {
+        Map<Integer, Long> producedOffsets = produceFuture.join();
+        TestUtils.awaitCondition("all produced offsets should be committed", () -> {
+            Map<TopicPartition, OffsetAndMetadata> committed =
+                    rule.admin().consumerGroupOffsets(TestUtils.DEFAULT_GROUP_ID);
+
+            for (Entry<Integer, Long> entry : producedOffsets.entrySet()) {
+                int partition = entry.getKey();
+                long produced = entry.getValue();
+
+                OffsetAndMetadata metadata = committed.get(new TopicPartition(topic, partition));
+                if (metadata == null || metadata.offset() <= produced) {
+                    return false;
+                }
+            }
+            return true;
+        });
     }
 
     private static void safeClose(AutoCloseable resource) {
