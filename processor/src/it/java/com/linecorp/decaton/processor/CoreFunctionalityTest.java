@@ -16,6 +16,12 @@
 
 package com.linecorp.decaton.processor;
 
+import static org.junit.Assert.assertTrue;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -27,7 +33,12 @@ import org.junit.Test;
 import com.linecorp.decaton.processor.runtime.ProcessorScope;
 import com.linecorp.decaton.testing.KafkaClusterRule;
 import com.linecorp.decaton.testing.RandomRule;
+import com.linecorp.decaton.testing.processor.ProcessedRecord;
+import com.linecorp.decaton.testing.processor.ProcessingGuarantee;
+import com.linecorp.decaton.testing.processor.ProcessingGuarantee.GuaranteeType;
 import com.linecorp.decaton.testing.processor.ProcessorTestSuite;
+import com.linecorp.decaton.testing.processor.ProducedRecord;
+import com.linecorp.decaton.testing.processor.TestTask;
 
 public class CoreFunctionalityTest {
     @ClassRule
@@ -100,6 +111,51 @@ public class CoreFunctionalityTest {
                         }
                     });
                 }))
+                .build()
+                .run();
+    }
+
+    /**
+     * Decaton doesn't guarantee that produced messages are processed in
+     * "strictly" same order (refs {@link GuaranteeType#PROCESS_ORDERING}).
+     *
+     * But as long as we set partition.concurrency to 1 and all subscriptions are
+     * restarted gracefully, we can expect "strict" process ordering as like vanilla Kafka consumer
+     */
+    @Test(timeout = 60000)
+    public void testSingleThreadProcessing() {
+        ProcessingGuarantee strictOrdering = new ProcessingGuarantee() {
+            private final Map<String, List<TestTask>> produced = new HashMap<>();
+            private final Map<String, List<TestTask>> processed = new HashMap<>();
+
+            @Override
+            public synchronized void onProduce(ProducedRecord record) {
+                produced.computeIfAbsent(record.key(), key -> new ArrayList<>()).add(record.task());
+            }
+
+            @Override
+            public synchronized void onProcess(TaskMetadata metadata, ProcessedRecord record) {
+                processed.computeIfAbsent(record.key(), key -> new ArrayList<>()).add(record.task());
+            }
+
+            @Override
+            public void doAssert() {
+                // use assertTrue instead of assertEquals not to cause error message explosion
+                //noinspection SimplifiableJUnitAssertion
+                assertTrue(produced.equals(processed));
+            }
+        };
+
+        Random rand = randomRule.random();
+        ProcessorTestSuite
+                .builder(rule)
+                .configureProcessorsBuilder(builder -> builder.thenProcess((ctx, task) -> {
+                    Thread.sleep(rand.nextInt(10));
+                }))
+                .propertySupplier(StaticPropertySupplier.of(
+                        Property.ofStatic(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY, 1)
+                ))
+                .customSemantics(strictOrdering)
                 .build()
                 .run();
     }
