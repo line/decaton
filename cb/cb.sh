@@ -45,7 +45,12 @@ function commit_rev() {
     log "Committing revision $rev"
     git --git-dir=$repo/.git --work-tree=$repo add $store_dir/$rev
     git --git-dir=$repo/.git --work-tree=$repo commit -m"Auto add commit data: $rev"
-    git --git-dir=$repo/.git --work-tree=$repo push
+
+    origin="origin"
+    if [ -n "$GH_USERNAME" ]; then
+        origin="$(git remote get-url origin | sed 's/https:\/\//https:\/\/${GH_USERNAME}:${GH_PASSWORD}@/')"
+    fi
+    git --git-dir=$repo/.git --work-tree=$repo push $origin HEAD
 }
 
 function update_last_rev() {
