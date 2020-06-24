@@ -117,7 +117,7 @@ public class InProcessExecution implements Execution {
         if (config == null) {
             return Taskstats.NOOP;
         } else {
-            return new Taskstats(config.jtaskstatsBin());
+            return new Taskstats(config.jtaskstatsBin(), config.jtaskstatsOutput());
         }
     }
 

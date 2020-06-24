@@ -84,6 +84,9 @@ public final class Main implements Callable<Integer> {
     @Option(names = "--taskstats-bin", description = "Path to jtaskstats", defaultValue = "jtaskstats")
     private Path jtaskstatsBin;
 
+    @Option(names = "--taskstats-output", description = "Path to write jtaskstats output")
+    private Path jtaskstatsOutput;
+
     @Option(names = "--format", description = "Result format, one of: text(default), json",
             defaultValue = "text")
     private String resultFormat;
@@ -124,7 +127,7 @@ public final class Main implements Callable<Integer> {
         }
         BenchmarkConfig.TaskStatsConfig taskstats = null;
         if (enableTaskstats) {
-            taskstats = new TaskStatsConfig(jtaskstatsBin);
+            taskstats = new TaskStatsConfig(jtaskstatsBin, jtaskstatsOutput);
         }
         ResultFormat resultFormat = resultFormat();
         BenchmarkConfig config =

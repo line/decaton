@@ -84,11 +84,16 @@ public class BenchmarkConfig {
         Path profilerBin;
         List<String> profilerOpts;
     }
+
     @Value
     public static class TaskStatsConfig {
         /**
          * jtaskstats binary path (available only at Linux machines) that is optional and might be null.
          */
         Path jtaskstatsBin;
+        /**
+         * jtaskstats result output path.
+         */
+        Path jtaskstatsOutput;
     }
 }
