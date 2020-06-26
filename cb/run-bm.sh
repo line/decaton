@@ -32,5 +32,7 @@ function run_with_opts() {
         >$out_dir/$name-benchmark.json
 }
 
+$root_dir/cb/sysinfo.sh >$out_dir/sysinfo.json
+
 run_with_opts "tasks_10k_latency_10ms_concurrency_20" --tasks 10000 --simulate-latency=10 --param=decaton.partition.concurrency=20
 run_with_opts "tasks_100k_latency_0ms_concurrency_20" --tasks 100000 --simulate-latency=0 --param=decaton.partition.concurrency=20
