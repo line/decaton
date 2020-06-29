@@ -130,11 +130,11 @@ public class BenchmarkResult {
         return new BenchmarkResult(performance.plus(other.performance),
                                    resource.plus(other.resource),
                                    jvmStats.plus(other.jvmStats),
-                                   ExtraInfo.EMPTY);
+                                   other.extraInfo);
     }
 
     public BenchmarkResult div(int d) {
-        return new BenchmarkResult(performance.div(d), resource.div(d), jvmStats.div(d), ExtraInfo.EMPTY);
+        return new BenchmarkResult(performance.div(d), resource.div(d), jvmStats.div(d), extraInfo);
     }
 
     public static BenchmarkResult aggregateAverage(List<BenchmarkResult> results) {

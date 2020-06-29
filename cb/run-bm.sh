@@ -17,6 +17,7 @@ $root_dir/gradlew clean benchmark:shadowJar
 function run_with_opts() {
     name=$1; shift
     $root_dir/benchmark/debm.sh \
+        --runs 3 \
         --title "$rev-$name" \
         --format=json \
         --profile \

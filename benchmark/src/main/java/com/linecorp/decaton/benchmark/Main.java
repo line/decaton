@@ -29,7 +29,6 @@ import java.util.concurrent.Callable;
 
 import com.linecorp.decaton.benchmark.BenchmarkConfig.ProfilingConfig;
 import com.linecorp.decaton.benchmark.BenchmarkConfig.TaskStatsConfig;
-
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
@@ -95,6 +94,10 @@ public final class Main implements Callable<Integer> {
             description = "Trim file paths in result from its path to filename only")
     private boolean fileNameOnly;
 
+    @Option(names = "--runs", defaultValue = "1",
+            description = "Number of attempts to make averaged result. The last attempt's data will be used for some type of results like profiling output.")
+    private int runs;
+
     private static List<String> parseOptions(String opts) {
         if (opts == null) {
             return emptyList();
@@ -121,6 +124,10 @@ public final class Main implements Callable<Integer> {
 
     @Override
     public Integer call() throws Exception {
+        if (runs <= 0) {
+            throw new RuntimeException("--runs must be at least 1");
+        }
+
         BenchmarkConfig.ProfilingConfig profiling = null;
         if (enableProfiling) {
             profiling = new ProfilingConfig(profilerBin, parseOptions(profilerOpts));
@@ -146,7 +153,14 @@ public final class Main implements Callable<Integer> {
                                .fileNameOnly(fileNameOnly)
                                .build();
         Benchmark benchmark = new Benchmark(config);
-        BenchmarkResult result = benchmark.run();
+        List<BenchmarkResult> results = new ArrayList<>(runs);
+        for (int i = 0; i < runs; i++) {
+            BenchmarkResult result = benchmark.run();
+            results.add(result);
+        }
+        @SuppressWarnings("OptionalGetWithoutIsPresent")
+        BenchmarkResult sum = results.stream().reduce(BenchmarkResult::plus).get();
+        BenchmarkResult result = sum.div(results.size());
         resultFormat.print(config, System.out, result);
         return 0;
     }
