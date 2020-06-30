@@ -43,14 +43,14 @@ function revisions_since() {
 function commit_rev() {
     rev=$1
     log "Committing revision $rev"
-    git --git-dir=$repo/.git --work-tree=$repo add $store_dir/$rev
-    git --git-dir=$repo/.git --work-tree=$repo commit -m"Auto add commit data: $rev"
+    git -C $repo add $store_dir/$rev
+    git -C $repo commit -m"Auto add commit data: $rev"
 
     origin="origin"
     if [ -n "$GH_USERNAME" ]; then
         origin="$(git remote get-url origin | sed 's/https:\/\//https:\/\/${GH_USERNAME}:${GH_PASSWORD}@/')"
     fi
-    git --git-dir=$repo/.git --work-tree=$repo push $origin HEAD
+    git -C $repo push $origin HEAD
 }
 
 function update_last_rev() {
@@ -71,7 +71,7 @@ if [ ! -e $repo ]; then
 fi
 
 log "Checking out $STORE_BRANCH at $repo"
-git --git-dir=$repo/.git --work-tree=$repo checkout $STORE_BRANCH
+git -C $repo checkout $STORE_BRANCH
 
 checkout $BUILD_BRANCH
 pull
