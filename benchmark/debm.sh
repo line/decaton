@@ -7,7 +7,7 @@ JTASKSTATS_VERSION=0.2.0
 JTASKSTATS_URL_BASE="https://github.com/kawamuray/jtaskstats/releases/download/v${JTASKSTATS_VERSION}"
 
 extra_opts=""
-classpath="$CLASSPATH:$(ls $(dirname $0)/build/libs/benchmark-*-shadow.jar | sort -nr | head -1)"
+classpath="${CLASSPATH:-$(ls $(dirname $0)/build/libs/benchmark-*-shadow.jar | sort -nr | head -1)}"
 
 if [[ "$*" == *--profile* ]] && [[ "$*" != *--profiler-bin* ]] && ! which profiler.sh >/dev/null 2>&1; then
     dir="/tmp/async-profiler-${ASYNC_PROFILER_VERSION}"

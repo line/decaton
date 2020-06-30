@@ -74,17 +74,26 @@ public class BenchmarkConfig {
      * Taskstats config is optional and might be null.
      */
     TaskStatsConfig taskstats;
+    /**
+     * Trim file paths in result from its path to filename only.
+     */
+    boolean fileNameOnly;
 
     @Value
     public static class ProfilingConfig {
         Path profilerBin;
         List<String> profilerOpts;
     }
+
     @Value
     public static class TaskStatsConfig {
         /**
          * jtaskstats binary path (available only at Linux machines) that is optional and might be null.
          */
         Path jtaskstatsBin;
+        /**
+         * jtaskstats result output path.
+         */
+        Path jtaskstatsOutput;
     }
 }

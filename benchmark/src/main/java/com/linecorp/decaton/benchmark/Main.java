@@ -29,7 +29,6 @@ import java.util.concurrent.Callable;
 
 import com.linecorp.decaton.benchmark.BenchmarkConfig.ProfilingConfig;
 import com.linecorp.decaton.benchmark.BenchmarkConfig.TaskStatsConfig;
-
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
@@ -64,7 +63,8 @@ public final class Main implements Callable<Integer> {
     @Option(names = "--param", description = "Key-value parameters to supply for runner")
     private Map<String, String> params = new HashMap<>();
 
-    @Option(names = "--no-wait-jit", description = "Do not await JIT compilation to get stable before moving onto actual run")
+    @Option(names = "--no-wait-jit",
+            description = "Do not await JIT compilation to get stable before moving onto actual run")
     private boolean skipWaitingJIT;
 
     @Option(names = "--profile", description = "Enable profiling of execution with async-profiler")
@@ -83,6 +83,21 @@ public final class Main implements Callable<Integer> {
     @Option(names = "--taskstats-bin", description = "Path to jtaskstats", defaultValue = "jtaskstats")
     private Path jtaskstatsBin;
 
+    @Option(names = "--taskstats-output", description = "Path to write jtaskstats output")
+    private Path jtaskstatsOutput;
+
+    @Option(names = "--format", description = "Result format, one of: text(default), json",
+            defaultValue = "text")
+    private String resultFormat;
+
+    @Option(names = "--file-name-only",
+            description = "Trim file paths in result from its path to filename only")
+    private boolean fileNameOnly;
+
+    @Option(names = "--runs", defaultValue = "1",
+            description = "Number of attempts to make averaged result. The last attempt's data will be used for some type of results like profiling output.")
+    private int runs;
+
     private static List<String> parseOptions(String opts) {
         if (opts == null) {
             return emptyList();
@@ -96,16 +111,32 @@ public final class Main implements Callable<Integer> {
         return items;
     }
 
+    private ResultFormat resultFormat() {
+        switch (resultFormat) {
+            case "text":
+                return new TextResultFormat();
+            case "json":
+                return new JsonResultFormat();
+            default:
+                throw new IllegalArgumentException("unknown format: " + resultFormat);
+        }
+    }
+
     @Override
     public Integer call() throws Exception {
+        if (runs <= 0) {
+            throw new RuntimeException("--runs must be at least 1");
+        }
+
         BenchmarkConfig.ProfilingConfig profiling = null;
         if (enableProfiling) {
             profiling = new ProfilingConfig(profilerBin, parseOptions(profilerOpts));
         }
         BenchmarkConfig.TaskStatsConfig taskstats = null;
         if (enableTaskstats) {
-            taskstats = new TaskStatsConfig(jtaskstatsBin);
+            taskstats = new TaskStatsConfig(jtaskstatsBin, jtaskstatsOutput);
         }
+        ResultFormat resultFormat = resultFormat();
         BenchmarkConfig config =
                 BenchmarkConfig.builder()
                                .title(title)
@@ -119,10 +150,18 @@ public final class Main implements Callable<Integer> {
                                .profiling(profiling)
                                .forking(true)
                                .taskstats(taskstats)
+                               .fileNameOnly(fileNameOnly)
                                .build();
         Benchmark benchmark = new Benchmark(config);
-        BenchmarkResult result = benchmark.run();
-        result.print(config, System.out);
+        List<BenchmarkResult> results = new ArrayList<>(runs);
+        for (int i = 0; i < runs; i++) {
+            BenchmarkResult result = benchmark.run();
+            results.add(result);
+        }
+        @SuppressWarnings("OptionalGetWithoutIsPresent")
+        BenchmarkResult sum = results.stream().reduce(BenchmarkResult::plus).get();
+        BenchmarkResult result = sum.div(results.size());
+        resultFormat.print(config, System.out, result);
         return 0;
     }
 

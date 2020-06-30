@@ -25,12 +25,18 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class Taskstats {
-    public static final Taskstats NOOP = new Taskstats(null);
+    public static final Taskstats NOOP = new Taskstats(null, null);
 
     private final Path jtaskstatsBin;
+    private final Path outputPath;
 
-    public Taskstats(Path jtaskstatsBin) {
+    public Taskstats(Path jtaskstatsBin, Path outputPath) {
         this.jtaskstatsBin = jtaskstatsBin;
+        if (outputPath == null) {
+            this.outputPath = Paths.get(outputFileName());
+        } else {
+            this.outputPath = outputPath;
+        }
     }
 
     private static String outputFileName() {
@@ -40,6 +46,7 @@ public class Taskstats {
     /**
      * Report taskstats of all java threads in the target JVM and return the path to the file
      * containing the output.
+     *
      * @return path to the file containing output.
      */
     public Optional<Path> reportStats() {
@@ -51,10 +58,9 @@ public class Taskstats {
                 jtaskstatsBin.toString(),
                 String.valueOf(JvmUtils.currentPid())
         };
-        Path output = Paths.get(outputFileName());
         try {
             Process process = new ProcessBuilder(cmd)
-                    .redirectOutput(output.toFile())
+                    .redirectOutput(outputPath.toFile())
                     .redirectError(Redirect.INHERIT)
                     .start();
             if (process.waitFor() != 0) {
@@ -64,6 +70,6 @@ public class Taskstats {
             log.error("Failed to run jtaskstats command: {}", cmd, e);
             throw new RuntimeException(e);
         }
-        return Optional.of(output);
+        return Optional.of(outputPath);
     }
 }
