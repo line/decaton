@@ -12,7 +12,7 @@ fi
 
 root_dir=$(dirname $0)/..
 
-$root_dir/gradlew clean benchmark:shadowJar
+$root_dir/gradlew --no-daemon clean benchmark:shadowJar
 
 function run_with_opts() {
     name=$1; shift
