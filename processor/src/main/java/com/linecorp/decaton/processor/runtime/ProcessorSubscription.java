@@ -37,8 +37,6 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import com.linecorp.decaton.processor.DeferredCompletion;
 import com.linecorp.decaton.processor.ProcessorProperties;
@@ -48,9 +46,10 @@ import com.linecorp.decaton.processor.metrics.Metrics;
 import com.linecorp.decaton.processor.metrics.Metrics.SubscriptionMetrics;
 import com.linecorp.decaton.processor.runtime.Utils.Timer;
 
-public class ProcessorSubscription extends Thread implements AsyncShutdownable {
-    private static final Logger logger = LoggerFactory.getLogger(ProcessorSubscription.class);
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
+public class ProcessorSubscription extends Thread implements AsyncShutdownable {
     private static final long POLL_TIMEOUT_MILLIS = 100;
 
     private final SubscriptionScope scope;
@@ -85,12 +84,12 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
     }
 
     private void updateState(SubscriptionStateListener.State newState) {
-        logger.info("ProcessorSubscription transitioned to state: {}", newState);
+        log.info("ProcessorSubscription transitioned to state: {}", newState);
         if (stateListener != null) {
             try {
                 stateListener.onChange(newState);
             } catch (Exception e) {
-                logger.warn("State listener threw an exception", e);
+                log.warn("State listener threw an exception", e);
             }
         }
     }
@@ -106,16 +105,16 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
     private void commitCompletedOffsets(Consumer<?, ?> consumer, boolean sync) {
         Map<TopicPartition, OffsetAndMetadata> commitOffsets = contexts.commitOffsets();
         if (commitOffsets.isEmpty()) {
-            logger.debug("No new offsets to commit, skipping commit");
+            log.debug("No new offsets to commit, skipping commit");
             return;
         }
-        logger.debug("Committing offsets {}: {}", sync ? "SYNC" : "ASYNC", commitOffsets);
+        log.debug("Committing offsets {}: {}", sync ? "SYNC" : "ASYNC", commitOffsets);
         if (sync) {
             consumer.commitSync(commitOffsets);
         } else {
             consumer.commitAsync(commitOffsets, (offsets, exception) -> {
                 if (exception != null) {
-                    logger.warn("Offset commit failed asynchronously", exception);
+                    log.warn("Offset commit failed asynchronously", exception);
                 }
             });
         }
@@ -132,13 +131,13 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
             final int pendingTasksCount = contexts.totalPendingTasks();
             Duration elapsed = timer.duration();
             if (pendingTasksCount == 0) {
-                logger.debug("waiting for task completion is successful {} ns \\(^^)/",
-                             Utils.formatNanos(elapsed));
+                log.debug("waiting for task completion is successful {} ns \\(^^)/",
+                          Utils.formatNanos(elapsed));
                 break;
             }
 
             if (elapsed.toNanos() >= timeoutNanos) {
-                logger.debug(
+                log.debug(
                         "waiting for task completion timed out {} ns. {} tasks are likely to be duplicated",
                         Utils.formatNanos(elapsed), pendingTasksCount);
                 break;
@@ -161,7 +160,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
 
         Timer timer = Utils.timer();
         contexts.dropContexts(partitions);
-        logger.info("took {} ms to revoke {} partitions", timer.elapsedMillis(), partitions.size());
+        log.info("took {} ms to revoke {} partitions", timer.elapsedMillis(), partitions.size());
     }
 
     private void partitionsAssigned(Collection<TopicPartition> partitions) {
@@ -173,7 +172,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
         for (TopicPartition partition : partitions) {
             contexts.initContext(partition, false);
         }
-        logger.info("took {} ms to assign {} partitions", timer.elapsedMillis(), partitions.size());
+        log.info("took {} ms to assign {} partitions", timer.elapsedMillis(), partitions.size());
     }
 
     @Override
@@ -199,24 +198,24 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
                     try {
                         commitCompletedOffsets(consumer, true);
                     } catch (CommitFailedException | TimeoutException e) {
-                        logger.warn("Offset commit failed at group rebalance", e);
+                        log.warn("Offset commit failed at group rebalance", e);
                     }
                 }
 
                 @Override
                 public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-                    logger.debug("assigning({}): {}, currently assigned({}): {}", partitions.size(), partitions,
-                                 currentAssignment.size(), currentAssignment);
+                    log.debug("assigning({}): {}, currently assigned({}): {}", partitions.size(), partitions,
+                              currentAssignment.size(), currentAssignment);
 
                     final Collection<TopicPartition> revokedPartitions = new HashSet<>(currentAssignment);
                     revokedPartitions.removeAll(partitions);
-                    logger.debug("revoked partitions({}): {}", revokedPartitions.size(), revokedPartitions);
+                    log.debug("revoked partitions({}): {}", revokedPartitions.size(), revokedPartitions);
                     partitionsRevoked(revokedPartitions);
 
                     final Collection<TopicPartition> newlyAssignedPartitions = new HashSet<>(partitions);
                     newlyAssignedPartitions.removeAll(currentAssignment);
-                    logger.debug("newly assigned partitions({}): {}", newlyAssignedPartitions.size(),
-                                 newlyAssignedPartitions);
+                    log.debug("newly assigned partitions({}): {}", newlyAssignedPartitions.size(),
+                              newlyAssignedPartitions);
                     partitionsAssigned(newlyAssignedPartitions);
 
                     final Collection<TopicPartition> regressed =
@@ -224,7 +223,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
                                       .filter(tp -> contexts.get(tp).isOffsetRegressing(consumer.position(tp)))
                                       .collect(toList());
                     if (!regressed.isEmpty()) {
-                        logger.debug("regression on {}, so resetting all internal states", regressed);
+                        log.debug("regression on {}, so resetting all internal states", regressed);
                         partitionsRevoked(regressed);
                         partitionsAssigned(regressed);
                     }
@@ -250,8 +249,8 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
                 metrics.commitOffsetTime.record(timer.duration());
             }
         } catch (RuntimeException e) {
-            logger.error("ProcessorSubscription {} got exception while consuming, currently assigned: {}",
-                         scope, currentAssignment, e);
+            log.error("ProcessorSubscription {} got exception while consuming, currently assigned: {}",
+                      scope, currentAssignment, e);
         } finally {
             updateState(SubscriptionStateListener.State.SHUTTING_DOWN);
 
@@ -265,15 +264,15 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
             try {
                 commitCompletedOffsets(consumer, true);
             } catch (RuntimeException e) {
-                logger.error("Offset commit failed before closing consumer", e);
+                log.error("Offset commit failed before closing consumer", e);
             }
 
             processors.destroySingletonScope(scope.subscriptionId());
 
             consumerClosing.set(true);
             consumer.close();
-            logger.info("ProcessorSubscription {} terminated in {} ms", scope,
-                        timer.elapsedMillis());
+            log.info("ProcessorSubscription {} terminated in {} ms", scope,
+                     timer.elapsedMillis());
 
             updateState(SubscriptionStateListener.State.TERMINATED);
         }
@@ -318,7 +317,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
             return;
         }
 
-        logger.debug("pausing partitions: {}", pausedPartitions);
+        log.debug("pausing partitions: {}", pausedPartitions);
         consumer.pause(pausedPartitions);
         pausedPartitions.forEach(tp -> contexts.get(tp).pause());
     }
@@ -329,7 +328,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
             return;
         }
 
-        logger.debug("resuming partitions: {}", resumedPartitions);
+        log.debug("resuming partitions: {}", resumedPartitions);
         consumer.resume(resumedPartitions);
         resumedPartitions.forEach(tp -> contexts.get(tp).resume());
     }
@@ -339,7 +338,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
             try {
                 commitCompletedOffsets(consumer, false);
             } catch (CommitFailedException | TimeoutException e) {
-                logger.warn("Offset commit failed, but continuing to consume", e);
+                log.warn("Offset commit failed, but continuing to consume", e);
                 // Continue processing, assuming commit will be handled successfully in next attempt.
             }
             lastCommittedMillis = System.currentTimeMillis();
@@ -349,7 +348,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
 
     @Override
     public void initiateShutdown() {
-        logger.info("Initiating shutdown of subscription thread: {}", getName());
+        log.info("Initiating shutdown of subscription thread: {}", getName());
         terminated.set(true);
     }
 
@@ -357,6 +356,6 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
     public void awaitShutdown() throws InterruptedException {
         join();
         metrics.close();
-        logger.info("Subscription thread terminated: {}", getName());
+        log.info("Subscription thread terminated: {}", getName());
     }
 }
