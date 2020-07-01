@@ -103,14 +103,22 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
                      .collect(Collectors.toSet());
     }
 
-    private void commitCompletedOffsets(Consumer<?, ?> consumer) {
+    private void commitCompletedOffsets(Consumer<?, ?> consumer, boolean sync) {
         Map<TopicPartition, OffsetAndMetadata> commitOffsets = contexts.commitOffsets();
         if (commitOffsets.isEmpty()) {
             logger.debug("No new offsets to commit, skipping commit");
             return;
         }
-        logger.debug("Committing offsets: {}", commitOffsets);
-        consumer.commitSync(commitOffsets);
+        logger.debug("Committing offsets {}: {}", sync ? "SYNC" : "ASYNC", commitOffsets);
+        if (sync) {
+            consumer.commitSync(commitOffsets);
+        } else {
+            consumer.commitAsync(commitOffsets, (offsets, exception) -> {
+                if (exception != null) {
+                    logger.warn("Offset commit failed asynchronously", exception);
+                }
+            });
+        }
         contexts.updateCommittedOffsets(commitOffsets);
     }
 
@@ -189,7 +197,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
 
                     waitForRemainingTasksCompletion(rebalanceTimeoutMillis.value());
                     try {
-                        commitCompletedOffsets(consumer);
+                        commitCompletedOffsets(consumer, true);
                     } catch (CommitFailedException | TimeoutException e) {
                         logger.warn("Offset commit failed at group rebalance", e);
                     }
@@ -255,7 +263,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
             // so we're manually handling this here instead of relying on rebalance listener for better compatibility
             contexts.updateHighWatermarks();
             try {
-                commitCompletedOffsets(consumer);
+                commitCompletedOffsets(consumer, true);
             } catch (RuntimeException e) {
                 logger.error("Offset commit failed before closing consumer", e);
             }
@@ -329,7 +337,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
     private long commitOffsetsIfNecessary(Consumer<String, byte[]> consumer, long lastCommittedMillis) {
         if (System.currentTimeMillis() - lastCommittedMillis >= commitIntervalMillis.value()) {
             try {
-                commitCompletedOffsets(consumer);
+                commitCompletedOffsets(consumer, false);
             } catch (CommitFailedException | TimeoutException e) {
                 logger.warn("Offset commit failed, but continuing to consume", e);
                 // Continue processing, assuming commit will be handled successfully in next attempt.
