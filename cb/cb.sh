@@ -72,6 +72,8 @@ fi
 
 log "Checking out $STORE_BRANCH at $repo"
 git -C $repo checkout $STORE_BRANCH
+log "Pulling latest revision at $repo"
+git -C $repo pull
 
 checkout $BUILD_BRANCH
 pull
