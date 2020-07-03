@@ -16,7 +16,8 @@
 
 package com.linecorp.decaton.benchmark;
 
-import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
 import java.lang.ProcessBuilder.Redirect;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -65,18 +66,28 @@ public class AsyncProfilerProfiling implements Profiling {
         cmd.add(String.valueOf(JvmUtils.currentPid()));
         try {
             Process process = new ProcessBuilder(cmd)
-                    .redirectOutput(new File("/dev/stderr"))
+                    .redirectOutput(Redirect.PIPE)
                     .redirectError(Redirect.INHERIT)
                     .start();
             if (!process.waitFor(PROFILER_CMD_TIMEOUT_SECS, TimeUnit.SECONDS)) {
                 throw new RuntimeException("timed out waiting async-profiler command");
             }
+            slurpOutput(process.getInputStream());
+
             if (process.exitValue() != 0) {
                 throw new RuntimeException("async-profiler exits with error: " + process.exitValue());
             }
         } catch (Exception e) {
             log.error("Failed to run profiler command: {}", cmd, e);
             throw new RuntimeException(e);
+        }
+    }
+
+    private static void slurpOutput(InputStream in) throws IOException {
+        byte[] buf = new byte[4096];
+        int len;
+        while ((len = in.read(buf)) > 0) {
+            System.err.write(buf, 0, len);
         }
     }
 
