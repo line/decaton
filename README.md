@@ -48,6 +48,11 @@ Below are some examples. See [Index](./docs/index.adoc) for the full list.
 * Dynamic Rate Limiting - Apply and update processing rate quota dynamically
 * Task Compaction - Crush preceding tasks which its processing results will be overwritten by following task
 
+# Performance
+
+High performance is one of the biggest functionalities of Decaton so we're carefully tracking its performance transitions commit-by-commit.
+You can see performance tracking dashboard from [here](https://line.github.io/decaton) (Note that the actual performance could be more or less depending on machine resource and configuration).
+
 # How to build
 
 We use Gradle to build this project.
