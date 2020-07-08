@@ -69,10 +69,11 @@ public class RateLimiterTest {
         DynamicProperty<Long> rateProp = new DynamicProperty<>(ProcessorProperties.CONFIG_PROCESSING_RATE);
         try (ProcessorSubscription subscription = TestUtils.subscription(
                 rule.bootstrapServers(),
-                ProcessorsBuilder.consuming(topicName, new ProtocolBuffersDeserializer<>(HelloTask.parser()))
-                                 .thenProcess(processor),
-                null,
-                StaticPropertySupplier.of(rateProp));
+                builder -> builder.processorsBuilder(ProcessorsBuilder
+                                                             .consuming(topicName,
+                                                                        new ProtocolBuffersDeserializer<>(HelloTask.parser()))
+                                                             .thenProcess(processor))
+                                  .properties(StaticPropertySupplier.of(rateProp)));
              DecatonClient<HelloTask> client = TestUtils.client(topicName, rule.bootstrapServers())) {
 
             int count = 0;

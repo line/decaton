@@ -71,10 +71,9 @@ public class MetricsTest {
         CountDownLatch processLatch = new CountDownLatch(1);
         try (ProcessorSubscription subscription = TestUtils.subscription(
                 rule.bootstrapServers(),
-                ProcessorsBuilder.consuming(topicName, new ProtocolBuffersDeserializer<>(HelloTask.parser()))
-                                 .thenProcess((context, task) -> processLatch.countDown()),
-                null,
-                StaticPropertySupplier.of());
+                builder -> builder.processorsBuilder(
+                        ProcessorsBuilder.consuming(topicName, new ProtocolBuffersDeserializer<>(HelloTask.parser()))
+                                         .thenProcess((context, task) -> processLatch.countDown())));
              DecatonClient<HelloTask> client = TestUtils.client(topicName, rule.bootstrapServers())) {
             client.put(null, HelloTask.getDefaultInstance());
             processLatch.await();
@@ -99,12 +98,13 @@ public class MetricsTest {
         props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, rule.bootstrapServers());
         try (ProcessorSubscription subscription = TestUtils.subscription(
                 rule.bootstrapServers(),
-                ProcessorsBuilder.consuming(topicName, new ProtocolBuffersDeserializer<>(HelloTask.parser()))
-                                 .thenProcess(processor),
-                null,
-                StaticPropertySupplier.of(
-                        Property.ofStatic(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY, 1),
-                        Property.ofStatic(ProcessorProperties.CONFIG_MAX_PENDING_RECORDS, 1)));
+                builder -> builder.processorsBuilder(ProcessorsBuilder
+                                                             .consuming(topicName,
+                                                                        new ProtocolBuffersDeserializer<>(HelloTask.parser()))
+                                                             .thenProcess(processor))
+                                  .properties(StaticPropertySupplier.of(
+                                          Property.ofStatic(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY, 1),
+                                          Property.ofStatic(ProcessorProperties.CONFIG_MAX_PENDING_RECORDS, 1))));
              Producer<String, DecatonTaskRequest> producer =
                      new KafkaProducer<>(props,
                                          new PrintableAsciiStringSerializer(),

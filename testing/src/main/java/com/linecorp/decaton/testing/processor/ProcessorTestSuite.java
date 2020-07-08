@@ -227,10 +227,16 @@ public class ProcessorTestSuite {
 
         return TestUtils.subscription("subscription-" + id,
                                       rule.bootstrapServers(),
-                                      processorsBuilder,
-                                      retryConfig,
-                                      propertySuppliers,
-                                      state -> statesListener.onChange(id, state));
+                                      builder -> {
+                                          builder.processorsBuilder(processorsBuilder);
+                                          if (retryConfig != null) {
+                                              builder.enableRetry(retryConfig);
+                                          }
+                                          if (propertySuppliers != null) {
+                                              builder.properties(propertySuppliers);
+                                          }
+                                          builder.stateListener(state -> statesListener.onChange(id, state));
+                                      });
     }
 
     private static void performRollingRestart(ProcessorSubscription[] subscriptions,
