@@ -173,15 +173,16 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
         updateState(SubscriptionStateListener.State.INITIALIZING);
 
         Consumer<String, byte[]> consumer = consumerSupplier.get();
-
+        AtomicBoolean consumerClosing = new AtomicBoolean(false);
         final Collection<TopicPartition> currentAssignment = new HashSet<>();
         try {
             consumer.subscribe(subscribeTopics(), new ConsumerRebalanceListener() {
                 @Override
                 public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
                     // KafkaConsumer#close has been changed to invoke onPartitionRevoked since Kafka 2.4.0.
-                    // Since we're doing cleanup procedure on shutdown individually so just immediately return if terminated
-                    if (terminated.get()) {
+                    // Since we're doing cleanup procedure on shutdown manually
+                    // so just immediately return if consumer is already closing
+                    if (consumerClosing.get()) {
                         return;
                     }
                     updateState(SubscriptionStateListener.State.REBALANCING);
@@ -248,14 +249,20 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
 
             Timer timer = Utils.timer();
             contexts.destroyAllProcessors();
+
+            // Since kafka-clients version 2.4.0 ConsumerRebalanceListener#onPartitionsRevoked gets triggered
+            // at close so the same thing is supposed to happen, but its not true for older kafka-clients version
+            // so we're manually handling this here instead of relying on rebalance listener for better compatibility
+            contexts.updateHighWatermarks();
             try {
-                contexts.updateHighWatermarks();
                 commitCompletedOffsets(consumer);
             } catch (RuntimeException e) {
                 logger.error("Offset commit failed before closing consumer", e);
             }
 
             processors.destroySingletonScope(scope.subscriptionId());
+
+            consumerClosing.set(true);
             consumer.close();
             logger.info("ProcessorSubscription {} terminated in {} ms", scope,
                         timer.elapsedMillis());

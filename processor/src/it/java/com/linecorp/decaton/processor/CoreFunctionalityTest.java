@@ -35,7 +35,6 @@ import com.linecorp.decaton.testing.KafkaClusterRule;
 import com.linecorp.decaton.testing.RandomRule;
 import com.linecorp.decaton.testing.processor.ProcessedRecord;
 import com.linecorp.decaton.testing.processor.ProcessingGuarantee;
-import com.linecorp.decaton.testing.processor.ProcessingGuarantee.GuaranteeType;
 import com.linecorp.decaton.testing.processor.ProcessorTestSuite;
 import com.linecorp.decaton.testing.processor.ProducedRecord;
 import com.linecorp.decaton.testing.processor.TestTask;
@@ -115,16 +114,11 @@ public class CoreFunctionalityTest {
                 .run();
     }
 
-    /**
-     * Decaton doesn't guarantee that produced messages are processed in
-     * "strictly" same order (refs {@link GuaranteeType#PROCESS_ORDERING}).
-     *
-     * But as long as we set partition.concurrency to 1 and all subscriptions are
-     * restarted gracefully, we can expect "strict" process ordering as like vanilla Kafka consumer
-     */
     @Test(timeout = 60000)
     public void testSingleThreadProcessing() {
-        ProcessingGuarantee strictOrdering = new ProcessingGuarantee() {
+        // Note that this processing semantics is not be considered as Decaton specification which users can rely on.
+        // Rather, this is just a expected behavior based on current implementation when we set concurrency to 1.
+        ProcessingGuarantee noDuplicates = new ProcessingGuarantee() {
             private final Map<String, List<TestTask>> produced = new HashMap<>();
             private final Map<String, List<TestTask>> processed = new HashMap<>();
 
@@ -155,7 +149,7 @@ public class CoreFunctionalityTest {
                 .propertySupplier(StaticPropertySupplier.of(
                         Property.ofStatic(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY, 1)
                 ))
-                .customSemantics(strictOrdering)
+                .customSemantics(noDuplicates)
                 .build()
                 .run();
     }

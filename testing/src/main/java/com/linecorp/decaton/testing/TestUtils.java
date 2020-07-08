@@ -22,6 +22,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
+import com.linecorp.decaton.processor.SubscriptionStateListener;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
@@ -125,7 +126,8 @@ public class TestUtils {
                             bootstrapServers,
                             processorsBuilder,
                             retryConfig,
-                            propertySupplier);
+                            propertySupplier,
+                            null);
     }
 
     /**
@@ -137,6 +139,7 @@ public class TestUtils {
      * @param processorsBuilder actual processing logic. This parameter is mandatory
      * @param retryConfig can be null if you don't enable retry queueing feature
      * @param propertySupplier can be null if you don't supply extra Decaton configs
+     * @param stateListener can be null if you don't need to listen subscription state
      * @param <T> type of tasks
      * @return {@link ProcessorSubscription} instance which is already running
      */
@@ -144,7 +147,8 @@ public class TestUtils {
                                                          String bootstrapServers,
                                                          ProcessorsBuilder<T> processorsBuilder,
                                                          RetryConfig retryConfig,
-                                                         PropertySupplier propertySupplier) {
+                                                         PropertySupplier propertySupplier,
+                                                         SubscriptionStateListener stateListener) {
         Properties props = new Properties();
         props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         props.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, "test-" + subscriptionId);
@@ -157,6 +161,9 @@ public class TestUtils {
                                                          .stateListener(state -> {
                                                              if (state == State.RUNNING) {
                                                                  initializationLatch.countDown();
+                                                             }
+                                                             if (stateListener != null) {
+                                                                 stateListener.onChange(state);
                                                              }
                                                          });
         if (retryConfig != null) {

@@ -45,7 +45,8 @@ public interface SubscriptionStateListener {
      * The expected state transition is:
      * <pre>
      * {@code
-     * INITIALIZING -> REBALANCING <-> RUNNING -> SHUTTING_DOWN -> TERMINATED
+     * INITIALIZING -> RUNNING <-> REBALANCING
+     *                    └──────> SHUTTING_DOWN -> TERMINATED
      * }
      * </pre>
      *
@@ -69,7 +70,7 @@ public interface SubscriptionStateListener {
         RUNNING,
         /**
          * Entered shutdown sequence.
-         * No extra tasks will be queued, but existing queued tasks will be processed.
+         * No extra tasks will be queued, but started tasks will not be interrupted.
          */
         SHUTTING_DOWN,
         /**
