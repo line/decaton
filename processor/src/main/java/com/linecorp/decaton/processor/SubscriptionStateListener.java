@@ -70,7 +70,7 @@ public interface SubscriptionStateListener {
         RUNNING,
         /**
          * Entered shutdown sequence.
-         * No extra tasks will be queued, but started tasks will not be interrupted.
+         * No extra tasks will be queued, but the tasks that are already in process continues till it completes.
          */
         SHUTTING_DOWN,
         /**

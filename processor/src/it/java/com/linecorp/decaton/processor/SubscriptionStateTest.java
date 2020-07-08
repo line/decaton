@@ -26,7 +26,6 @@ import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 import org.junit.ClassRule;
 import org.junit.Test;
@@ -62,9 +61,7 @@ public class SubscriptionStateTest {
             List<State> validTransition = Arrays.asList(State.INITIALIZING);
             while ((state = states.pollFirst()) != null) {
                 if (!validTransition.contains(state)) {
-                    fail(String.format("Invalid state transition %s on subscription-%d",
-                                       stateHistory.stream().map(State::name).collect(Collectors.joining(",")),
-                                       instanceId));
+                    fail(String.format("Invalid state transition %s on subscription-%d", stateHistory, instanceId));
                 }
                 switch (state) {
                     case INITIALIZING:
