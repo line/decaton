@@ -62,6 +62,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
     private final Property<Long> rebalanceTimeoutMillis;
     private final SubscriptionStateListener stateListener;
     private final SubscriptionMetrics metrics;
+    private volatile boolean asyncCommitInFlight;
 
     public ProcessorSubscription(SubscriptionScope scope,
                                  Supplier<Consumer<String, byte[]>> consumerSupplier,
@@ -111,14 +112,53 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
         log.debug("Committing offsets {}: {}", sync ? "SYNC" : "ASYNC", commitOffsets);
         if (sync) {
             consumer.commitSync(commitOffsets);
+            contexts.updateCommittedOffsets(commitOffsets);
         } else {
+            if (asyncCommitInFlight) {
+                // We would end up making multiple OffsetCommit requests containing same set of offsets if we proceed
+                // another async commit without waiting the first one to complete.
+                // This would be harmless if `decaton.commit.interval.ms` is set to sufficiently large, but otherwise
+                // we would make abusive offset commits despite there's no progress in processing.
+                log.debug("Skipping commit due to another async commit is currently in-flight");
+                return;
+            }
             consumer.commitAsync(commitOffsets, (offsets, exception) -> {
+                asyncCommitInFlight = false;
                 if (exception != null) {
                     log.warn("Offset commit failed asynchronously", exception);
+                    return;
+                }
+                // Exception raised from the commitAsync callback bubbles up to Consumer.poll() so it kills this
+                // subscription thread.
+                // Basically the exception thrown from here is considered a bug, but failing to commit offset itself
+                // isn't usually critical for consumer's continuation availability so we grab it here widely.
+                try {
+                    // Some thread and timing safety consideration about below operation.
+                    // Thread safety:
+                    // Below operation touches some thread-unsafe resources such as ProcessingContexts map and
+                    // variable storing committed offset in ProcessingContext but we can assume this callback is
+                    // thread safe because in all cases a callback for commitAsync is called from inside of
+                    // Consumer.poll() which is called only by this (subscription) thread.
+                    // Timing safety:
+                    // At the time this callback is triggered there might be a change in ProcessingContexts map
+                    // underlying contexts. It would occur in two cases:
+                    // 1. When group rebalance is triggered and the context is dropped by revoke at partitionsRevoked().
+                    // 2. When dynamic processor reload is triggered and the context is renewed by
+                    // PartitionContexts.maybeHandlePropertyReload.
+                    // The case 2 is safe (safe to keep updating committed offset in renewed PartitionContext) because
+                    // it caries previously consuming offset without reset.
+                    // The case 1 is somewhat suspicious but should still be safe, because whenever partition revoke
+                    // happens it calls commitSync() through onPartitionsRevoked(). According to the document of
+                    // commitAsync(), it is guaranteed that its callback is called before subsequent commitSync()
+                    // returns. So when a context is dropped from PartitionContexts, there should be no in-flight
+                    // commitAsync().
+                    contexts.updateCommittedOffsets(commitOffsets);
+                } catch (RuntimeException e) {
+                    log.error("Unexpected exception caught while updating committed offset", e);
                 }
             });
+            asyncCommitInFlight = true;
         }
-        contexts.updateCommittedOffsets(commitOffsets);
     }
 
     private void waitForRemainingTasksCompletion(long timeoutMillis) {
