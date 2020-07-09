@@ -64,17 +64,18 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
     private final SubscriptionMetrics metrics;
     private volatile boolean asyncCommitInFlight;
 
-    public ProcessorSubscription(SubscriptionScope scope,
-                                 Supplier<Consumer<String, byte[]>> consumerSupplier,
-                                 Processors<?> processors,
-                                 ProcessorProperties props,
-                                 SubscriptionStateListener stateListener) {
+    ProcessorSubscription(SubscriptionScope scope,
+                          Supplier<Consumer<String, byte[]>> consumerSupplier,
+                          Processors<?> processors,
+                          ProcessorProperties props,
+                          SubscriptionStateListener stateListener,
+                          PartitionContexts contexts) {
         this.scope = scope;
         this.consumerSupplier = consumerSupplier;
         this.processors = processors;
         this.stateListener = stateListener;
+        this.contexts = contexts;
         terminated = new AtomicBoolean();
-        contexts = new PartitionContexts(scope, processors);
         metrics = Metrics.withTags("subscription", scope.subscriptionId()).new SubscriptionMetrics();
 
         blacklistedKeysFilter = new BlacklistedKeysFilter(props);
@@ -82,6 +83,15 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
         rebalanceTimeoutMillis = props.get(ProcessorProperties.CONFIG_GROUP_REBALANCE_TIMEOUT_MS);
 
         setName(String.format("DecatonSubscriptionThread-%s", scope));
+    }
+
+    public ProcessorSubscription(SubscriptionScope scope,
+                                 Supplier<Consumer<String, byte[]>> consumerSupplier,
+                                 Processors<?> processors,
+                                 ProcessorProperties props,
+                                 SubscriptionStateListener stateListener) {
+        this(scope, consumerSupplier, processors, props, stateListener,
+             new PartitionContexts(scope, processors));
     }
 
     private void updateState(SubscriptionStateListener.State newState) {
@@ -103,7 +113,8 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
                      .collect(Collectors.toSet());
     }
 
-    private void commitCompletedOffsets(Consumer<?, ?> consumer, boolean sync) {
+    // visible for testing
+    void commitCompletedOffsets(Consumer<?, ?> consumer, boolean sync) {
         Map<TopicPartition, OffsetAndMetadata> commitOffsets = contexts.commitOffsets();
         if (commitOffsets.isEmpty()) {
             log.debug("No new offsets to commit, skipping commit");
