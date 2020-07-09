@@ -48,7 +48,7 @@ function commit_rev() {
 
     origin="origin"
     if [ -n "$GH_USERNAME" ]; then
-        origin="$(git remote get-url origin | sed 's/https:\/\//https:\/\/${GH_USERNAME}:${GH_ACCESS_TOKEN}@/')"
+        origin=$(git remote get-url origin | sed "s/https:\/\//https:\/\/${GH_USERNAME}:${GH_ACCESS_TOKEN}@/")
     fi
     git -C $repo push $origin HEAD
 }
