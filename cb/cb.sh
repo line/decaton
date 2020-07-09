@@ -48,7 +48,7 @@ function commit_rev() {
 
     origin="origin"
     if [ -n "$GH_USERNAME" ]; then
-        origin="$(git remote get-url origin | sed 's/https:\/\//https:\/\/${GH_USERNAME}:${GH_PASSWORD}@/')"
+        origin="$(git remote get-url origin | sed 's/https:\/\//https:\/\/${GH_USERNAME}:${GH_ACCESS_TOKEN}@/')"
     fi
     git -C $repo push $origin HEAD
 }
@@ -85,14 +85,16 @@ mkdir -p $store_dir
 for rev in $(revisions_since $last_rev); do
     rev_dir=$store_dir/$rev
     if [ -e $rev_dir ]; then
-        log "Removing old commit data: $rev_dir"
-        rm -rf $rev_dir
+        log "Output dir for $rev already exists, skipping"
+        continue
     fi
     mkdir -p $rev_dir
 
     checkout $rev
     log "Running benchmark for the revision $rev"
-    $base_dir/run-bm.sh $config $rev_dir $rev
+    if ! $base_dir/run-bm.sh $config $rev_dir $rev; then
+        log "Benchmark execution failed: $rev"
+    fi
 
     commit_rev $rev
     update_last_rev $rev
