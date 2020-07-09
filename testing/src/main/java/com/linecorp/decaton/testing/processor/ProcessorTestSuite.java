@@ -41,6 +41,7 @@ import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.ProcessorProperties;
 import com.linecorp.decaton.processor.ProcessorsBuilder;
 import com.linecorp.decaton.processor.PropertySupplier;
+import com.linecorp.decaton.processor.SubscriptionStateListener;
 import com.linecorp.decaton.processor.runtime.ProcessorSubscription;
 import com.linecorp.decaton.processor.runtime.RetryConfig;
 import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
@@ -77,11 +78,25 @@ public class ProcessorTestSuite {
     private final RetryConfig retryConfig;
     private final PropertySupplier propertySuppliers;
     private final Set<ProcessingGuarantee> semantics;
+    private final SubscriptionStatesListener statesListener;
 
     private static final int NUM_TASKS = 10000;
     private static final int NUM_KEYS = 100;
     private static final int NUM_SUBSCRIPTION_INSTANCES = 3;
     private static final int NUM_PARTITIONS = 8;
+
+    /**
+     * An interface to listen multiple subscription's state changes
+     */
+    @FunctionalInterface
+    public interface SubscriptionStatesListener {
+        /**
+         * Called at state transitioned to new state
+         * @param instanceId id of the subscription instance which state has changed. Possible values are 0..{@link #NUM_SUBSCRIPTION_INSTANCES} - 1
+         * @param newState new state of the subscription
+         */
+        void onChange(int instanceId, SubscriptionStateListener.State newState);
+    }
 
     @Setter
     @Accessors(fluent = true)
@@ -103,6 +118,10 @@ public class ProcessorTestSuite {
          * Supply additional {@link ProcessorProperties} through {@link PropertySupplier}
          */
         private PropertySupplier propertySupplier;
+        /**
+         * Listen every subscription's state changes
+         */
+        private SubscriptionStatesListener statesListener;
         /**
          * Exclude semantics from assertion.
          * Intended to be used when we test a feature which breaks subset of semantics
@@ -133,11 +152,16 @@ public class ProcessorTestSuite {
             }
             semantics.addAll(customSemantics);
 
+            if (statesListener == null) {
+                statesListener = (id, state) -> {};
+            }
+
             return new ProcessorTestSuite(rule,
                                           configureProcessorsBuilder,
                                           retryConfig,
                                           propertySupplier,
-                                          semantics);
+                                          semantics,
+                                          statesListener);
         }
     }
 
@@ -203,9 +227,16 @@ public class ProcessorTestSuite {
 
         return TestUtils.subscription("subscription-" + id,
                                       rule.bootstrapServers(),
-                                      processorsBuilder,
-                                      retryConfig,
-                                      propertySuppliers);
+                                      builder -> {
+                                          builder.processorsBuilder(processorsBuilder);
+                                          if (retryConfig != null) {
+                                              builder.enableRetry(retryConfig);
+                                          }
+                                          if (propertySuppliers != null) {
+                                              builder.properties(propertySuppliers);
+                                          }
+                                          builder.stateListener(state -> statesListener.onChange(id, state));
+                                      });
     }
 
     private static void performRollingRestart(ProcessorSubscription[] subscriptions,

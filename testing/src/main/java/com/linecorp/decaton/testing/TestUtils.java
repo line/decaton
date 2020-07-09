@@ -16,12 +16,16 @@
 
 package com.linecorp.decaton.testing;
 
+import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
+import com.linecorp.decaton.processor.SubscriptionStateListener;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
@@ -33,11 +37,8 @@ import com.linecorp.decaton.client.DecatonClient;
 import com.linecorp.decaton.client.kafka.PrintableAsciiStringSerializer;
 import com.linecorp.decaton.client.kafka.ProtocolBuffersKafkaSerializer;
 import com.linecorp.decaton.common.Serializer;
-import com.linecorp.decaton.processor.ProcessorsBuilder;
-import com.linecorp.decaton.processor.PropertySupplier;
 import com.linecorp.decaton.processor.SubscriptionStateListener.State;
 import com.linecorp.decaton.processor.runtime.ProcessorSubscription;
-import com.linecorp.decaton.processor.runtime.RetryConfig;
 import com.linecorp.decaton.processor.runtime.SubscriptionBuilder;
 import com.linecorp.decaton.protobuf.ProtocolBuffersSerializer;
 import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
@@ -111,21 +112,14 @@ public class TestUtils {
      * and unique subscription id assigned
      *
      * @param bootstrapServers bootstrap servers to connect
-     * @param processorsBuilder actual processing logic. This parameter is mandatory
-     * @param retryConfig can be null if you don't enable retry queueing feature
-     * @param propertySupplier can be null if you don't supply extra Decaton configs
-     * @param <T> type of tasks
+     * @param builderConfigurer configure subscription builder to fit test requirements
      * @return {@link ProcessorSubscription} instance which is already running with unique subscription id assigned
      */
-    public static <T> ProcessorSubscription subscription(String bootstrapServers,
-                                                         ProcessorsBuilder<T> processorsBuilder,
-                                                         RetryConfig retryConfig,
-                                                         PropertySupplier propertySupplier) {
+    public static ProcessorSubscription subscription(String bootstrapServers,
+                                                     Consumer<SubscriptionBuilder> builderConfigurer) {
         return subscription("subscription-" + sequence(),
                             bootstrapServers,
-                            processorsBuilder,
-                            retryConfig,
-                            propertySupplier);
+                            builderConfigurer);
     }
 
     /**
@@ -134,37 +128,39 @@ public class TestUtils {
      *
      * @param subscriptionId subscription id of the instance
      * @param bootstrapServers bootstrap servers to connect
-     * @param processorsBuilder actual processing logic. This parameter is mandatory
-     * @param retryConfig can be null if you don't enable retry queueing feature
-     * @param propertySupplier can be null if you don't supply extra Decaton configs
-     * @param <T> type of tasks
+     * @param builderConfigurer configure subscription builder to fit test requirements
      * @return {@link ProcessorSubscription} instance which is already running
      */
-    public static <T> ProcessorSubscription subscription(String subscriptionId,
-                                                         String bootstrapServers,
-                                                         ProcessorsBuilder<T> processorsBuilder,
-                                                         RetryConfig retryConfig,
-                                                         PropertySupplier propertySupplier) {
+    public static ProcessorSubscription subscription(String subscriptionId,
+                                                     String bootstrapServers,
+                                                     Consumer<SubscriptionBuilder> builderConfigurer) {
+        AtomicReference<SubscriptionStateListener> stateListenerRef = new AtomicReference<>();
+        CountDownLatch initializationLatch = new CountDownLatch(1);
+        SubscriptionStateListener outerStateListener = state -> {
+            if (state == State.RUNNING) {
+                initializationLatch.countDown();
+            }
+            Optional.ofNullable(stateListenerRef.get()).ifPresent(s -> s.onChange(state));
+        };
+
+        SubscriptionBuilder builder = new SubscriptionBuilder(subscriptionId) {
+            @Override
+            public SubscriptionBuilder stateListener(SubscriptionStateListener stateListener) {
+                if (stateListener != outerStateListener) {
+                    stateListenerRef.set(stateListener);
+                }
+                return super.stateListener(stateListener);
+            }
+        };
         Properties props = new Properties();
         props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         props.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, "test-" + subscriptionId);
         props.setProperty(ConsumerConfig.GROUP_ID_CONFIG, DEFAULT_GROUP_ID);
         props.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        CountDownLatch initializationLatch = new CountDownLatch(1);
-        SubscriptionBuilder builder = SubscriptionBuilder.newBuilder(subscriptionId)
-                                                         .consumerConfig(props)
-                                                         .processorsBuilder(processorsBuilder)
-                                                         .stateListener(state -> {
-                                                             if (state == State.RUNNING) {
-                                                                 initializationLatch.countDown();
-                                                             }
-                                                         });
-        if (retryConfig != null) {
-            builder.enableRetry(retryConfig);
-        }
-        if (propertySupplier != null) {
-            builder.properties(propertySupplier);
-        }
+
+        builderConfigurer.accept(builder);
+        builder.consumerConfig(props)
+               .stateListener(outerStateListener);
         ProcessorSubscription subscription = builder.buildAndStart();
 
         try {

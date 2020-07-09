@@ -16,6 +16,12 @@
 
 package com.linecorp.decaton.processor;
 
+import static org.junit.Assert.assertTrue;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -27,7 +33,11 @@ import org.junit.Test;
 import com.linecorp.decaton.processor.runtime.ProcessorScope;
 import com.linecorp.decaton.testing.KafkaClusterRule;
 import com.linecorp.decaton.testing.RandomRule;
+import com.linecorp.decaton.testing.processor.ProcessedRecord;
+import com.linecorp.decaton.testing.processor.ProcessingGuarantee;
 import com.linecorp.decaton.testing.processor.ProcessorTestSuite;
+import com.linecorp.decaton.testing.processor.ProducedRecord;
+import com.linecorp.decaton.testing.processor.TestTask;
 
 public class CoreFunctionalityTest {
     @ClassRule
@@ -100,6 +110,46 @@ public class CoreFunctionalityTest {
                         }
                     });
                 }))
+                .build()
+                .run();
+    }
+
+    @Test(timeout = 60000)
+    public void testSingleThreadProcessing() {
+        // Note that this processing semantics is not be considered as Decaton specification which users can rely on.
+        // Rather, this is just a expected behavior based on current implementation when we set concurrency to 1.
+        ProcessingGuarantee noDuplicates = new ProcessingGuarantee() {
+            private final Map<String, List<TestTask>> produced = new HashMap<>();
+            private final Map<String, List<TestTask>> processed = new HashMap<>();
+
+            @Override
+            public synchronized void onProduce(ProducedRecord record) {
+                produced.computeIfAbsent(record.key(), key -> new ArrayList<>()).add(record.task());
+            }
+
+            @Override
+            public synchronized void onProcess(TaskMetadata metadata, ProcessedRecord record) {
+                processed.computeIfAbsent(record.key(), key -> new ArrayList<>()).add(record.task());
+            }
+
+            @Override
+            public void doAssert() {
+                // use assertTrue instead of assertEquals not to cause error message explosion
+                //noinspection SimplifiableJUnitAssertion
+                assertTrue(produced.equals(processed));
+            }
+        };
+
+        Random rand = randomRule.random();
+        ProcessorTestSuite
+                .builder(rule)
+                .configureProcessorsBuilder(builder -> builder.thenProcess((ctx, task) -> {
+                    Thread.sleep(rand.nextInt(10));
+                }))
+                .propertySupplier(StaticPropertySupplier.of(
+                        Property.ofStatic(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY, 1)
+                ))
+                .customSemantics(noDuplicates)
                 .build()
                 .run();
     }

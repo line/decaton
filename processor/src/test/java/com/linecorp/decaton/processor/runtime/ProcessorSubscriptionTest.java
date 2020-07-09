@@ -17,9 +17,6 @@
 package com.linecorp.decaton.processor.runtime;
 
 import static org.junit.Assert.assertEquals;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.spy;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -31,7 +28,6 @@ import java.util.concurrent.CountDownLatch;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
-import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.TopicPartition;
@@ -46,13 +42,11 @@ import com.linecorp.decaton.processor.TaskMetadata;
 
 public class ProcessorSubscriptionTest {
     /**
-     * A mock consumer which triggers rebalance listener in poll()
-     * like real KafkaConsumer. (refs: KAFKA-6968)
+     * A mock consumer which exposes rebalance listener so that can be triggered manually
+     * ({@link MockConsumer} doesn't simulate rebalance listener invocation. refs: KAFKA-6968).
      */
     private static class DecatonMockConsumer extends MockConsumer<String, byte[]> {
-        private boolean needRebalance;
-        private ConsumerRebalanceListener listener;
-        private Collection<TopicPartition> previousAssignment;
+        private volatile ConsumerRebalanceListener rebalanceListener;
 
         private DecatonMockConsumer() {
             super(OffsetResetStrategy.LATEST);
@@ -60,20 +54,8 @@ public class ProcessorSubscriptionTest {
 
         @Override
         public synchronized void subscribe(Collection<String> topics, ConsumerRebalanceListener listener) {
-            this.listener = listener;
-            previousAssignment = assignment();
-            needRebalance = true;
+            rebalanceListener = listener;
             super.subscribe(topics, listener);
-        }
-
-        @Override
-        public synchronized ConsumerRecords<String, byte[]> poll(long timeout) {
-            if (needRebalance) {
-                listener.onPartitionsRevoked(previousAssignment);
-                listener.onPartitionsAssigned(assignment());
-                needRebalance = false;
-            }
-            return super.poll(timeout);
         }
     }
 
@@ -101,15 +83,14 @@ public class ProcessorSubscriptionTest {
     @Test(timeout = 10000L)
     public void testStateTransition() throws Exception {
         TopicPartition tp = new TopicPartition("topic", 0);
-        Consumer<String, byte[]> consumer = spy(new DecatonMockConsumer());
+        DecatonMockConsumer consumer = new DecatonMockConsumer();
         List<State> states = Collections.synchronizedList(new ArrayList<>());
 
         CountDownLatch pollLatch = new CountDownLatch(1);
-        doAnswer(inv -> {
-            Object records = inv.callRealMethod();
+        consumer.schedulePollTask(() -> {
+            consumer.rebalanceListener.onPartitionsAssigned(consumer.assignment());
             pollLatch.countDown();
-            return records;
-        }).when(consumer).poll(anyLong());
+        });
 
         ProcessorSubscription subscription = subscription(consumer, states::add, tp);
 
@@ -117,12 +98,10 @@ public class ProcessorSubscriptionTest {
         pollLatch.await();
 
         assertEquals(Arrays.asList(State.INITIALIZING,
-                                   State.REBALANCING,
                                    State.RUNNING), states);
 
         subscription.close();
         assertEquals(Arrays.asList(State.INITIALIZING,
-                                   State.REBALANCING,
                                    State.RUNNING,
                                    State.SHUTTING_DOWN,
                                    State.TERMINATED), states);
