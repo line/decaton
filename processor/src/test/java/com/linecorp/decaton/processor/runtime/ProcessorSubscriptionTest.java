@@ -34,6 +34,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -135,20 +137,36 @@ public class ProcessorSubscriptionTest {
                                    State.TERMINATED), states);
     }
 
-    private ProcessorSubscription subscriptionForCommitTest() {
+    private ProcessorSubscription subscriptionForCommitTest(BlockingQueue<Runnable> tasks) {
         SubscriptionScope scope = scope("topic");
-        return new ProcessorSubscription(
+        ProcessorSubscription subscription = new ProcessorSubscription(
                 scope,
                 () -> consumerMock,
                 null,
                 scope.props(),
                 null,
-                contextsMock);
+                contextsMock) {
+            @Override
+            public void run() {
+                if (tasks == null) {
+                    return;
+                }
+                while (true) {
+                    try {
+                        tasks.take().run();
+                    } catch (InterruptedException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+            }
+        };
+        subscription.start();
+        return subscription;
     }
 
     @Test(timeout = 5000)
     public void testCommitCompletedOffsetsSync() {
-        ProcessorSubscription subscription = subscriptionForCommitTest();
+        ProcessorSubscription subscription = subscriptionForCommitTest(null);
         // When committed ended up successfully update committed offsets
         Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(
                 new TopicPartition("topic", 0), new OffsetAndMetadata(1234, null));
@@ -160,7 +178,7 @@ public class ProcessorSubscriptionTest {
     @SuppressWarnings("unchecked")
     @Test(timeout = 5000)
     public void testCommitCompletedOffsetsSync_NO_COMMIT() {
-        ProcessorSubscription subscription = subscriptionForCommitTest();
+        ProcessorSubscription subscription = subscriptionForCommitTest(null);
         // When target offsets is empty do not attempt any commit
         doReturn(emptyMap()).when(contextsMock).commitOffsets();
         subscription.commitCompletedOffsets(consumerMock, true);
@@ -171,7 +189,7 @@ public class ProcessorSubscriptionTest {
     @SuppressWarnings("unchecked")
     @Test(timeout = 5000)
     public void testCommitCompletedOffsetsSync_FAIL() {
-        ProcessorSubscription subscription = subscriptionForCommitTest();
+        ProcessorSubscription subscription = subscriptionForCommitTest(null);
         // When commit raised an exception do not update committed offsets
         Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(
                 new TopicPartition("topic", 0), new OffsetAndMetadata(1234, null));
@@ -187,8 +205,9 @@ public class ProcessorSubscriptionTest {
 
     @SuppressWarnings("unchecked")
     @Test(timeout = 5000)
-    public void testCommitCompletedOffsetsAsync() {
-        ProcessorSubscription subscription = subscriptionForCommitTest();
+    public void testCommitCompletedOffsetsAsync() throws InterruptedException {
+        BlockingQueue<Runnable> tasks = new ArrayBlockingQueue<>(1);
+        ProcessorSubscription subscription = subscriptionForCommitTest(tasks);
         Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(
                 new TopicPartition("topic", 0), new OffsetAndMetadata(1234, null));
         doReturn(offsets).when(contextsMock).commitOffsets();
@@ -210,14 +229,21 @@ public class ProcessorSubscriptionTest {
         verify(contextsMock, never()).updateCommittedOffsets(any());
 
         // Committed offset should be updated once the in-flight request completes
-        cbRef.get().onComplete(offsets, null);
+        CountDownLatch latch = new CountDownLatch(1);
+        tasks.put(() -> {
+            // The callback is not thread-safe and is required to be called from the subscription thread.
+            cbRef.get().onComplete(offsets, null);
+            latch.countDown();
+        });
+        latch.await();
         verify(contextsMock, times(1)).updateCommittedOffsets(offsets);
     }
 
     @SuppressWarnings("unchecked")
     @Test(timeout = 5000)
-    public void testCommitCompletedOffsetsAsync_FAIL() {
-        ProcessorSubscription subscription = subscriptionForCommitTest();
+    public void testCommitCompletedOffsetsAsync_FAIL() throws InterruptedException {
+        BlockingQueue<Runnable> tasks = new ArrayBlockingQueue<>(1);
+        ProcessorSubscription subscription = subscriptionForCommitTest(tasks);
         Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(
                 new TopicPartition("topic", 0), new OffsetAndMetadata(1234, null));
         doReturn(offsets).when(contextsMock).commitOffsets();
@@ -229,18 +255,25 @@ public class ProcessorSubscriptionTest {
         }).when(consumerMock).commitAsync(any(Map.class), any());
         subscription.commitCompletedOffsets(consumerMock, false);
         // If async commit fails it should never update committed offset
-        cbRef.get().onComplete(offsets, new RuntimeException("failure"));
+        CountDownLatch latch = new CountDownLatch(1);
+        tasks.put(() -> {
+            // The callback is not thread-safe and is required to be called from the subscription thread.
+            cbRef.get().onComplete(offsets, new RuntimeException("failure"));
+            latch.countDown();
+        });
+        latch.await();
         verify(contextsMock, never()).updateCommittedOffsets(offsets);
     }
 
     @SuppressWarnings("unchecked")
     @Test(timeout = 5000)
     public void testCommitCompletedOffsetsAsync_SUBSEQUENT_SYNC() {
-        ProcessorSubscription subscription = subscriptionForCommitTest();
+        ProcessorSubscription subscription = subscriptionForCommitTest(null);
         Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(
                 new TopicPartition("topic", 0), new OffsetAndMetadata(1234, null));
         doReturn(offsets).when(contextsMock).commitOffsets();
 
+        // No one completes async commit underlying this.
         subscription.commitCompletedOffsets(consumerMock, false);
 
         // Subsequent sync commit can proceed regardless of in-flight async commit

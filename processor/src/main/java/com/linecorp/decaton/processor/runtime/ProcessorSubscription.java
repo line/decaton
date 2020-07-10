@@ -62,7 +62,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
     private final Property<Long> rebalanceTimeoutMillis;
     private final SubscriptionStateListener stateListener;
     private final SubscriptionMetrics metrics;
-    private volatile boolean asyncCommitInFlight;
+    private boolean asyncCommitInFlight;
 
     ProcessorSubscription(SubscriptionScope scope,
                           Supplier<Consumer<String, byte[]>> consumerSupplier,
@@ -139,6 +139,14 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
                     log.warn("Offset commit failed asynchronously", exception);
                     return;
                 }
+                if (Thread.currentThread() != this) {
+                    // This isn't expected to happen (see below comment) but we check it with cheap cost
+                    // just in case to avoid silent corruption.
+                    log.error("BUG: commitAsync callback triggered by an unexpected thread: {}." +
+                              " Please report this to Decaton developers", Thread.currentThread());
+                    return;
+                }
+
                 // Exception raised from the commitAsync callback bubbles up to Consumer.poll() so it kills this
                 // subscription thread.
                 // Basically the exception thrown from here is considered a bug, but failing to commit offset itself
