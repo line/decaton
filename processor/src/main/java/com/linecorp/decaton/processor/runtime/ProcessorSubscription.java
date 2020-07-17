@@ -191,14 +191,15 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
             Duration elapsed = timer.duration();
             if (pendingTasksCount == 0) {
                 if (log.isDebugEnabled()) {
-                    log.debug("Waiting for task completion is successful {} ms", Utils.formatNum(elapsed.toMillis()));
+                    log.debug("Waiting for task completion is successful {} ms",
+                              Utils.formatNum(elapsed.toMillis()));
                 }
                 break;
             }
 
             if (elapsed.toNanos() >= timeoutNanos) {
                 log.warn("Timed out waiting {} tasks to complete after {} ms",
-                        Utils.formatNum(elapsed.toMillis()), pendingTasksCount);
+                         pendingTasksCount, Utils.formatNum(elapsed.toMillis()));
                 break;
             }
 
@@ -221,7 +222,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
         contexts.dropContexts(partitions);
         if (log.isInfoEnabled()) {
             log.info("Processed revoke {} partitions in {} ms",
-                    partitions.size(), Utils.formatNum(timer.elapsedMillis()));
+                     partitions.size(), Utils.formatNum(timer.elapsedMillis()));
         }
     }
 
@@ -236,7 +237,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
         }
         if (log.isInfoEnabled()) {
             log.info("Processed assign {} partitions in {} ms",
-                    partitions.size(), Utils.formatNum(timer.elapsedMillis()));
+                     partitions.size(), Utils.formatNum(timer.elapsedMillis()));
         }
     }
 
