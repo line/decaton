@@ -84,7 +84,7 @@ final class Utils {
 
         @Override
         public String toString() {
-            return formatNanos(elapsedNanos()) + " ns";
+            return formatNum(elapsedNanos()) + " ns";
         }
     }
 
@@ -97,12 +97,12 @@ final class Utils {
     }
 
     /**
-     * Formats given {@param nanos} in human-readable, comma-separated string format.
-     * @param nanos nanoseconds to format.
-     * @return comma-separated string representation of given nanoseconds.
+     * Formats given {@param number} in human-readable, comma-separated string format.
+     * @param number number to format.
+     * @return comma-separated string representation of given number.
      */
-    static String formatNanos(long nanos) {
-        return numberFormat.get().format(nanos);
+    static String formatNum(long number) {
+        return numberFormat.get().format(number);
     }
 
     /**
@@ -111,7 +111,7 @@ final class Utils {
      * @return comma-separated string representation of given duration.
      */
     static String formatNanos(Duration duration) {
-        return formatNanos(duration.toNanos());
+        return formatNum(duration.toNanos());
     }
 
     /**

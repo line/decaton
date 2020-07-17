@@ -190,15 +190,15 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
             final int pendingTasksCount = contexts.totalPendingTasks();
             Duration elapsed = timer.duration();
             if (pendingTasksCount == 0) {
-                log.debug("waiting for task completion is successful {} ns \\(^^)/",
-                          Utils.formatNanos(elapsed));
+                if (log.isDebugEnabled()) {
+                    log.debug("Waiting for task completion is successful {} ms", Utils.formatNum(elapsed.toMillis()));
+                }
                 break;
             }
 
             if (elapsed.toNanos() >= timeoutNanos) {
-                log.debug(
-                        "waiting for task completion timed out {} ns. {} tasks are likely to be duplicated",
-                        Utils.formatNanos(elapsed), pendingTasksCount);
+                log.warn("Timed out waiting {} tasks to complete after {} ms",
+                        Utils.formatNum(elapsed.toMillis()), pendingTasksCount);
                 break;
             }
 
@@ -219,7 +219,10 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
 
         Timer timer = Utils.timer();
         contexts.dropContexts(partitions);
-        log.info("took {} ms to revoke {} partitions", timer.elapsedMillis(), partitions.size());
+        if (log.isInfoEnabled()) {
+            log.info("Processed revoke {} partitions in {} ms",
+                    partitions.size(), Utils.formatNum(timer.elapsedMillis()));
+        }
     }
 
     private void partitionsAssigned(Collection<TopicPartition> partitions) {
@@ -231,7 +234,10 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
         for (TopicPartition partition : partitions) {
             contexts.initContext(partition, false);
         }
-        log.info("took {} ms to assign {} partitions", timer.elapsedMillis(), partitions.size());
+        if (log.isInfoEnabled()) {
+            log.info("Processed assign {} partitions in {} ms",
+                    partitions.size(), Utils.formatNum(timer.elapsedMillis()));
+        }
     }
 
     @Override
@@ -263,17 +269,17 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
 
                 @Override
                 public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-                    log.debug("assigning({}): {}, currently assigned({}): {}", partitions.size(), partitions,
+                    log.debug("Assigning({}): {}, currently assigned({}): {}", partitions.size(), partitions,
                               currentAssignment.size(), currentAssignment);
 
                     final Collection<TopicPartition> revokedPartitions = new HashSet<>(currentAssignment);
                     revokedPartitions.removeAll(partitions);
-                    log.debug("revoked partitions({}): {}", revokedPartitions.size(), revokedPartitions);
+                    log.debug("Revoked partitions({}): {}", revokedPartitions.size(), revokedPartitions);
                     partitionsRevoked(revokedPartitions);
 
                     final Collection<TopicPartition> newlyAssignedPartitions = new HashSet<>(partitions);
                     newlyAssignedPartitions.removeAll(currentAssignment);
-                    log.debug("newly assigned partitions({}): {}", newlyAssignedPartitions.size(),
+                    log.debug("Newly assigned partitions({}): {}", newlyAssignedPartitions.size(),
                               newlyAssignedPartitions);
                     partitionsAssigned(newlyAssignedPartitions);
 
@@ -282,7 +288,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
                                       .filter(tp -> contexts.get(tp).isOffsetRegressing(consumer.position(tp)))
                                       .collect(toList());
                     if (!regressed.isEmpty()) {
-                        log.debug("regression on {}, so resetting all internal states", regressed);
+                        log.debug("Offset regression on {}, so resetting all internal states", regressed);
                         partitionsRevoked(regressed);
                         partitionsAssigned(regressed);
                     }
@@ -376,7 +382,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
             return;
         }
 
-        log.debug("pausing partitions: {}", pausedPartitions);
+        log.debug("Pausing partitions: {}", pausedPartitions);
         consumer.pause(pausedPartitions);
         pausedPartitions.forEach(tp -> contexts.get(tp).pause());
     }
@@ -387,7 +393,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
             return;
         }
 
-        log.debug("resuming partitions: {}", resumedPartitions);
+        log.debug("Resuming partitions: {}", resumedPartitions);
         consumer.resume(resumedPartitions);
         resumedPartitions.forEach(tp -> contexts.get(tp).resume());
     }
