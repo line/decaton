@@ -30,7 +30,6 @@ import com.linecorp.decaton.client.kafka.ProtocolBuffersKafkaSerializer;
 import com.linecorp.decaton.common.Serializer;
 import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
 
-import brave.Tracer;
 import brave.Tracing;
 import lombok.AccessLevel;
 import lombok.Setter;

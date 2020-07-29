@@ -48,15 +48,14 @@ public class DecatonTaskProducer implements AutoCloseable {
 
     private final Producer<String, DecatonTaskRequest> producer;
     private final String topic;
-    private KafkaTracing kafkaTracing;
 
     public DecatonTaskProducer(String topic, Properties producerConfig, KafkaProducerSupplier producerSupplier,
                                Tracing tracing, String instanceId) {
         Properties completeProducerConfig = completeProducerConfig(producerConfig);
         this.topic = topic;
         if(tracing != null){
-            this.kafkaTracing = KafkaTracing.newBuilder(tracing).remoteServiceName(instanceId).build();
-            this.producer = this.kafkaTracing.producer( producerSupplier.getProducer(completeProducerConfig));
+            KafkaTracing kafkaTracing = KafkaTracing.newBuilder(tracing).remoteServiceName(instanceId).build();
+            producer = kafkaTracing.producer(producerSupplier.getProducer(completeProducerConfig));
         }else{
             producer = producerSupplier.getProducer(completeProducerConfig);
         }
