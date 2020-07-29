@@ -109,7 +109,7 @@ public class PartitionContextsTest {
         long offset = 1L;
         doReturn(OptionalLong.of(offset)).when(context).offsetWaitingCommit();
 
-        Map<TopicPartition, OffsetAndMetadata> committedOffsets = contexts.commitOffsets();
+        Map<TopicPartition, OffsetAndMetadata> committedOffsets = contexts.commitReadyOffsets();
         assertEquals(offset + 1, committedOffsets.get(context.topicPartition()).offset());
     }
 
@@ -120,12 +120,12 @@ public class PartitionContextsTest {
         doReturn(OptionalLong.empty()).when(cts.get(0)).offsetWaitingCommit();
         doReturn(OptionalLong.empty()).when(cts.get(1)).offsetWaitingCommit();
 
-        Map<TopicPartition, OffsetAndMetadata> committedOffsets = contexts.commitOffsets();
+        Map<TopicPartition, OffsetAndMetadata> committedOffsets = contexts.commitReadyOffsets();
         // No record has been committed so returned map should be empty
         assertTrue(committedOffsets.isEmpty());
 
         doReturn(OptionalLong.of(1)).when(cts.get(0)).offsetWaitingCommit();
-        committedOffsets = contexts.commitOffsets();
+        committedOffsets = contexts.commitReadyOffsets();
         // No record has been committed for tp1 so the returned map shouldn't contain entry for it.
         assertEquals(1, committedOffsets.size());
         Entry<TopicPartition, OffsetAndMetadata> entry = committedOffsets.entrySet().iterator().next();
@@ -140,7 +140,7 @@ public class PartitionContextsTest {
         offsets.put(ctxs.get(0).topicPartition(), new OffsetAndMetadata(101));
         offsets.put(ctxs.get(1).topicPartition(), new OffsetAndMetadata(201));
 
-        contexts.updateCommittedOffsets(offsets);
+        contexts.storeCommittedOffsets(offsets);
 
         // PartitionContext manages their "completed" offset so its minus 1 from committed offset
         // which indicates the offset to "fetch next".

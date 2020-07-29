@@ -34,9 +34,10 @@ import org.slf4j.LoggerFactory;
 
 import com.linecorp.decaton.processor.ProcessorProperties;
 import com.linecorp.decaton.processor.Property;
+import com.linecorp.decaton.processor.runtime.CommitManager.OffsetsStore;
 import com.linecorp.decaton.processor.runtime.Utils.Task;
 
-public class PartitionContexts {
+public class PartitionContexts implements OffsetsStore {
     private static final Logger logger = LoggerFactory.getLogger(PartitionContexts.class);
 
     private final SubscriptionScope scope;
@@ -108,8 +109,9 @@ public class PartitionContexts {
         destroyProcessors(contexts.keySet());
     }
 
-    // visible for testing
-    public Map<TopicPartition, OffsetAndMetadata> commitOffsets() {
+
+    @Override
+    public Map<TopicPartition, OffsetAndMetadata> commitReadyOffsets() {
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
         for (PartitionContext context : contexts.values()) {
             context.offsetWaitingCommit().ifPresent(
@@ -119,7 +121,8 @@ public class PartitionContexts {
         return offsets;
     }
 
-    public void updateCommittedOffsets(Map<TopicPartition, OffsetAndMetadata> offsets) {
+    @Override
+    public void storeCommittedOffsets(Map<TopicPartition, OffsetAndMetadata> offsets) {
         for (Entry<TopicPartition, OffsetAndMetadata> entry : offsets.entrySet()) {
             TopicPartition tp = entry.getKey();
             long offset = entry.getValue().offset();

@@ -16,32 +16,19 @@
 
 package com.linecorp.decaton.processor.runtime;
 
-import static java.util.Collections.emptyMap;
-import static java.util.Collections.singletonMap;
 import static org.junit.Assert.assertEquals;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.MockConsumer;
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.Rule;
@@ -134,119 +121,5 @@ public class ProcessorSubscriptionTest {
                                    State.RUNNING,
                                    State.SHUTTING_DOWN,
                                    State.TERMINATED), states);
-    }
-
-    private ProcessorSubscription subscriptionForCommitTest() {
-        SubscriptionScope scope = scope("topic");
-        return new ProcessorSubscription(
-                scope,
-                () -> consumerMock,
-                null,
-                scope.props(),
-                null,
-                contextsMock);
-    }
-
-    @Test(timeout = 5000)
-    public void testCommitCompletedOffsetsSync() {
-        ProcessorSubscription subscription = subscriptionForCommitTest();
-        // When committed ended up successfully update committed offsets
-        Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(
-                new TopicPartition("topic", 0), new OffsetAndMetadata(1234, null));
-        doReturn(offsets).when(contextsMock).commitOffsets();
-        subscription.commitCompletedOffsets(consumerMock, true);
-        verify(contextsMock, times(1)).updateCommittedOffsets(offsets);
-    }
-
-    @SuppressWarnings("unchecked")
-    @Test(timeout = 5000)
-    public void testCommitCompletedOffsetsSync_NO_COMMIT() {
-        ProcessorSubscription subscription = subscriptionForCommitTest();
-        // When target offsets is empty do not attempt any commit
-        doReturn(emptyMap()).when(contextsMock).commitOffsets();
-        subscription.commitCompletedOffsets(consumerMock, true);
-        verify(consumerMock, never()).commitSync(any(Map.class));
-        verify(consumerMock, never()).commitAsync(any(Map.class), any());
-    }
-
-    @SuppressWarnings("unchecked")
-    @Test(timeout = 5000)
-    public void testCommitCompletedOffsetsSync_FAIL() {
-        ProcessorSubscription subscription = subscriptionForCommitTest();
-        // When commit raised an exception do not update committed offsets
-        Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(
-                new TopicPartition("topic", 0), new OffsetAndMetadata(1234, null));
-        doReturn(offsets).when(contextsMock).commitOffsets();
-        doThrow(new RuntimeException("error")).when(consumerMock).commitSync(any(Map.class));
-        try {
-            subscription.commitCompletedOffsets(consumerMock, true);
-        } catch (RuntimeException ignored) {
-            // ignore
-        }
-        verify(contextsMock, never()).updateCommittedOffsets(any());
-    }
-
-    @SuppressWarnings("unchecked")
-    @Test(timeout = 5000)
-    public void testCommitCompletedOffsetsAsync() throws InterruptedException {
-        ProcessorSubscription subscription = subscriptionForCommitTest();
-        Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(
-                new TopicPartition("topic", 0), new OffsetAndMetadata(1234, null));
-        doReturn(offsets).when(contextsMock).commitOffsets();
-        AtomicReference<OffsetCommitCallback> cbRef = new AtomicReference<>();
-        doAnswer(invocation -> {
-            OffsetCommitCallback cb = invocation.getArgument(1);
-            cbRef.set(cb);
-            return null;
-        }).when(consumerMock).commitAsync(any(Map.class), any());
-        subscription.commitCompletedOffsets(consumerMock, false);
-
-        // Committed offsets should not be updated yet here
-        verify(consumerMock, times(1)).commitAsync(any(Map.class), any());
-        verify(contextsMock, never()).updateCommittedOffsets(any());
-
-        // Subsequent async commit attempt should be ignored until the in-flight one completes
-        subscription.commitCompletedOffsets(consumerMock, false);
-        verify(consumerMock, times(1)).commitAsync(any(Map.class), any());
-        verify(contextsMock, never()).updateCommittedOffsets(any());
-
-        // Committed offset should be updated once the in-flight request completes
-        cbRef.get().onComplete(offsets, null);
-        verify(contextsMock, times(1)).updateCommittedOffsets(offsets);
-    }
-
-    @SuppressWarnings("unchecked")
-    @Test(timeout = 5000)
-    public void testCommitCompletedOffsetsAsync_FAIL() throws InterruptedException {
-        ProcessorSubscription subscription = subscriptionForCommitTest();
-        Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(
-                new TopicPartition("topic", 0), new OffsetAndMetadata(1234, null));
-        doReturn(offsets).when(contextsMock).commitOffsets();
-        AtomicReference<OffsetCommitCallback> cbRef = new AtomicReference<>();
-        doAnswer(invocation -> {
-            OffsetCommitCallback cb = invocation.getArgument(1);
-            cbRef.set(cb);
-            return null;
-        }).when(consumerMock).commitAsync(any(Map.class), any());
-        subscription.commitCompletedOffsets(consumerMock, false);
-        // If async commit fails it should never update committed offset
-        cbRef.get().onComplete(offsets, new RuntimeException("failure"));
-        verify(contextsMock, never()).updateCommittedOffsets(offsets);
-    }
-
-    @SuppressWarnings("unchecked")
-    @Test(timeout = 5000)
-    public void testCommitCompletedOffsetsAsync_SUBSEQUENT_SYNC() {
-        ProcessorSubscription subscription = subscriptionForCommitTest();
-        Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(
-                new TopicPartition("topic", 0), new OffsetAndMetadata(1234, null));
-        doReturn(offsets).when(contextsMock).commitOffsets();
-
-        // No one completes async commit underlying this.
-        subscription.commitCompletedOffsets(consumerMock, false);
-
-        // Subsequent sync commit can proceed regardless of in-flight async commit
-        subscription.commitCompletedOffsets(consumerMock, true);
-        verify(consumerMock, times(1)).commitSync(any(Map.class));
     }
 }
