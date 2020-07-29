@@ -29,6 +29,9 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
 import com.linecorp.decaton.protocol.Decaton.TaskMetadataProto;
 
+import brave.Tracing;
+import brave.kafka.clients.KafkaTracing;
+
 /**
  * A raw interface to put a built {@link DecatonTaskRequest} directly.
  * This interface isn't expected to be used by applications unless it's really necessary.
@@ -45,6 +48,19 @@ public class DecatonTaskProducer implements AutoCloseable {
 
     private final Producer<String, DecatonTaskRequest> producer;
     private final String topic;
+    private KafkaTracing kafkaTracing;
+
+    public DecatonTaskProducer(String topic, Properties producerConfig, KafkaProducerSupplier producerSupplier,
+                               Tracing tracing, String instanceId) {
+        Properties completeProducerConfig = completeProducerConfig(producerConfig);
+        this.topic = topic;
+        if(tracing != null){
+            this.kafkaTracing = KafkaTracing.newBuilder(tracing).remoteServiceName(instanceId).build();
+            this.producer = this.kafkaTracing.producer( producerSupplier.getProducer(completeProducerConfig));
+        }else{
+            producer = producerSupplier.getProducer(completeProducerConfig);
+        }
+    }
 
     private static Properties completeProducerConfig(Properties producerConfig) {
         final Properties result = new Properties();

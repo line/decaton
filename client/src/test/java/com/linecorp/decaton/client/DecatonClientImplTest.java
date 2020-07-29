@@ -64,7 +64,7 @@ public class DecatonClientImplTest {
     public void setUp() {
         client = new DecatonClientImpl<>(TOPIC, new ProtocolBuffersSerializer<>(),
                                          APPLICATION_ID, INSTANCE_ID, new Properties(),
-                                         config -> producer, timestampSupplier);
+                                         config -> producer, timestampSupplier,null);
     }
 
     @Test

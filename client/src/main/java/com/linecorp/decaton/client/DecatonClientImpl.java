@@ -16,6 +16,8 @@
 
 package com.linecorp.decaton.client;
 
+import static java.lang.String.format;
+
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
@@ -26,6 +28,8 @@ import com.google.protobuf.ByteString;
 import com.linecorp.decaton.common.Serializer;
 import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
 import com.linecorp.decaton.protocol.Decaton.TaskMetadataProto;
+
+import brave.Tracing;
 
 public class DecatonClientImpl<T> implements DecatonClient<T> {
     private final Serializer<T> serializer;
@@ -40,11 +44,12 @@ public class DecatonClientImpl<T> implements DecatonClient<T> {
                       String instanceId,
                       Properties producerConfig,
                       KafkaProducerSupplier producerSupplier,
-                      Supplier<Long> timestampSupplier) {
+                      Supplier<Long> timestampSupplier,
+                      Tracing tracing) {
         this.serializer = serializer;
         this.applicationId = applicationId;
         this.instanceId = instanceId;
-        producer = new DecatonTaskProducer(topic, producerConfig, producerSupplier);
+        producer = new DecatonTaskProducer(topic, producerConfig, producerSupplier, tracing, format("{}:{}",applicationId,instanceId));
         this.timestampSupplier = timestampSupplier;
     }
 
@@ -53,9 +58,10 @@ public class DecatonClientImpl<T> implements DecatonClient<T> {
                              String applicationId,
                              String instanceId,
                              Properties producerConfig,
-                             KafkaProducerSupplier producerSupplier) {
+                             KafkaProducerSupplier producerSupplier,
+                             Tracing tracing) {
         this(topic, serializer, applicationId, instanceId, producerConfig, producerSupplier,
-             System::currentTimeMillis);
+             System::currentTimeMillis,tracing);
     }
 
     @Override

@@ -30,6 +30,8 @@ import com.linecorp.decaton.client.kafka.ProtocolBuffersKafkaSerializer;
 import com.linecorp.decaton.common.Serializer;
 import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
 
+import brave.Tracer;
+import brave.Tracing;
 import lombok.AccessLevel;
 import lombok.Setter;
 import lombok.experimental.Accessors;
@@ -50,6 +52,7 @@ public class DecatonClientBuilder<T> {
     private String applicationId;
     private String instanceId;
     private KafkaProducerSupplier producerSupplier;
+    private Tracing tracing;
 
     public static class DefaultKafkaProducerSupplier implements KafkaProducerSupplier {
         @Override
@@ -91,6 +94,7 @@ public class DecatonClientBuilder<T> {
                 Objects.requireNonNull(applicationId, "applicationId"),
                 instanceId,
                 Objects.requireNonNull(producerConfig, "producerConfig"),
-                producerSupplier);
+                producerSupplier,
+                tracing);
     }
 }
