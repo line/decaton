@@ -81,7 +81,7 @@ public class OutOfOrderCommitControl {
 
     public synchronized DeferredCompletion reportFetchedOffset(long offset) {
         if (isRegressing(offset)) {
-            throw new IllegalArgumentException(String.format(
+            throw new OffsetRegressionException(String.format(
                     "offset regression %s: %d > %d", topicPartition, offset, latest));
         }
 

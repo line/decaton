@@ -16,11 +16,8 @@
 
 package com.linecorp.decaton.processor.runtime;
 
-import static java.util.stream.Collectors.toList;
-
 import java.time.Duration;
 import java.util.Collection;
-import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -145,43 +142,15 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
         }
     }
 
-    private void partitionsRevoked(Collection<TopicPartition> partitions) {
-        if (partitions.isEmpty()) {
-            return;
-        }
-
-        Timer timer = Utils.timer();
-        contexts.dropContexts(partitions);
-        if (log.isInfoEnabled()) {
-            log.info("Processed revoke {} partitions in {} ms",
-                     partitions.size(), Utils.formatNum(timer.elapsedMillis()));
-        }
-    }
-
-    private void partitionsAssigned(Collection<TopicPartition> partitions) {
-        if (partitions.isEmpty()) {
-            return;
-        }
-
-        Timer timer = Utils.timer();
-        for (TopicPartition partition : partitions) {
-            contexts.initContext(partition, false);
-        }
-        if (log.isInfoEnabled()) {
-            log.info("Processed assign {} partitions in {} ms",
-                     partitions.size(), Utils.formatNum(timer.elapsedMillis()));
-        }
-    }
-
     @Override
     public void run() {
         updateState(SubscriptionStateListener.State.INITIALIZING);
 
         Consumer<String, byte[]> consumer = consumerSupplier.get();
         AtomicBoolean consumerClosing = new AtomicBoolean(false);
-        final Collection<TopicPartition> currentAssignment = new HashSet<>();
         CommitManager commitManager = new CommitManager(
                 consumer, props.get(ProcessorProperties.CONFIG_COMMIT_INTERVAL_MS), contexts);
+        AssignmentManager assignManager = new AssignmentManager(contexts);
         try {
             consumer.subscribe(subscribeTopics(), new ConsumerRebalanceListener() {
                 @Override
@@ -204,52 +173,25 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
 
                 @Override
                 public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-                    log.debug("Assigning({}): {}, currently assigned({}): {}", partitions.size(), partitions,
-                              currentAssignment.size(), currentAssignment);
-
-                    final Collection<TopicPartition> revokedPartitions = new HashSet<>(currentAssignment);
-                    revokedPartitions.removeAll(partitions);
-                    log.debug("Revoked partitions({}): {}", revokedPartitions.size(), revokedPartitions);
-                    partitionsRevoked(revokedPartitions);
-
-                    final Collection<TopicPartition> newlyAssignedPartitions = new HashSet<>(partitions);
-                    newlyAssignedPartitions.removeAll(currentAssignment);
-                    log.debug("Newly assigned partitions({}): {}", newlyAssignedPartitions.size(),
-                              newlyAssignedPartitions);
-                    partitionsAssigned(newlyAssignedPartitions);
-
-                    final Collection<TopicPartition> regressed =
-                            partitions.stream()
-                                      .filter(tp -> contexts.get(tp).isOffsetRegressing(consumer.position(tp)))
-                                      .collect(toList());
-                    if (!regressed.isEmpty()) {
-                        log.debug("Offset regression on {}, so resetting all internal states", regressed);
-                        partitionsRevoked(regressed);
-                        partitionsAssigned(regressed);
-                    }
+                    assignManager.assign(partitions);
 
                     // Consumer rebalance resets all pause states of assigned partitions even though they
                     // haven't moved over from/to different consumer instance.
                     // Need to re-call pause with originally paused partitions to bring state back consistent.
                     consumer.pause(contexts.pausedPartitions());
 
-                    // Set currentAssignment to latest partitions set.
-                    currentAssignment.clear();
-                    currentAssignment.addAll(partitions);
-
                     updateState(SubscriptionStateListener.State.RUNNING);
                 }
             });
 
             while (!terminated.get()) {
-                pollOnce(consumer);
+                pollOnce(consumer, assignManager);
                 Timer timer = Utils.timer();
                 commitManager.maybeCommitAsync();
                 metrics.commitOffsetTime.record(timer.duration());
             }
         } catch (RuntimeException e) {
-            log.error("ProcessorSubscription {} got exception while consuming, currently assigned: {}",
-                      scope, currentAssignment, e);
+            log.error("Unknown exception thrown at subscription loop, thread will be terminated: {}", scope, e);
         } finally {
             updateState(SubscriptionStateListener.State.SHUTTING_DOWN);
 
@@ -277,7 +219,8 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
         }
     }
 
-    private void pollOnce(Consumer<String, byte[]> consumer) {
+    private void pollOnce(Consumer<String, byte[]> consumer,
+                          AssignmentManager assignManager) {
         Timer timer = Utils.timer();
         ConsumerRecords<String, byte[]> records = consumer.poll(POLL_TIMEOUT_MILLIS);
         metrics.consumerPollTime.record(timer.duration());
@@ -286,7 +229,16 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
         records.forEach(record -> {
             TopicPartition tp = new TopicPartition(record.topic(), record.partition());
             PartitionContext context = contexts.get(tp);
-            DeferredCompletion offsetCompletion = context.registerOffset(record.offset());
+
+            DeferredCompletion offsetCompletion;
+            try {
+                offsetCompletion = context.registerOffset(record.offset());
+            } catch (OffsetRegressionException e) {
+                log.warn("Offset regression at partition {}", tp);
+                assignManager.repair(tp);
+                // If it fails even at 2nd attempt... no idea let it die.
+                offsetCompletion = context.registerOffset(record.offset());
+            }
             TracingProvider provider = scope.tracingProvider();
             RecordTraceHandle trace = provider.traceFor(record, scope.subscriptionId());
             final DeferredCompletion tracingCompletion = () -> {
@@ -296,8 +248,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
                     log.error("Exception from tracing", e);
                 }
             };
-            DeferredCompletion completion = DeferredCompletion.combine(offsetCompletion,
-                                                                       tracingCompletion);
+            DeferredCompletion completion = DeferredCompletion.combine(offsetCompletion, tracingCompletion);
 
             if (blacklistedKeysFilter.shouldTake(record)) {
                 TaskRequest taskRequest =
