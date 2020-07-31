@@ -18,9 +18,10 @@ package com.linecorp.decaton.processor.metrics;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
+import java.util.ListIterator;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
@@ -59,30 +60,39 @@ public class Metrics {
      * the instance from {@link MeterRegistry} when the last reference to the meter closed and disappeared.
      */
     abstract static class AbstractMetrics implements AutoCloseable {
-        private static final ConcurrentMap<Id, AtomicInteger> meterRefCounts = new ConcurrentHashMap<>();
+        private static final Map<Id, AtomicInteger> meterRefCounts = new HashMap<>();
         private final List<Meter> meters = new ArrayList<>();
 
-        synchronized <T extends Meter> T meter(Supplier<T> ctor) {
-            T meter = ctor.get();
-            meterRefCounts.computeIfAbsent(meter.getId(), key -> new AtomicInteger())
-                          .incrementAndGet();
-            meters.add(meter);
-            return meter;
+        <T extends Meter> T meter(Supplier<T> ctor) {
+            synchronized (meterRefCounts) {
+                T meter = ctor.get();
+                meterRefCounts.computeIfAbsent(meter.getId(), key -> new AtomicInteger())
+                              .incrementAndGet();
+                meters.add(meter);
+                return meter;
+            }
         }
 
         @Override
-        public synchronized void close() {
-            for (Meter meter : meters) {
-                Id id = meter.getId();
-                AtomicInteger count = meterRefCounts.get(id);
-                if (count != null && count.decrementAndGet() <= 0) {
-                    meterRefCounts.remove(id);
-                    registry.remove(meter);
-                    meter.close();
+        public void close() {
+            synchronized (meterRefCounts) {
+                // traverse from the end to avoid arrayCopy
+                for (ListIterator<Meter> iterator = meters.listIterator(meters.size() - 1); iterator.hasNext(); ) {
+                    Meter meter = iterator.previous();
+                    Id id = meter.getId();
+                    AtomicInteger count = meterRefCounts.get(id);
+                    if (count == null) {
+                        throw new IllegalStateException("Missing reference to meter: " + id);
+                    }
+                    if (count.decrementAndGet() <= 0) {
+                        meterRefCounts.remove(id);
+                        registry.remove(meter);
+                        meter.close();
+                    }
+                    // make close idempotent
+                    iterator.remove();
                 }
             }
-            // make close idempotent
-            meters.clear();
         }
     }
 
