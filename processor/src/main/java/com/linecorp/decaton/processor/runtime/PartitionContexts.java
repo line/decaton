@@ -18,11 +18,11 @@ package com.linecorp.decaton.processor.runtime;
 
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toMap;
-import static java.util.stream.Collectors.toSet;
 
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
@@ -39,9 +39,10 @@ import com.linecorp.decaton.processor.Property;
 import com.linecorp.decaton.processor.runtime.AssignmentManager.AssignmentConfig;
 import com.linecorp.decaton.processor.runtime.AssignmentManager.AssignmentStore;
 import com.linecorp.decaton.processor.runtime.CommitManager.OffsetsStore;
+import com.linecorp.decaton.processor.runtime.TaskConsumer.PartitionStates;
 import com.linecorp.decaton.processor.runtime.Utils.Task;
 
-public class PartitionContexts implements OffsetsStore, AssignmentStore {
+public class PartitionContexts implements OffsetsStore, AssignmentStore, PartitionStates {
     private static final Logger logger = LoggerFactory.getLogger(PartitionContexts.class);
 
     private final SubscriptionScope scope;
@@ -173,7 +174,13 @@ public class PartitionContexts implements OffsetsStore, AssignmentStore {
         return processingRateProp.value() == RateLimiter.PAUSED || reloadRequested.get();
     }
 
-    public Collection<TopicPartition> partitionsNeedsPause() {
+    @Override
+    public void updatePartitionsStatus() {
+        updateHighWatermarks();
+    }
+
+    @Override
+    public List<TopicPartition> partitionsNeedsPause() {
         boolean pausingAll = pausingAllProcessing();
         return contexts.values().stream()
                        .filter(c -> !c.paused())
@@ -182,7 +189,8 @@ public class PartitionContexts implements OffsetsStore, AssignmentStore {
                        .collect(toList());
     }
 
-    public Collection<TopicPartition> partitionsNeedsResume() {
+    @Override
+    public List<TopicPartition> partitionsNeedsResume() {
         boolean pausingAll = pausingAllProcessing();
         return contexts.values().stream()
                        .filter(PartitionContext::paused)
@@ -191,9 +199,18 @@ public class PartitionContexts implements OffsetsStore, AssignmentStore {
                        .collect(toList());
     }
 
-    public Set<TopicPartition> pausedPartitions() {
-        return contexts.values().stream().filter(PartitionContext::paused).map(PartitionContext::topicPartition)
-                       .collect(toSet());
+    @Override
+    public void partitionsPaused(List<TopicPartition> partitions) {
+        for (TopicPartition tp : partitions) {
+            contexts.get(tp).pause();
+        }
+    }
+
+    @Override
+    public void partitionsResumed(List<TopicPartition> partitions) {
+        for (TopicPartition tp : partitions) {
+            contexts.get(tp).resume();
+        }
     }
 
     /**

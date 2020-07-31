@@ -20,7 +20,6 @@ import java.time.Duration;
 import java.util.Collection;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -28,8 +27,7 @@ import java.util.stream.Stream;
 
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
-import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 
@@ -41,17 +39,14 @@ import com.linecorp.decaton.processor.TracingProvider;
 import com.linecorp.decaton.processor.TracingProvider.RecordTraceHandle;
 import com.linecorp.decaton.processor.metrics.Metrics;
 import com.linecorp.decaton.processor.metrics.Metrics.SubscriptionMetrics;
-import com.linecorp.decaton.processor.TracingProvider.TraceHandle;
+import com.linecorp.decaton.processor.runtime.TaskConsumer.ConsumerHandler;
 import com.linecorp.decaton.processor.runtime.Utils.Timer;
 
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class ProcessorSubscription extends Thread implements AsyncShutdownable {
-    private static final long POLL_TIMEOUT_MILLIS = 100;
-
     private final SubscriptionScope scope;
-    private final Supplier<Consumer<String, byte[]>> consumerSupplier;
     private final AtomicBoolean terminated;
     private final BlacklistedKeysFilter blacklistedKeysFilter;
     private final PartitionContexts contexts;
@@ -59,7 +54,97 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
     private final Property<Long> rebalanceTimeoutMillis;
     private final SubscriptionStateListener stateListener;
     private final SubscriptionMetrics metrics;
-    private final ProcessorProperties props;
+    private final CommitManager commitManager;
+    private final AssignmentManager assignManager;
+    private final TaskConsumer taskConsumer;
+
+    class Handler implements ConsumerHandler {
+        @Override
+        public void prepareForRebalance() {
+            updateState(SubscriptionStateListener.State.REBALANCING);
+
+            waitForRemainingTasksCompletion(rebalanceTimeoutMillis.value());
+            try {
+                commitManager.commitSync();
+            } catch (CommitFailedException | TimeoutException e) {
+                log.warn("Offset commit failed at group rebalance", e);
+            }
+        }
+
+        private void waitForRemainingTasksCompletion(long timeoutMillis) {
+            Timer timer = Utils.timer();
+
+            while (true) {
+                contexts.updateHighWatermarks();
+
+                final int pendingTasksCount = contexts.totalPendingTasks();
+                Duration elapsed = timer.duration();
+                if (pendingTasksCount == 0) {
+                    if (log.isDebugEnabled()) {
+                        log.debug("Waiting for task completion is successful {} ms",
+                                  Utils.formatNum(elapsed.toMillis()));
+                    }
+                    return;
+                }
+
+                long remainingMs = timeoutMillis - elapsed.toMillis();
+                if (remainingMs <= 0) {
+                    log.warn("Timed out waiting {} tasks to complete after {} ms",
+                             pendingTasksCount, Utils.formatNum(elapsed.toMillis()));
+                    break;
+                }
+
+                try {
+                    Thread.sleep(Math.min(200L, remainingMs));
+                } catch (InterruptedException ignore) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+        }
+
+        @Override
+        public void updateAssignment(Collection<TopicPartition> newAssignment) {
+            assignManager.assign(newAssignment);
+
+            updateState(SubscriptionStateListener.State.RUNNING);
+        }
+
+        @Override
+        public void receive(ConsumerRecord<String, byte[]> record) {
+            TopicPartition tp = new TopicPartition(record.topic(), record.partition());
+            PartitionContext context = contexts.get(tp);
+
+            DeferredCompletion offsetCompletion;
+            try {
+                offsetCompletion = context.registerOffset(record.offset());
+            } catch (OffsetRegressionException e) {
+                log.warn("Offset regression at partition {}", tp);
+                assignManager.repair(tp);
+                // If it fails even at 2nd attempt... no idea let it die.
+                offsetCompletion = context.registerOffset(record.offset());
+            }
+            TracingProvider provider = scope.tracingProvider();
+            RecordTraceHandle trace = provider.traceFor(record, scope.subscriptionId());
+            final DeferredCompletion tracingCompletion = () -> {
+                try {
+                    trace.processingCompletion();
+                } catch (Exception e) {
+                    log.error("Exception from tracing", e);
+                }
+            };
+            DeferredCompletion completion = DeferredCompletion.combine(offsetCompletion, tracingCompletion);
+
+            if (blacklistedKeysFilter.shouldTake(record)) {
+                TaskRequest taskRequest =
+                        new TaskRequest(tp, record.offset(), completion, record.key(),
+                                        record.headers(), trace, record.value());
+                context.addRequest(taskRequest);
+            } else {
+                completion.complete();
+            }
+        }
+    }
 
     ProcessorSubscription(SubscriptionScope scope,
                           Supplier<Consumer<String, byte[]>> consumerSupplier,
@@ -68,14 +153,17 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
                           SubscriptionStateListener stateListener,
                           PartitionContexts contexts) {
         this.scope = scope;
-        this.consumerSupplier = consumerSupplier;
         this.processors = processors;
         this.stateListener = stateListener;
         this.contexts = contexts;
-        this.props = props;
         terminated = new AtomicBoolean();
         metrics = Metrics.withTags("subscription", scope.subscriptionId()).new SubscriptionMetrics();
 
+        Consumer<String, byte[]> consumer = consumerSupplier.get();
+        taskConsumer = new TaskConsumer(consumer, contexts, new Handler(), metrics);
+        commitManager = new CommitManager(
+                consumer, props.get(ProcessorProperties.CONFIG_COMMIT_INTERVAL_MS), contexts);
+        assignManager = new AssignmentManager(contexts);
         blacklistedKeysFilter = new BlacklistedKeysFilter(props);
         rebalanceTimeoutMillis = props.get(ProcessorProperties.CONFIG_GROUP_REBALANCE_TIMEOUT_MS);
 
@@ -109,84 +197,20 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
                      .collect(Collectors.toSet());
     }
 
-    private void waitForRemainingTasksCompletion(long timeoutMillis) {
-        final long timeoutNanos = TimeUnit.MILLISECONDS.toNanos(timeoutMillis);
-        Timer timer = Utils.timer();
-
-        while (true) {
-            contexts.updateHighWatermarks();
-
-            final int pendingTasksCount = contexts.totalPendingTasks();
-            Duration elapsed = timer.duration();
-            if (pendingTasksCount == 0) {
-                if (log.isDebugEnabled()) {
-                    log.debug("Waiting for task completion is successful {} ms",
-                              Utils.formatNum(elapsed.toMillis()));
-                }
-                break;
-            }
-
-            if (elapsed.toNanos() >= timeoutNanos) {
-                log.warn("Timed out waiting {} tasks to complete after {} ms",
-                         pendingTasksCount, Utils.formatNum(elapsed.toMillis()));
-                break;
-            }
-
-            final long timeRemainingMills = TimeUnit.NANOSECONDS.toMillis(timeoutNanos - elapsed.toNanos());
-            try {
-                Thread.sleep(Math.min(200L, timeRemainingMills));
-            } catch (InterruptedException ignore) {
-                Thread.currentThread().interrupt();
-                break;
-            }
-        }
-    }
-
     @Override
     public void run() {
         updateState(SubscriptionStateListener.State.INITIALIZING);
+        taskConsumer.init(subscribeTopics());
 
-        Consumer<String, byte[]> consumer = consumerSupplier.get();
-        AtomicBoolean consumerClosing = new AtomicBoolean(false);
-        CommitManager commitManager = new CommitManager(
-                consumer, props.get(ProcessorProperties.CONFIG_COMMIT_INTERVAL_MS), contexts);
-        AssignmentManager assignManager = new AssignmentManager(contexts);
         try {
-            consumer.subscribe(subscribeTopics(), new ConsumerRebalanceListener() {
-                @Override
-                public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
-                    // KafkaConsumer#close has been changed to invoke onPartitionRevoked since Kafka 2.4.0.
-                    // Since we're doing cleanup procedure on shutdown manually
-                    // so just immediately return if consumer is already closing
-                    if (consumerClosing.get()) {
-                        return;
-                    }
-                    updateState(SubscriptionStateListener.State.REBALANCING);
-
-                    waitForRemainingTasksCompletion(rebalanceTimeoutMillis.value());
-                    try {
-                        commitManager.commitSync();
-                    } catch (CommitFailedException | TimeoutException e) {
-                        log.warn("Offset commit failed at group rebalance", e);
-                    }
-                }
-
-                @Override
-                public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-                    assignManager.assign(partitions);
-
-                    // Consumer rebalance resets all pause states of assigned partitions even though they
-                    // haven't moved over from/to different consumer instance.
-                    // Need to re-call pause with originally paused partitions to bring state back consistent.
-                    consumer.pause(contexts.pausedPartitions());
-
-                    updateState(SubscriptionStateListener.State.RUNNING);
-                }
-            });
-
             while (!terminated.get()) {
-                pollOnce(consumer, assignManager);
+                taskConsumer.poll();
+
                 Timer timer = Utils.timer();
+                contexts.maybeHandlePropertyReload();
+                metrics.reloadContextsTime.record(timer.duration());
+
+                timer = Utils.timer();
                 commitManager.maybeCommitAsync();
                 metrics.commitOffsetTime.record(timer.duration());
             }
@@ -210,89 +234,12 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
 
             processors.destroySingletonScope(scope.subscriptionId());
 
-            consumerClosing.set(true);
-            consumer.close();
+            taskConsumer.close();
             log.info("ProcessorSubscription {} terminated in {} ms", scope,
                      timer.elapsedMillis());
 
             updateState(SubscriptionStateListener.State.TERMINATED);
         }
-    }
-
-    private void pollOnce(Consumer<String, byte[]> consumer,
-                          AssignmentManager assignManager) {
-        Timer timer = Utils.timer();
-        ConsumerRecords<String, byte[]> records = consumer.poll(POLL_TIMEOUT_MILLIS);
-        metrics.consumerPollTime.record(timer.duration());
-
-        timer = Utils.timer();
-        records.forEach(record -> {
-            TopicPartition tp = new TopicPartition(record.topic(), record.partition());
-            PartitionContext context = contexts.get(tp);
-
-            DeferredCompletion offsetCompletion;
-            try {
-                offsetCompletion = context.registerOffset(record.offset());
-            } catch (OffsetRegressionException e) {
-                log.warn("Offset regression at partition {}", tp);
-                assignManager.repair(tp);
-                // If it fails even at 2nd attempt... no idea let it die.
-                offsetCompletion = context.registerOffset(record.offset());
-            }
-            TracingProvider provider = scope.tracingProvider();
-            RecordTraceHandle trace = provider.traceFor(record, scope.subscriptionId());
-            final DeferredCompletion tracingCompletion = () -> {
-                try {
-                    trace.processingCompletion();
-                } catch (Exception e) {
-                    log.error("Exception from tracing", e);
-                }
-            };
-            DeferredCompletion completion = DeferredCompletion.combine(offsetCompletion, tracingCompletion);
-
-            if (blacklistedKeysFilter.shouldTake(record)) {
-                TaskRequest taskRequest =
-                        new TaskRequest(tp, record.offset(), completion, record.key(),
-                                        record.headers(), trace, record.value());
-                context.addRequest(taskRequest);
-            } else {
-                completion.complete();
-            }
-        });
-        metrics.handleRecordsTime.record(timer.duration());
-
-        timer = Utils.timer();
-        contexts.maybeHandlePropertyReload();
-        metrics.reloadContextsTime.record(timer.duration());
-
-        contexts.updateHighWatermarks();
-
-        timer = Utils.timer();
-        pausePartitions(consumer);
-        resumePartitions(consumer);
-        metrics.handlePausesTime.record(timer.duration());
-    }
-
-    private void pausePartitions(Consumer<?, ?> consumer) {
-        Collection<TopicPartition> pausedPartitions = contexts.partitionsNeedsPause();
-        if (pausedPartitions.isEmpty()) {
-            return;
-        }
-
-        log.debug("Pausing partitions: {}", pausedPartitions);
-        consumer.pause(pausedPartitions);
-        pausedPartitions.forEach(tp -> contexts.get(tp).pause());
-    }
-
-    private void resumePartitions(Consumer<?, ?> consumer) {
-        Collection<TopicPartition> resumedPartitions = contexts.partitionsNeedsResume();
-        if (resumedPartitions.isEmpty()) {
-            return;
-        }
-
-        log.debug("Resuming partitions: {}", resumedPartitions);
-        consumer.resume(resumedPartitions);
-        resumedPartitions.forEach(tp -> contexts.get(tp).resume());
     }
 
     @Override
