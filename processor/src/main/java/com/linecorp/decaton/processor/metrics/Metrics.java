@@ -77,7 +77,7 @@ public class Metrics {
         public void close() {
             synchronized (meterRefCounts) {
                 // traverse from the end to avoid arrayCopy
-                for (ListIterator<Meter> iterator = meters.listIterator(meters.size() - 1); iterator.hasNext(); ) {
+                for (ListIterator<Meter> iterator = meters.listIterator(meters.size()); iterator.hasPrevious(); ) {
                     Meter meter = iterator.previous();
                     Id id = meter.getId();
                     AtomicInteger count = meterRefCounts.get(id);
