@@ -20,6 +20,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.ListIterator;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
@@ -59,12 +60,8 @@ public class Metrics {
      * the instance from {@link MeterRegistry} when the last reference to the meter closed and disappeared.
      */
     abstract static class AbstractMetrics implements AutoCloseable {
-        private static final Map<Meter.Id, AtomicInteger> meterRefCounts = new HashMap<>();
-        private final List<Meter> meters;
-
-        protected AbstractMetrics() {
-            meters = new ArrayList<>();
-        }
+        private static final Map<Id, AtomicInteger> meterRefCounts = new HashMap<>();
+        private final List<Meter> meters = new ArrayList<>();
 
         <T extends Meter> T meter(Supplier<T> ctor) {
             synchronized (meterRefCounts) {
@@ -79,14 +76,21 @@ public class Metrics {
         @Override
         public void close() {
             synchronized (meterRefCounts) {
-                for (Meter meter : meters) {
-                    Meter.Id id = meter.getId();
-                    int count = meterRefCounts.get(id).decrementAndGet();
-                    if (count == 0) {
+                // traverse from the end to avoid arrayCopy
+                for (ListIterator<Meter> iterator = meters.listIterator(meters.size()); iterator.hasPrevious(); ) {
+                    Meter meter = iterator.previous();
+                    Id id = meter.getId();
+                    AtomicInteger count = meterRefCounts.get(id);
+                    if (count == null) {
+                        throw new IllegalStateException("Missing reference to meter: " + id);
+                    }
+                    if (count.decrementAndGet() <= 0) {
                         meterRefCounts.remove(id);
                         registry.remove(meter);
                         meter.close();
                     }
+                    // make close idempotent
+                    iterator.remove();
                 }
             }
         }
