@@ -67,7 +67,7 @@ public class ProcessorSubscriptionTest {
      * A mock consumer which exposes rebalance listener so that can be triggered manually
      * ({@link MockConsumer} doesn't simulate rebalance listener invocation. refs: KAFKA-6968).
      */
-    private static class DecatonMockConsumer extends MockConsumer<String, byte[]> {
+    private static class DecatonMockConsumer extends MockConsumer<byte[], byte[]> {
         private volatile ConsumerRebalanceListener rebalanceListener;
 
         private DecatonMockConsumer() {
@@ -82,7 +82,7 @@ public class ProcessorSubscriptionTest {
     }
 
     @Mock
-    private Consumer<String, byte[]> consumerMock;
+    private Consumer<byte[], byte[]> consumerMock;
 
     @Mock
     private PartitionContexts contextsMock;
@@ -95,7 +95,7 @@ public class ProcessorSubscriptionTest {
                 ProcessorProperties.builder().build());
     }
 
-    private static ProcessorSubscription subscription(Consumer<String, byte[]> consumer,
+    private static ProcessorSubscription subscription(Consumer<byte[], byte[]> consumer,
                                                       SubscriptionStateListener listener,
                                                       TopicPartition tp) {
         SubscriptionScope scope = scope(tp.topic());

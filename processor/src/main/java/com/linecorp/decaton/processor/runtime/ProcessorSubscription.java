@@ -53,7 +53,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
     private static final long POLL_TIMEOUT_MILLIS = 100;
 
     private final SubscriptionScope scope;
-    private final Supplier<Consumer<String, byte[]>> consumerSupplier;
+    private final Supplier<Consumer<byte[], byte[]>> consumerSupplier;
     private final AtomicBoolean terminated;
     private final BlacklistedKeysFilter blacklistedKeysFilter;
     private final PartitionContexts contexts;
@@ -65,7 +65,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
     private boolean asyncCommitInFlight;
 
     ProcessorSubscription(SubscriptionScope scope,
-                          Supplier<Consumer<String, byte[]>> consumerSupplier,
+                          Supplier<Consumer<byte[], byte[]>> consumerSupplier,
                           Processors<?> processors,
                           ProcessorProperties props,
                           SubscriptionStateListener stateListener,
@@ -86,7 +86,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
     }
 
     public ProcessorSubscription(SubscriptionScope scope,
-                                 Supplier<Consumer<String, byte[]>> consumerSupplier,
+                                 Supplier<Consumer<byte[], byte[]>> consumerSupplier,
                                  Processors<?> processors,
                                  ProcessorProperties props,
                                  SubscriptionStateListener stateListener) {
@@ -245,7 +245,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
     public void run() {
         updateState(SubscriptionStateListener.State.INITIALIZING);
 
-        Consumer<String, byte[]> consumer = consumerSupplier.get();
+        Consumer<byte[], byte[]> consumer = consumerSupplier.get();
         AtomicBoolean consumerClosing = new AtomicBoolean(false);
         final Collection<TopicPartition> currentAssignment = new HashSet<>();
         try {
@@ -344,9 +344,9 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
         }
     }
 
-    private void pollOnce(Consumer<String, byte[]> consumer) {
+    private void pollOnce(Consumer<byte[], byte[]> consumer) {
         Timer timer = Utils.timer();
-        ConsumerRecords<String, byte[]> records = consumer.poll(POLL_TIMEOUT_MILLIS);
+        ConsumerRecords<byte[], byte[]> records = consumer.poll(POLL_TIMEOUT_MILLIS);
         metrics.consumerPollTime.record(timer.duration());
 
         timer = Utils.timer();
@@ -354,10 +354,11 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
             TopicPartition tp = new TopicPartition(record.topic(), record.partition());
             PartitionContext context = contexts.get(tp);
             DeferredCompletion completion = context.registerOffset(record.offset());
+            String key = processors.keyDeserializer().deserialize(record.key());
 
-            if (blacklistedKeysFilter.shouldTake(record)) {
+            if (blacklistedKeysFilter.shouldTake(key)) {
                 TaskRequest taskRequest =
-                        new TaskRequest(tp, record.offset(), completion, record.key(), record.value());
+                        new TaskRequest(tp, record.offset(), completion, key, record.value());
                 context.addRequest(taskRequest);
             } else {
                 completion.complete();
@@ -399,7 +400,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
         resumedPartitions.forEach(tp -> contexts.get(tp).resume());
     }
 
-    private long commitOffsetsIfNecessary(Consumer<String, byte[]> consumer, long lastCommittedMillis) {
+    private long commitOffsetsIfNecessary(Consumer<byte[], byte[]> consumer, long lastCommittedMillis) {
         if (System.currentTimeMillis() - lastCommittedMillis >= commitIntervalMillis.value()) {
             try {
                 commitCompletedOffsets(consumer, false);

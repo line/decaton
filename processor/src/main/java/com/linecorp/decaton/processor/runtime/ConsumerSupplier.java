@@ -27,14 +27,10 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
-import org.apache.kafka.common.serialization.StringDeserializer;
 
-public class ConsumerSupplier implements Supplier<Consumer<String, byte[]>> {
+public class ConsumerSupplier implements Supplier<Consumer<byte[], byte[]>> {
     public static final int MAX_MAX_POLL_RECORDS = 100;
 
-    private static final Map<String, String> configDefaults = new HashMap<String, String>() {{
-        put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
-    }};
     private static final Map<String, String> configOverwrites = new HashMap<String, String>() {{
         put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
     }};
@@ -46,15 +42,12 @@ public class ConsumerSupplier implements Supplier<Consumer<String, byte[]>> {
     }
 
     @Override
-    public Consumer<String, byte[]> get() {
-        return new KafkaConsumer<>(mergedProps(), null, new ByteArrayDeserializer());
+    public Consumer<byte[], byte[]> get() {
+        return new KafkaConsumer<>(mergedProps(), new ByteArrayDeserializer(), new ByteArrayDeserializer());
     }
 
     private Properties mergedProps() {
         Properties props = new Properties();
-        for (Entry<String, String> entry : configDefaults.entrySet()) {
-            props.setProperty(entry.getKey(), entry.getValue());
-        }
         for (String key : config.stringPropertyNames()) {
             props.setProperty(key, config.getProperty(key));
         }

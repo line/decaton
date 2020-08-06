@@ -24,6 +24,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.linecorp.decaton.common.Deserializer;
 import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.TaskExtractor;
 import com.linecorp.decaton.processor.metrics.Metrics;
@@ -33,15 +34,18 @@ public class Processors<T> {
 
     private final List<DecatonProcessorSupplier<T>> suppliers;
     private final DecatonProcessorSupplier<byte[]> retryProcessorSupplier;
+    private final Deserializer<String> keyDeserializer;
     private final TaskExtractor<T> taskExtractor;
     private final TaskExtractor<T> retryTaskExtractor;
 
     public Processors(List<DecatonProcessorSupplier<T>> suppliers,
                       DecatonProcessorSupplier<byte[]> retryProcessorSupplier,
+                      Deserializer<String> keyDeserializer,
                       TaskExtractor<T> taskExtractor,
                       TaskExtractor<T> retryTaskExtractor) {
         this.suppliers = Collections.unmodifiableList(suppliers);
         this.retryProcessorSupplier = retryProcessorSupplier;
+        this.keyDeserializer = keyDeserializer;
         this.taskExtractor = taskExtractor;
         this.retryTaskExtractor = retryTaskExtractor;
     }
@@ -111,5 +115,9 @@ public class Processors<T> {
         if (retryProcessorSupplier != null) {
             retryProcessorSupplier.leaveThreadScope(subscriptionId, tp, threadId);
         }
+    }
+
+    public Deserializer<String> keyDeserializer() {
+        return keyDeserializer;
     }
 }
