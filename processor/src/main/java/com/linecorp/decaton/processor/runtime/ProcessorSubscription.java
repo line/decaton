@@ -133,13 +133,15 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
                 log.debug("Skipping commit due to another async commit is currently in-flight");
                 return;
             }
+
+            Thread pollThread = Thread.currentThread();
             consumer.commitAsync(commitOffsets, (offsets, exception) -> {
                 asyncCommitInFlight = false;
                 if (exception != null) {
                     log.warn("Offset commit failed asynchronously", exception);
                     return;
                 }
-                if (Thread.currentThread() != this) {
+                if (Thread.currentThread() != pollThread) {
                     // This isn't expected to happen (see below comment) but we check it with cheap cost
                     // just in case to avoid silent corruption.
                     log.error("BUG: commitAsync callback triggered by an unexpected thread: {}." +
