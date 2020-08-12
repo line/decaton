@@ -33,7 +33,7 @@ NOTE: It takes some moment (~1h) until the published version becomes visible to 
 3. Upon successful exit, login to https://oss.sonatype.org and click "Staging Repositories" in the left panel. ![staging-repo](staging-repositories.png)
 4. Confirm you see an entry for decaton in staging repositories list. Check the box and press the "Close" button. ![staging-list](staging-list.png)
 5. It will take some time to complete. Keep polling the screen until the "Release" button becomes clickable. ![release-ready](./release-ready.png)
-6. Press the "Release" button and you're done! Againt it takes some moment until it becomes visible to users. You can check out [maven central search](https://search.maven.org/search?q=decaton) to see if the version you released is now visible or not.
+6. Press the "Release" button and you're done! Against it takes some moment until it becomes visible to users. You can check out [maven central search](https://search.maven.org/search?q=decaton) to see if the version you released is now visible or not.
 7. Create a new release from the pushed tag from https://github.com/line/decaton/releases . You can copy the template from the past release notes. Unfortunately the construction of release note is manually done for now.
 
 
