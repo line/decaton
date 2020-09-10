@@ -16,17 +16,20 @@
 
 package com.linecorp.decaton.testing;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
 
+import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Time;
 
 import kafka.server.KafkaConfig;
 import kafka.server.KafkaServer;
 import kafka.utils.CoreUtils;
-import kafka.utils.TestUtils;
 import lombok.Getter;
 import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
@@ -48,8 +51,13 @@ public class EmbeddedKafkaCluster implements AutoCloseable {
 
         for (int i = 0; i < numBrokers; i++) {
             Properties prop = createBrokerConfig(i, zkConnect);
-            KafkaServer server = TestUtils.createServer(KafkaConfig.fromProps(prop), Time.SYSTEM);
-            int port = TestUtils.boundPort(server, SecurityProtocol.PLAINTEXT);
+
+            KafkaServer server = new KafkaServer(KafkaConfig.fromProps(prop),
+                                                 Time.SYSTEM,
+                                                 Option.empty(),
+                                                 scala.collection.immutable.List.empty());
+            server.startup();
+            int port = server.boundPort(ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT));
             String listener = "127.0.0.1:" + port;
             listeners.add(listener);
             servers.add(server);
@@ -61,24 +69,32 @@ public class EmbeddedKafkaCluster implements AutoCloseable {
     }
 
     private static Properties createBrokerConfig(int brokerId, String zkConnect) {
-        return TestUtils.createBrokerConfig(brokerId, zkConnect,
-                                            false, // disable controlled shutdown
-                                            true, // enable delete topic
-                                            0, // use random port
+        Properties prop = new Properties();
 
-                                            // << enable only PLAINTEXT
-                                            Option.empty(),
-                                            Option.empty(), Option.empty(),
-                                            true, false, 0,
-                                            false, 0, false, 0,
-                                            // enable only PLAINTEXT >>
+        prop.setProperty("broker.id", String.valueOf(brokerId));
+        prop.setProperty("zookeeper.connect", zkConnect);
+        prop.setProperty("controlled.shutdown.enable", "false");
+        prop.setProperty("delete.topic.enable", "true");
+        prop.setProperty("listeners", "PLAINTEXT://localhost:0");
+        try {
+            prop.setProperty("log.dir",
+                             Files.createTempDirectory("zookeeper-logs").toFile().getAbsolutePath());
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+        prop.setProperty("num.partitions", "1");
+        prop.setProperty("default.replication.factor", "3");
+        prop.setProperty("zookeeper.connection.timeout.ms", "10000");
+        prop.setProperty("replica.socket.timeout.ms", "1500");
+        prop.setProperty("controller.socket.timeout.ms", "1500");
+        prop.setProperty("log.segment.delete.delay.ms", "1000");
+        prop.setProperty("log.cleaner.dedupe.buffer.size", "2097152");
+        prop.setProperty("message.timestamp.difference.max.ms", String.valueOf(Long.MAX_VALUE));
+        prop.setProperty("offsets.topic.replication.factor", "1");
+        prop.setProperty("offsets.topic.num.partitions", "5");
+        prop.setProperty("group.initial.rebalance.delay.ms", "0");
 
-                                            Option.empty(), // omit rack information
-                                            1, // logDir count
-                                            false, // disable delegation token
-                                            1, // num partitions
-                                            (short) 1 // default replication factor
-        );
+        return prop;
     }
 
     @Override
