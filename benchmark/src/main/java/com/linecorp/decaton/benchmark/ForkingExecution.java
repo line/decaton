@@ -16,16 +16,15 @@
 
 package com.linecorp.decaton.benchmark;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.lang.ProcessBuilder.Redirect;
 import java.lang.management.ManagementFactory;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.rmi.RemoteException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
 import com.fasterxml.jackson.annotation.JsonAutoDetect.Visibility;
@@ -33,6 +32,8 @@ import com.fasterxml.jackson.annotation.PropertyAccessor;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+
+import com.linecorp.decaton.benchmark.BenchmarkRmi.RemoteCallback;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -50,65 +51,65 @@ public class ForkingExecution implements Execution {
 
     public static void main(String[] args) throws IOException, InterruptedException {
         Config config = mapper.readValue(args[0], Config.class);
+        RemoteCallback remoteCallback = BenchmarkRmi.lookup(Integer.parseInt(args[1]));
+
         InProcessExecution execution = new InProcessExecution();
-        BenchmarkResult result = execution.execute(config, System.out::println);
-        mapper.writeValue(System.out, result);
+        BenchmarkResult result = execution.execute(config, stage -> {
+            try {
+                remoteCallback.onStage(stage);
+            } catch (RemoteException e) {
+                log.error("Failed to invoke remote callback", e);
+                throw new RuntimeException(e);
+            }
+        });
+
+        remoteCallback.onResult(mapper.writeValueAsString(result));
     }
 
     @Override
     public BenchmarkResult execute(Config config, Consumer<Stage> stageCallback) {
         List<String> cmd = new ArrayList<>();
-        cmd.add(javaBin().toString());
-        cmd.add("-server");
-        cmd.addAll(jvmFlags());
-        cmd.add("-cp"); cmd.add(currentClasspath());
-        cmd.add(ForkingExecution.class.getName());
-        cmd.add(serializeConfig(config));
 
+        final BenchmarkResult result;
         final Process process;
-        try {
+        try (BenchmarkRmi rmi = new BenchmarkRmi()) {
+            CompletableFuture<String> resultFuture = rmi.start();
+
+            cmd.add(javaBin().toString());
+            cmd.add("-server");
+            cmd.addAll(jvmFlags());
+            cmd.add("-cp"); cmd.add(currentClasspath());
+            cmd.add(ForkingExecution.class.getName());
+            cmd.add(serializeConfig(config));
+            cmd.add(String.valueOf(rmi.port()));
+
             log.debug("Forking child process for run with: {}", cmd);
             process = new ProcessBuilder()
                     .command(cmd)
                     .redirectError(Redirect.INHERIT)
+                    .redirectOutput(Redirect.INHERIT)
                     .start();
+
+            Stage stage;
+            while ((stage = rmi.poll()) != Stage.FINISH) {
+                stageCallback.accept(stage);
+            }
+            result = mapper.readValue(resultFuture.join(), BenchmarkResult.class);
         } catch (IOException e) {
             log.error("Failed to spawn child process: {}", cmd, e);
             throw new RuntimeException("failed to spawn child process", e);
         }
 
-        final BenchmarkResult result;
         try {
-             result = communicate(process.getInputStream(), stageCallback);
-        } catch (IOException e) {
-            throw new RuntimeException("error while communicating with child", e);
-        } finally {
-            try {
-                process.waitFor();
-            } catch (InterruptedException e) {
-                log.warn("Interrupted while waiting child", e);
-            }
+            process.waitFor();
+        } catch (InterruptedException e) {
+            log.warn("Interrupted while waiting child", e);
         }
+
         if (process.exitValue() != 0) {
             throw new RuntimeException("child exit with error: " + process.exitValue());
         }
         return result;
-    }
-
-    private static BenchmarkResult communicate(InputStream in, Consumer<Stage> stageCallback)
-            throws IOException {
-        BufferedReader br = new BufferedReader(new InputStreamReader(in));
-        String line;
-        while ((line = br.readLine()) != null) {
-            log.debug("Received line from child: {}", line);
-            Stage stage = Stage.valueOf(line);
-            stageCallback.accept(stage);
-            if (stage == Stage.FINISH) {
-                break;
-            }
-        }
-        line = br.readLine();
-        return mapper.readValue(line, BenchmarkResult.class);
     }
 
     private static Path javaBin() {

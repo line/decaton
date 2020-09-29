@@ -40,7 +40,7 @@ public interface Runner extends AutoCloseable {
      * and pass it immediately to {@link Recording#process(Task)} which is given by an argument.
      *
      * @param config runner configurations.
-     * @param recording recording for this benchmark.
+     * @param recording recording of the benchmark.
      * @param resourceTracker resource tracking interface (use is optional).
      * @throws InterruptedException whenever appropriate.
      */
