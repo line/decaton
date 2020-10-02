@@ -91,7 +91,7 @@ public class ForkingExecution implements Execution {
                     .start();
 
             Stage stage;
-            while ((stage = rmi.poll()) != Stage.FINISH) {
+            while ((stage = rmi.pollStage()) != Stage.FINISH) {
                 stageCallback.accept(stage);
             }
             result = mapper.readValue(resultFuture.join(), BenchmarkResult.class);

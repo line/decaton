@@ -35,7 +35,10 @@ import com.linecorp.decaton.benchmark.Execution.Stage;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Remote interface used for communication between forked execution and benchmark controller
+ * Remote interface used for communication between forked execution and benchmark controller.
+ *
+ * {@link Stage} changes are notified through {@link BenchmarkRmi#pollStage()} rather than
+ * RMI callback directly which requires benchmark controller to be concurrent aware.
  */
 @Slf4j
 class BenchmarkRmi implements AutoCloseable {
@@ -85,7 +88,7 @@ class BenchmarkRmi implements AutoCloseable {
      * Poll {@link Stage} changes which is emitted from forked execution
      * @return {@link Stage} of the execution
      */
-    Stage poll() {
+    Stage pollStage() {
         try {
             return stageQueue.take();
         } catch (InterruptedException e) {
