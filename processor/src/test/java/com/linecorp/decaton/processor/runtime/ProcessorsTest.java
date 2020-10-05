@@ -36,6 +36,7 @@ import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
 
 import com.linecorp.decaton.processor.ProcessorProperties;
+import com.linecorp.decaton.processor.serialization.StringDeserializer;
 import com.linecorp.decaton.protocol.Sample.HelloTask;
 
 public class ProcessorsTest {
@@ -64,6 +65,7 @@ public class ProcessorsTest {
 
         Processors<HelloTask> processors = new Processors<>(
                 suppliers, null,
+                new StringDeserializer(),
                 new DefaultTaskExtractor<>(bytes -> HelloTask.getDefaultInstance()),
                 null);
 

@@ -27,6 +27,7 @@ import com.linecorp.decaton.processor.runtime.DefaultTaskExtractor;
 import com.linecorp.decaton.processor.runtime.ProcessorScope;
 import com.linecorp.decaton.processor.runtime.ProcessorSubscription;
 import com.linecorp.decaton.processor.runtime.Processors;
+import com.linecorp.decaton.processor.serialization.StringDeserializer;
 import com.linecorp.decaton.processor.runtime.SubscriptionBuilder;
 
 import lombok.Getter;
@@ -41,13 +42,18 @@ import lombok.experimental.Accessors;
 public class ProcessorsBuilder<T> {
     @Getter
     private final String topic;
+    private final Deserializer<String> keyDeserializer;
     private final TaskExtractor<T> taskExtractor;
     private final TaskExtractor<T> retryTaskExtractor;
 
     private final List<DecatonProcessorSupplier<T>> suppliers;
 
-    public ProcessorsBuilder(String topic, TaskExtractor<T> taskExtractor, TaskExtractor<T> retryTaskExtractor) {
+    public ProcessorsBuilder(String topic,
+                             Deserializer<String> keyDeserializer,
+                             TaskExtractor<T> taskExtractor,
+                             TaskExtractor<T> retryTaskExtractor) {
         this.topic = topic;
+        this.keyDeserializer = keyDeserializer;
         this.taskExtractor = taskExtractor;
         this.retryTaskExtractor = retryTaskExtractor;
         suppliers = new ArrayList<>();
@@ -63,7 +69,7 @@ public class ProcessorsBuilder<T> {
      */
     public static <T> ProcessorsBuilder<T> consuming(String topic, Deserializer<T> deserializer) {
         DefaultTaskExtractor<T> taskExtractor = new DefaultTaskExtractor<>(deserializer);
-        return new ProcessorsBuilder<>(topic, taskExtractor, taskExtractor);
+        return new ProcessorsBuilder<>(topic, new StringDeserializer(), taskExtractor, taskExtractor);
     }
 
     /**
@@ -75,6 +81,21 @@ public class ProcessorsBuilder<T> {
      * @return an instance of {@link ProcessorsBuilder}.
      */
     public static <T> ProcessorsBuilder<T> consuming(String topic, TaskExtractor<T> taskExtractor) {
+        return consuming(topic, new StringDeserializer(), taskExtractor);
+    }
+
+    /**
+     * Create new {@link ProcessorsBuilder} that consumes message from topic expecting tasks of type
+     * which can be parsed by valueParser.
+     * @param topic the name of topic to consume.
+     * @param keyDeserializer the deserializer for key that implements {@link Deserializer}.
+     * @param taskExtractor the extractor to extract task of type {@link T} from message bytes.
+     * @param <T> the type of instantiated tasks.
+     * @return an instance of {@link ProcessorsBuilder}.
+     */
+    public static <T> ProcessorsBuilder<T> consuming(String topic,
+                                                     Deserializer<String> keyDeserializer,
+                                                     TaskExtractor<T> taskExtractor) {
         DefaultTaskExtractor<byte[]> innerExtractor = new DefaultTaskExtractor<>(bytes -> bytes);
         TaskExtractor<T> retryTaskExtractor = bytes -> {
             // Retry tasks are serialized as PB DecatonTaskRequest.
@@ -90,7 +111,7 @@ public class ProcessorsBuilder<T> {
             return new DecatonTask<>(retryTask.metadata(), task.taskData(), task.taskDataBytes());
         };
 
-        return new ProcessorsBuilder<>(topic, taskExtractor, retryTaskExtractor);
+        return new ProcessorsBuilder<>(topic, keyDeserializer, taskExtractor, retryTaskExtractor);
     }
 
     /**
@@ -134,6 +155,7 @@ public class ProcessorsBuilder<T> {
     }
 
     public Processors<T> build(DecatonProcessorSupplier<byte[]> retryProcessorSupplier) {
-        return new Processors<>(suppliers, retryProcessorSupplier, taskExtractor, retryTaskExtractor);
+        return new Processors<>(
+                suppliers, retryProcessorSupplier, keyDeserializer, taskExtractor, retryTaskExtractor);
     }
 }

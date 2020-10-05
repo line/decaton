@@ -37,11 +37,11 @@ class BlacklistedKeysFilter {
              .listen((oldValue, newValue) -> ignoreKeys = new HashSet<>(newValue));
     }
 
-    boolean shouldTake(ConsumerRecord<String, byte[]> record) {
+    boolean shouldTake(String key) {
         // Preceding isEmpty() check is for reducing tiny overhead applied for each contains() by calling
         // Object#hashCode. Since ignoreKeys should be empty for most cases..
-        if (!ignoreKeys.isEmpty() && ignoreKeys.contains(record.key())) {
-            logger.debug("Ignore task which has key configured to ignore: {}", record.key());
+        if (!ignoreKeys.isEmpty() && ignoreKeys.contains(key)) {
+            logger.debug("Ignore task which has key configured to ignore: {}", key);
             return false;
         }
 
