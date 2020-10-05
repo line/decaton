@@ -32,6 +32,8 @@ import java.util.concurrent.LinkedBlockingQueue;
 
 import com.linecorp.decaton.benchmark.Execution.Stage;
 
+import lombok.Getter;
+import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -45,8 +47,13 @@ class BenchmarkRmi implements AutoCloseable {
     private static final String REMOTE_NAME = "BenchmarkRmi";
 
     private final BlockingQueue<Stage> stageQueue = new LinkedBlockingQueue<>();
-    private int port;
     private RemoteCallback callback;
+    /**
+     * Port of the RMI registry
+     */
+    @Getter
+    @Accessors(fluent = true)
+    private int port;
 
     interface RemoteCallback extends Remote {
         /**
@@ -74,14 +81,6 @@ class BenchmarkRmi implements AutoCloseable {
             this.port = sock.getLocalPort();
             return sock;
         }
-    }
-
-    /**
-     * Port of the RMI registry
-     * @return port
-     */
-    int port() {
-        return port;
     }
 
     /**
@@ -158,7 +157,7 @@ class BenchmarkRmi implements AutoCloseable {
      */
     static RemoteCallback lookup(int port) {
         try {
-            return (RemoteCallback)LocateRegistry.getRegistry(port).lookup(REMOTE_NAME);
+            return (RemoteCallback) LocateRegistry.getRegistry(port).lookup(REMOTE_NAME);
         } catch (IOException | NotBoundException e) {
             throw new RuntimeException(e);
         }

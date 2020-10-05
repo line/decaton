@@ -97,16 +97,12 @@ cd /path/to/custom-runner
 ./gradlew shadowJar
 ```
 
-#### Build a shadowJar of the benchmark project:
-```sh
-cd /path/to/decaton/benchmark
+### Run benchmark:
 
-../gradlew :benchmark:shadowJar
-```
-
-Run:
 ```sh
 export CLASSPATH=/path/to/custom-runner-all.jar
+
+cd /path/to/decaton/benchmark
 
 ./debm.sh \
  --title "Custom" \
