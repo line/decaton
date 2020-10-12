@@ -28,9 +28,12 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 
+import lombok.extern.slf4j.Slf4j;
+
 /**
  * A wrapper of {@link AdminClient} for providing easy operation to manage topics
  */
+@Slf4j
 public class KafkaAdmin implements AutoCloseable {
     private final AdminClient adminClient;
 
@@ -62,11 +65,15 @@ public class KafkaAdmin implements AutoCloseable {
         }
     }
 
-    public void deleteTopics(String... topicNames) {
+    public void deleteTopics(boolean ignoreFailures, String... topicNames) {
         try {
             adminClient.deleteTopics(Arrays.asList(topicNames)).all().get();
         } catch (Exception e) {
-            throw new RuntimeException(e);
+            if (ignoreFailures) {
+                log.info("Failure while deleting topics {}, ignoring", topicNames, e);
+            } else {
+                throw new RuntimeException(e);
+            }
         }
     }
 

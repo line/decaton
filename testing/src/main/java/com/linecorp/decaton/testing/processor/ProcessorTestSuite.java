@@ -204,7 +204,7 @@ public class ProcessorTestSuite {
                 log.info("Closing subscription-{} (threadId: {})", i, subscriptions[i].getId());
                 safeClose(subscriptions[i]);
             }
-            rule.admin().deleteTopics(topic);
+            rule.admin().deleteTopics(true, topic);
         }
     }
 

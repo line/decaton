@@ -48,7 +48,7 @@ public class RetryQueueingTest {
 
     @After
     public void tearDown() {
-        rule.admin().deleteTopics(retryTopic);
+        rule.admin().deleteTopics(true, retryTopic);
     }
 
     private static class ProcessRetriedTask implements ProcessingGuarantee {

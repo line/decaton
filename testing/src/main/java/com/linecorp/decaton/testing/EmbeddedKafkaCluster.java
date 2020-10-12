@@ -37,6 +37,11 @@ import scala.Option;
  */
 @Slf4j
 public class EmbeddedKafkaCluster implements AutoCloseable {
+    /**
+     * Kafka errors if we attempt to delete topics when running on windows;
+     * see https://issues.apache.org/jira/browse/KAFKA-1194
+     */
+    public static final boolean IS_WINDOWS = System.getProperty("os.name").startsWith("Windows");
     private final List<KafkaServer> servers;
     @Getter
     @Accessors(fluent = true)
@@ -63,7 +68,7 @@ public class EmbeddedKafkaCluster implements AutoCloseable {
     private static Properties createBrokerConfig(int brokerId, String zkConnect) {
         return TestUtils.createBrokerConfig(brokerId, zkConnect,
                                             false, // disable controlled shutdown
-                                            true, // enable delete topic
+                                            !IS_WINDOWS, // enable delete topic except on Windows
                                             0, // use random port
 
                                             // << enable only PLAINTEXT
