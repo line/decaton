@@ -35,4 +35,12 @@ public interface DeferredCompletion {
     default <T> CompletableFuture<T> completeWith(CompletableFuture<T> future) {
         return future.whenComplete((r, e) -> complete());
     }
+
+    static DeferredCompletion combine(DeferredCompletion... completions) {
+        return () -> {
+            for (DeferredCompletion completion : completions) {
+                completion.complete();
+            }
+        };
+    }
 }

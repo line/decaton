@@ -44,6 +44,7 @@ import com.linecorp.decaton.processor.Property;
 import com.linecorp.decaton.processor.SubscriptionStateListener;
 import com.linecorp.decaton.processor.metrics.Metrics;
 import com.linecorp.decaton.processor.metrics.Metrics.SubscriptionMetrics;
+import com.linecorp.decaton.processor.runtime.TracingProvider.TraceHandle;
 import com.linecorp.decaton.processor.runtime.Utils.Timer;
 
 import lombok.extern.slf4j.Slf4j;
@@ -90,8 +91,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
                                  Processors<?> processors,
                                  ProcessorProperties props,
                                  SubscriptionStateListener stateListener) {
-        this(scope, consumerSupplier, processors, props, stateListener,
-             new PartitionContexts(scope, processors));
+        this(scope, consumerSupplier, processors, props, stateListener, new PartitionContexts(scope, processors));
     }
 
     private void updateState(SubscriptionStateListener.State newState) {
@@ -355,11 +355,22 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
         records.forEach(record -> {
             TopicPartition tp = new TopicPartition(record.topic(), record.partition());
             PartitionContext context = contexts.get(tp);
-            DeferredCompletion completion = context.registerOffset(record.offset());
+            DeferredCompletion offsetCompletion = context.registerOffset(record.offset());
+            TracingProvider provider = scope.tracingProvider();
+            TraceHandle trace = provider.traceFor(record, scope.subscriptionId());
+            final DeferredCompletion tracingCompletion = () -> {
+                try {
+                    trace.processingCompletion();
+                } catch (Exception e) {
+                    log.error("Exception from tracing", e);
+                }
+            };
+            DeferredCompletion completion = DeferredCompletion.combine(offsetCompletion,
+                                                                       tracingCompletion);
 
             if (blacklistedKeysFilter.shouldTake(record)) {
                 TaskRequest taskRequest =
-                        new TaskRequest(tp, record.offset(), completion, record.key(), record.value());
+                        new TaskRequest(tp, record.offset(), completion, record.key(), trace, record.value());
                 context.addRequest(taskRequest);
             } else {
                 completion.complete();
