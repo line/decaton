@@ -34,6 +34,7 @@ class SubscriptionScope {
     private final String topic;
     private final Optional<RetryConfig> retryConfig;
     private final ProcessorProperties props;
+    private final TracingProvider tracingProvider;
 
     Optional<String> retryTopic() {
         return retryConfig.map(conf -> conf.retryTopicOrDefault(topic));

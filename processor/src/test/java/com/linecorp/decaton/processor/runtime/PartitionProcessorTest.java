@@ -48,7 +48,8 @@ public class PartitionProcessorTest {
             new SubscriptionScope("subscription", "topic",
                                   Optional.empty(),
                                   ProcessorProperties.builder().set(Property.ofStatic(
-                                          ProcessorProperties.CONFIG_PARTITION_CONCURRENCY, 4)).build()),
+                                          ProcessorProperties.CONFIG_PARTITION_CONCURRENCY, 4)).build(),
+                                  NoopTracingProvider.INSTANCE),
             new TopicPartition("topic", 0));
 
     @Mock

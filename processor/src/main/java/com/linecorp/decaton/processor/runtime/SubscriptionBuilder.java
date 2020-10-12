@@ -71,6 +71,11 @@ public class SubscriptionBuilder {
     @Setter(AccessLevel.NONE)
     private RetryConfig retryConfig;
 
+    /**
+     * A {@link TracingProvider} for tracing the execution of record processing
+     */
+    private TracingProvider tracingProvider = NoopTracingProvider.INSTANCE;
+
     public SubscriptionBuilder(String subscriptionId) {
         this.subscriptionId = Objects.requireNonNull(subscriptionId, "subscriptionId");
         propertiesBuilder = ProcessorProperties.builder();
@@ -126,13 +131,24 @@ public class SubscriptionBuilder {
         return this;
     }
 
+    /**
+     * @param tracingProvider Add tracing provider that will be called to trace the execution of processing
+     * each record.
+     * @return updated instance of {@link SubscriptionBuilder}.
+     */
+    public SubscriptionBuilder enableTracing(TracingProvider tracingProvider) {
+        this.tracingProvider = Objects.requireNonNull(tracingProvider, "tracingProvider must not be null");
+        return this;
+    }
+
     public ProcessorSubscription build() {
         ProcessorProperties props = propertiesBuilder.build();
         String topic = processorsBuilder.topic();
         SubscriptionScope scope = new SubscriptionScope(Objects.requireNonNull(subscriptionId),
                                                         topic,
                                                         Optional.ofNullable(retryConfig),
-                                                        props);
+                                                        props,
+                                                        tracingProvider);
 
         Properties consumerConfig = Objects.requireNonNull(this.consumerConfig, "consumerConfig");
         ConsumerSupplier consumerSupplier = new ConsumerSupplier(consumerConfig);

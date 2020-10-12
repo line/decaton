@@ -48,6 +48,7 @@ import com.linecorp.decaton.processor.PropertySupplier;
 import com.linecorp.decaton.processor.SubscriptionStateListener;
 import com.linecorp.decaton.processor.runtime.ProcessorSubscription;
 import com.linecorp.decaton.processor.runtime.RetryConfig;
+import com.linecorp.decaton.processor.runtime.TracingProvider;
 import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
 import com.linecorp.decaton.protocol.Decaton.TaskMetadataProto;
 import com.linecorp.decaton.testing.KafkaClusterRule;
@@ -83,6 +84,7 @@ public class ProcessorTestSuite {
     private final PropertySupplier propertySuppliers;
     private final Set<ProcessingGuarantee> semantics;
     private final SubscriptionStatesListener statesListener;
+    private final TracingProvider tracingProvider;
 
     private static final int NUM_TASKS = 10000;
     private static final int NUM_KEYS = 100;
@@ -126,6 +128,9 @@ public class ProcessorTestSuite {
          * Listen every subscription's state changes
          */
         private SubscriptionStatesListener statesListener;
+
+        private TracingProvider tracingProvider;
+
         /**
          * Exclude semantics from assertion.
          * Intended to be used when we test a feature which breaks subset of semantics
@@ -165,7 +170,8 @@ public class ProcessorTestSuite {
                                           retryConfig,
                                           propertySupplier,
                                           semantics,
-                                          statesListener);
+                                          statesListener,
+                                          tracingProvider);
         }
     }
 
@@ -238,6 +244,9 @@ public class ProcessorTestSuite {
                                           }
                                           if (propertySuppliers != null) {
                                               builder.properties(propertySuppliers);
+                                          }
+                                          if(tracingProvider != null) {
+                                              builder.enableTracing(tracingProvider);
                                           }
                                           builder.stateListener(state -> statesListener.onChange(id, state));
                                       });

@@ -49,7 +49,8 @@ public class ProcessorsTest {
     private static final ThreadScope scope = new ThreadScope(
             new PartitionScope(
                     new SubscriptionScope(SUBSC_ID, topicPartition.topic(),
-                                          Optional.empty(), ProcessorProperties.builder().build()),
+                                          Optional.empty(), ProcessorProperties.builder().build(),
+                                          NoopTracingProvider.INSTANCE),
                     topicPartition),
             0);
 

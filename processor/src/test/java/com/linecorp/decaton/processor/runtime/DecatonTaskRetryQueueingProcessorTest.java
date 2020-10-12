@@ -58,7 +58,8 @@ public class DecatonTaskRetryQueueingProcessorTest {
     private static final SubscriptionScope scope = new SubscriptionScope(
             "subscription", "topic",
             Optional.of(RetryConfig.builder().backoff(RETRY_BACKOFF).build()),
-            ProcessorProperties.builder().build());
+            ProcessorProperties.builder().build(),
+            NoopTracingProvider.INSTANCE);
 
     @Mock
     private ProcessingContext<byte[]> context;
