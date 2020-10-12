@@ -16,7 +16,9 @@
 
 package com.linecorp.decaton.testing.processor;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -24,6 +26,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.function.Consumer;
@@ -34,6 +37,7 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.header.internals.RecordHeader;
 
 import com.google.protobuf.ByteString;
 
@@ -309,8 +313,12 @@ public class ProcessorTestSuite {
                                       .setMetadata(taskMetadata)
                                       .setSerializedTask(ByteString.copyFrom(serializer.serialize(task)))
                                       .build();
+            String traceId = "trace-" + UUID.randomUUID();
+            final RecordHeader traceHeader = new RecordHeader(TestTracingProvider.TRACE_HEADER,
+                                                              traceId.getBytes(StandardCharsets.UTF_8));
             ProducerRecord<String, DecatonTaskRequest> record =
-                    new ProducerRecord<>(topic, null, taskMetadata.getTimestampMillis(), key, request);
+                    new ProducerRecord<>(topic, null, taskMetadata.getTimestampMillis(), key, request,
+                                         Collections.singleton(traceHeader));
             CompletableFuture<RecordMetadata> future = new CompletableFuture<>();
             produceFutures[i] = future;
 
@@ -318,9 +326,11 @@ public class ProcessorTestSuite {
                 if (exception == null) {
                     future.complete(metadata);
                     onProduce.accept(new ProducedRecord(key,
-                                                        new TopicPartition(metadata.topic(), metadata.partition()),
+                                                        new TopicPartition(metadata.topic(),
+                                                                           metadata.partition()),
                                                         metadata.offset(),
-                                                        task));
+                                                        task,
+                                                        traceId));
                 } else {
                     future.completeExceptionally(exception);
                 }

@@ -14,37 +14,27 @@
  * under the License.
  */
 
-package com.linecorp.decaton.testing.processor;
+package com.linecorp.decaton.processor.runtime;
 
-import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 
-import lombok.Value;
-import lombok.experimental.Accessors;
+public enum NoopTracingProvider implements TracingProvider {
+    INSTANCE;
+    public enum NoopTrace implements TraceHandle {
+        INSTANCE;
 
-/**
- * A class which holds produced task along with produce metadata
- */
-@Value
-@Accessors(fluent = true)
-public class ProducedRecord {
-    /**
-     * Key of the task
-     */
-    String key;
-    /**
-     * Topic partition the record was sent to
-     */
-    TopicPartition topicPartition;
-    /**
-     * Offset in the partition
-     */
-    long offset;
-    /**
-     * Produced task
-     */
-    TestTask task;
-    /**
-     * Trace ID
-     */
-    String traceId;
+        @Override
+        public void processingStart() {}
+
+        @Override
+        public void processingReturn() {}
+
+        @Override
+        public void processingCompletion() {}
+    }
+
+    @Override
+    public TraceHandle traceFor(ConsumerRecord<?, ?> record, String subscriptionId) {
+        return NoopTrace.INSTANCE;
+    }
 }
