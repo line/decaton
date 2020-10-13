@@ -49,7 +49,8 @@ public class ExecutionSchedulerTest {
     private static final ThreadScope scope = new ThreadScope(
             new PartitionScope(
                     new SubscriptionScope("subscription", "topic",
-                                          Optional.empty(), ProcessorProperties.builder().build()),
+                                          Optional.empty(), ProcessorProperties.builder().build(),
+                                          NoopTracingProvider.INSTANCE),
                     new TopicPartition("topic", 0)),
             0);
 

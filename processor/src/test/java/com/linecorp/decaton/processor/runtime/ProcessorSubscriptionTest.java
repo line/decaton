@@ -90,7 +90,8 @@ public class ProcessorSubscriptionTest {
                 "subscription",
                 topic,
                 Optional.empty(),
-                ProcessorProperties.builder().build());
+                ProcessorProperties.builder().build(),
+                NoopTracingProvider.INSTANCE);
     }
 
     private static ProcessorSubscription subscription(Consumer<String, byte[]> consumer,

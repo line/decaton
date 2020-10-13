@@ -48,7 +48,7 @@ public class RateLimiterTest {
 
     @After
     public void tearDown() {
-        rule.admin().deleteTopics(topicName);
+        rule.admin().deleteTopics(true, topicName);
     }
 
     @Test(timeout = 30000)

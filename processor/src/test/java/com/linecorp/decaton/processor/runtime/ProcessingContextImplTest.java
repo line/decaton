@@ -81,7 +81,7 @@ public class ProcessingContextImplTest {
     @SafeVarargs
     private static ProcessingContextImpl<HelloTask> context(DecatonProcessor<HelloTask>... processors) {
         TaskRequest request = new TaskRequest(
-                new TopicPartition("topic", 1), 1, null, "TEST", REQUEST.toByteArray());
+                new TopicPartition("topic", 1), 1, null, "TEST", null, REQUEST.toByteArray());
         DecatonTask<HelloTask> task = new DecatonTask<>(
                 TaskMetadata.fromProto(REQUEST.getMetadata()), TASK, TASK.toByteArray());
         return new ProcessingContextImpl<>("subscription", request, task, Arrays.asList(processors), null);
@@ -302,7 +302,7 @@ public class ProcessingContextImplTest {
         DeferredCompletion completion = spy(new MockCompletion());
 
         TaskRequest request = new TaskRequest(
-                new TopicPartition("topic", 1), 1, null, "TEST", REQUEST.toByteArray());
+                new TopicPartition("topic", 1), 1, null, "TEST", null, REQUEST.toByteArray());
         DecatonTask<byte[]> task = new DecatonTask<>(
                 TaskMetadata.fromProto(REQUEST.getMetadata()), TASK.toByteArray(), TASK.toByteArray());
 

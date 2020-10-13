@@ -16,26 +16,50 @@
 
 package com.linecorp.decaton.processor;
 
+import static org.junit.Assert.assertEquals;
+
 import java.time.Duration;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ThreadLocalRandom;
 
 import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Test;
 
+import com.linecorp.decaton.client.DecatonClientBuilder.DefaultKafkaProducerSupplier;
 import com.linecorp.decaton.processor.runtime.RetryConfig;
 import com.linecorp.decaton.testing.KafkaClusterRule;
-import com.linecorp.decaton.testing.TestUtils;
 import com.linecorp.decaton.testing.processor.ProcessedRecord;
 import com.linecorp.decaton.testing.processor.ProcessingGuarantee;
 import com.linecorp.decaton.testing.processor.ProcessingGuarantee.GuaranteeType;
 import com.linecorp.decaton.testing.processor.ProcessorTestSuite;
 import com.linecorp.decaton.testing.processor.ProducedRecord;
+import com.linecorp.decaton.testing.processor.TestTracingProducer;
+import com.linecorp.decaton.testing.processor.TestTracingProvider;
 
-public class RetryQueueingTest {
+public class TracingTest {
+    public static class TracePropagation implements ProcessingGuarantee {
+        private final Map<String, String> producedTraceIds = new ConcurrentHashMap<>();
+        private final Map<String, String> consumedTraceIds = new ConcurrentHashMap<>();
+
+        @Override
+        public void onProduce(ProducedRecord record) {
+            producedTraceIds.put(record.task().getId(), record.traceId());
+        }
+
+        @Override
+        public void onProcess(TaskMetadata metadata, ProcessedRecord record) {
+            consumedTraceIds.put(record.task().getId(), TestTracingProvider.getCurrentTraceId());
+        }
+
+        @Override
+        public void doAssert() {
+            assertEquals(consumedTraceIds, producedTraceIds);
+            TestTracingProvider.assertAllTracesWereClosed();
+        }
+    }
     @ClassRule
     public static KafkaClusterRule rule = new KafkaClusterRule();
 
@@ -51,50 +75,31 @@ public class RetryQueueingTest {
         rule.admin().deleteTopics(true, retryTopic);
     }
 
-    private static class ProcessRetriedTask implements ProcessingGuarantee {
-        private final Set<String> producedIds = Collections.synchronizedSet(new HashSet<>());
-        private final Set<String> processedIds = Collections.synchronizedSet(new HashSet<>());
-
-        @Override
-        public void onProduce(ProducedRecord record) {
-            producedIds.add(record.task().getId());
-        }
-
-        @Override
-        public void onProcess(TaskMetadata metadata, ProcessedRecord record) {
-            if (metadata.retryCount() > 0) {
-                processedIds.add(record.task().getId());
-            }
-        }
-
-        @Override
-        public void doAssert() {
-            TestUtils.awaitCondition("all retried tasks must be processed",
-                                     () -> producedIds.size() == processedIds.size());
-        }
-    }
-
     @Test(timeout = 30000)
-    public void testRetryQueuing() throws Exception {
+    public void testTracePropagation() throws Exception {
         // scenario:
-        //   * all arrived tasks are retried once
+        //   * half of arrived tasks are retried once
         //   * after retried (i.e. retryCount() > 0), no more retry
+        final DefaultKafkaProducerSupplier producerSupplier = new DefaultKafkaProducerSupplier();
         ProcessorTestSuite
                 .builder(rule)
                 .configureProcessorsBuilder(builder -> builder.thenProcess((ctx, task) -> {
-                    if (ctx.metadata().retryCount() == 0) {
+                    if (ctx.metadata().retryCount() == 0 && ThreadLocalRandom.current().nextBoolean()) {
                         ctx.retry();
                     }
                 }))
                 .retryConfig(RetryConfig.builder()
                                         .retryTopic(retryTopic)
                                         .backoff(Duration.ofMillis(10))
+                                        .producerSupplier(config -> new TestTracingProducer(
+                                                producerSupplier.getProducer(config)))
                                         .build())
+                .tracingProvider(new TestTracingProvider())
                 // If we retry tasks, there's no guarantee about ordering nor serial processing
                 .excludeSemantics(
                         GuaranteeType.PROCESS_ORDERING,
                         GuaranteeType.SERIAL_PROCESSING)
-                .customSemantics(new ProcessRetriedTask())
+                .customSemantics(new TracePropagation())
                 .build()
                 .run();
     }

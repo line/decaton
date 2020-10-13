@@ -41,7 +41,7 @@ public class TemporaryTopic implements AutoCloseable {
     @Override
     public void close() throws Exception {
         log.info("Cleaning up topic {}", topic);
-        admin.deleteTopics(topic);
+        admin.deleteTopics(false, topic);
         admin.close();
     }
 

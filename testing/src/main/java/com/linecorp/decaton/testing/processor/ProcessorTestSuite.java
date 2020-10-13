@@ -16,7 +16,9 @@
 
 package com.linecorp.decaton.testing.processor;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -24,6 +26,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.function.Consumer;
@@ -34,6 +37,7 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.header.internals.RecordHeader;
 
 import com.google.protobuf.ByteString;
 
@@ -44,6 +48,7 @@ import com.linecorp.decaton.processor.PropertySupplier;
 import com.linecorp.decaton.processor.SubscriptionStateListener;
 import com.linecorp.decaton.processor.runtime.ProcessorSubscription;
 import com.linecorp.decaton.processor.runtime.RetryConfig;
+import com.linecorp.decaton.processor.runtime.TracingProvider;
 import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
 import com.linecorp.decaton.protocol.Decaton.TaskMetadataProto;
 import com.linecorp.decaton.testing.KafkaClusterRule;
@@ -79,6 +84,7 @@ public class ProcessorTestSuite {
     private final PropertySupplier propertySuppliers;
     private final Set<ProcessingGuarantee> semantics;
     private final SubscriptionStatesListener statesListener;
+    private final TracingProvider tracingProvider;
 
     private static final int NUM_TASKS = 10000;
     private static final int NUM_KEYS = 100;
@@ -122,6 +128,9 @@ public class ProcessorTestSuite {
          * Listen every subscription's state changes
          */
         private SubscriptionStatesListener statesListener;
+
+        private TracingProvider tracingProvider;
+
         /**
          * Exclude semantics from assertion.
          * Intended to be used when we test a feature which breaks subset of semantics
@@ -161,7 +170,8 @@ public class ProcessorTestSuite {
                                           retryConfig,
                                           propertySupplier,
                                           semantics,
-                                          statesListener);
+                                          statesListener,
+                                          tracingProvider);
         }
     }
 
@@ -204,7 +214,7 @@ public class ProcessorTestSuite {
                 log.info("Closing subscription-{} (threadId: {})", i, subscriptions[i].getId());
                 safeClose(subscriptions[i]);
             }
-            rule.admin().deleteTopics(topic);
+            rule.admin().deleteTopics(true, topic);
         }
     }
 
@@ -234,6 +244,9 @@ public class ProcessorTestSuite {
                                           }
                                           if (propertySuppliers != null) {
                                               builder.properties(propertySuppliers);
+                                          }
+                                          if(tracingProvider != null) {
+                                              builder.enableTracing(tracingProvider);
                                           }
                                           builder.stateListener(state -> statesListener.onChange(id, state));
                                       });
@@ -309,8 +322,12 @@ public class ProcessorTestSuite {
                                       .setMetadata(taskMetadata)
                                       .setSerializedTask(ByteString.copyFrom(serializer.serialize(task)))
                                       .build();
+            String traceId = "trace-" + UUID.randomUUID();
+            final RecordHeader traceHeader = new RecordHeader(TestTracingProvider.TRACE_HEADER,
+                                                              traceId.getBytes(StandardCharsets.UTF_8));
             ProducerRecord<String, DecatonTaskRequest> record =
-                    new ProducerRecord<>(topic, null, taskMetadata.getTimestampMillis(), key, request);
+                    new ProducerRecord<>(topic, null, taskMetadata.getTimestampMillis(), key, request,
+                                         Collections.singleton(traceHeader));
             CompletableFuture<RecordMetadata> future = new CompletableFuture<>();
             produceFutures[i] = future;
 
@@ -318,9 +335,11 @@ public class ProcessorTestSuite {
                 if (exception == null) {
                     future.complete(metadata);
                     onProduce.accept(new ProducedRecord(key,
-                                                        new TopicPartition(metadata.topic(), metadata.partition()),
+                                                        new TopicPartition(metadata.topic(),
+                                                                           metadata.partition()),
                                                         metadata.offset(),
-                                                        task));
+                                                        task,
+                                                        traceId));
                 } else {
                     future.completeExceptionally(exception);
                 }

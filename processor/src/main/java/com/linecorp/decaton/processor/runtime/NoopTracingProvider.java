@@ -16,32 +16,25 @@
 
 package com.linecorp.decaton.processor.runtime;
 
-import java.util.Optional;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 
-import com.linecorp.decaton.processor.ProcessorProperties;
+public enum NoopTracingProvider implements TracingProvider {
+    INSTANCE;
+    public enum NoopTrace implements TraceHandle {
+        INSTANCE;
 
-import lombok.AllArgsConstructor;
-import lombok.EqualsAndHashCode;
-import lombok.Getter;
-import lombok.experimental.Accessors;
+        @Override
+        public void processingStart() {}
 
-@AllArgsConstructor
-@EqualsAndHashCode
-@Accessors(fluent = true)
-@Getter
-class SubscriptionScope {
-    private final String subscriptionId;
-    private final String topic;
-    private final Optional<RetryConfig> retryConfig;
-    private final ProcessorProperties props;
-    private final TracingProvider tracingProvider;
+        @Override
+        public void processingReturn() {}
 
-    Optional<String> retryTopic() {
-        return retryConfig.map(conf -> conf.retryTopicOrDefault(topic));
+        @Override
+        public void processingCompletion() {}
     }
 
     @Override
-    public String toString() {
-        return subscriptionId;
+    public TraceHandle traceFor(ConsumerRecord<?, ?> record, String subscriptionId) {
+        return NoopTrace.INSTANCE;
     }
 }

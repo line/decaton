@@ -43,4 +43,8 @@ public class ProducedRecord {
      * Produced task
      */
     TestTask task;
+    /**
+     * Trace ID
+     */
+    String traceId;
 }

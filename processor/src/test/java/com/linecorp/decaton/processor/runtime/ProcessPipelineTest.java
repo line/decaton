@@ -52,6 +52,7 @@ import com.linecorp.decaton.processor.ProcessorProperties;
 import com.linecorp.decaton.processor.TaskExtractor;
 import com.linecorp.decaton.processor.TaskMetadata;
 import com.linecorp.decaton.processor.metrics.Metrics;
+import com.linecorp.decaton.processor.runtime.NoopTracingProvider.NoopTrace;
 import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
 import com.linecorp.decaton.protocol.Decaton.TaskMetadataProto;
 import com.linecorp.decaton.protocol.Sample.HelloTask;
@@ -68,7 +69,8 @@ public class ProcessPipelineTest {
     private static final ThreadScope scope = new ThreadScope(
             new PartitionScope(
                     new SubscriptionScope("subscription", "topic",
-                                          Optional.empty(), ProcessorProperties.builder().build()),
+                                          Optional.empty(), ProcessorProperties.builder().build(),
+                                          NoopTracingProvider.INSTANCE),
                     new TopicPartition("topic", 0)),
             0);
 
@@ -79,7 +81,7 @@ public class ProcessPipelineTest {
 
     private static TaskRequest taskRequest() {
         return new TaskRequest(
-                new TopicPartition("topic", 1), 1, mock(DeferredCompletion.class), "TEST", REQUEST.toByteArray());
+                new TopicPartition("topic", 1), 1, mock(DeferredCompletion.class), "TEST", NoopTrace.INSTANCE, REQUEST.toByteArray());
     }
 
     @Rule
