@@ -79,6 +79,7 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class ProcessorTestSuite {
     private final KafkaClusterRule rule;
+    private final int numTasks;
     private final Function<ProcessorsBuilder<TestTask>, ProcessorsBuilder<TestTask>> configureProcessorsBuilder;
     private final RetryConfig retryConfig;
     private final PropertySupplier propertySuppliers;
@@ -86,7 +87,7 @@ public class ProcessorTestSuite {
     private final SubscriptionStatesListener statesListener;
     private final TracingProvider tracingProvider;
 
-    private static final int NUM_TASKS = 10000;
+    private static final int DEFAULT_NUM_TASKS = 10000;
     private static final int NUM_KEYS = 100;
     private static final int NUM_SUBSCRIPTION_INSTANCES = 3;
     private static final int NUM_PARTITIONS = 8;
@@ -112,6 +113,10 @@ public class ProcessorTestSuite {
         private final Set<GuaranteeType> defaultSemantics = EnumSet.allOf(GuaranteeType.class);
         private final Set<ProcessingGuarantee> customSemantics = new HashSet<>();
 
+        /**
+         * Number of tasks to produce.
+         */
+        private int numTasks = DEFAULT_NUM_TASKS;
         /**
          * Configure test-specific processing logic
          */
@@ -166,6 +171,7 @@ public class ProcessorTestSuite {
             }
 
             return new ProcessorTestSuite(rule,
+                                          numTasks,
                                           configureProcessorsBuilder,
                                           retryConfig,
                                           propertySupplier,
@@ -187,7 +193,7 @@ public class ProcessorTestSuite {
      */
     public void run() {
         String topic = rule.admin().createRandomTopic(NUM_PARTITIONS, 3);
-        CountDownLatch rollingRestartLatch = new CountDownLatch(NUM_TASKS / 2);
+        CountDownLatch rollingRestartLatch = new CountDownLatch(numTasks / 2);
         Producer<String, DecatonTaskRequest> producer = null;
         ProcessorSubscription[] subscriptions = new ProcessorSubscription[NUM_SUBSCRIPTION_INSTANCES];
 
@@ -294,18 +300,18 @@ public class ProcessorTestSuite {
     }
 
     /**
-     * Generate and produce {@link #NUM_TASKS} tasks
+     * Generate and produce {@link #numTasks} tasks
      * @param producer Producer instance to be used
      * @param topic Topic to be sent tasks
      * @param onProduce Callback which is called when a task is complete to be sent
      * @return A CompletableFuture of Map, which holds partition as the key and max offset as the value
      */
-    private static CompletableFuture<Map<Integer, Long>> produceTasks(
+    private CompletableFuture<Map<Integer, Long>> produceTasks(
             Producer<String, DecatonTaskRequest> producer,
             String topic,
             Consumer<ProducedRecord> onProduce) {
         @SuppressWarnings("unchecked")
-        CompletableFuture<RecordMetadata>[] produceFutures = new CompletableFuture[NUM_TASKS];
+        CompletableFuture<RecordMetadata>[] produceFutures = new CompletableFuture[numTasks];
 
         TestTaskSerializer serializer = new TestTaskSerializer();
         for (int i = 0; i < produceFutures.length; i++) {

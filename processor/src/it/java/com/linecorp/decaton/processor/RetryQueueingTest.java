@@ -81,6 +81,7 @@ public class RetryQueueingTest {
         //   * after retried (i.e. retryCount() > 0), no more retry
         ProcessorTestSuite
                 .builder(rule)
+                .numTasks(1000)
                 .configureProcessorsBuilder(builder -> builder.thenProcess((ctx, task) -> {
                     if (ctx.metadata().retryCount() == 0) {
                         ctx.retry();
