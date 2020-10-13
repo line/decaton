@@ -14,7 +14,7 @@
  * under the License.
  */
 
-package com.linecorp.decaton.processor;
+package com.linecorp.decaton.processor.metrics;
 
 import static java.util.Collections.emptyList;
 import static org.junit.Assert.assertEquals;
@@ -35,7 +35,11 @@ import org.junit.Test;
 import com.linecorp.decaton.client.DecatonClient;
 import com.linecorp.decaton.client.kafka.PrintableAsciiStringSerializer;
 import com.linecorp.decaton.client.kafka.ProtocolBuffersKafkaSerializer;
-import com.linecorp.decaton.processor.metrics.Metrics;
+import com.linecorp.decaton.processor.DecatonProcessor;
+import com.linecorp.decaton.processor.ProcessorProperties;
+import com.linecorp.decaton.processor.ProcessorsBuilder;
+import com.linecorp.decaton.processor.Property;
+import com.linecorp.decaton.processor.StaticPropertySupplier;
 import com.linecorp.decaton.processor.runtime.ProcessorSubscription;
 import com.linecorp.decaton.protobuf.ProtocolBuffersDeserializer;
 import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
@@ -68,6 +72,11 @@ public class MetricsTest {
 
     @Test(timeout = 30000)
     public void testMetricsCleanup() throws Exception {
+        // Any neighbor integration tests that ran in the same JVM could leak subscription unclosed
+        // (e.g, test timeout) and that causes this test to fail unless we clear the registry here.
+        Metrics.registry().clear();
+        Metrics.AbstractMetrics.meterRefCounts.clear();
+
         CountDownLatch processLatch = new CountDownLatch(1);
         try (ProcessorSubscription subscription = TestUtils.subscription(
                 rule.bootstrapServers(),
