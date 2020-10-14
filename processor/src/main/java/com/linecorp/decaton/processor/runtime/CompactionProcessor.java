@@ -210,7 +210,8 @@ public class CompactionProcessor<T> implements DecatonProcessor<T> {
                     // By race condition, there is a chance that the scheduled flush for preceding task just
                     // got fired right after this method checked the key's existence at the beginning of this
                     // method.
-                    // In such case we have to re-schedule flush for the new entry that we being added just now.
+                    // In such case we have to re-schedule flush for the new entry that we've been added just
+                    // now.
                     scheduleFlush(context);
                 } else {
                     // Mark previous(looser) task as completed.

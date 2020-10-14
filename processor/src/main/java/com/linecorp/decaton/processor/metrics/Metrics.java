@@ -60,7 +60,7 @@ public class Metrics {
      * the instance from {@link MeterRegistry} when the last reference to the meter closed and disappeared.
      */
     abstract static class AbstractMetrics implements AutoCloseable {
-        private static final Map<Id, AtomicInteger> meterRefCounts = new HashMap<>();
+        static final Map<Id, AtomicInteger> meterRefCounts = new HashMap<>();
         private final List<Meter> meters = new ArrayList<>();
 
         <T extends Meter> T meter(Supplier<T> ctor) {

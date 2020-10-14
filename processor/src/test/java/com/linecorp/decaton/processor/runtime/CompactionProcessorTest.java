@@ -304,11 +304,16 @@ public class CompactionProcessorTest {
         TaskInput task1 = put(processor, "key", 1, null);
         TaskInput task2 = put(processor, "key", 2, null);
 
+        firstFlushComplete.await();
         verify(task1.completion, times(1)).complete();
-        // There must have been two separate tasks scheduled for each task.
-        assertEquals(2, scheduledExecutor.getTaskCount());
-
         secondFlushComplete.await();
         verify(task2.completion, times(1)).complete();
+
+        // There must have been two separate tasks scheduled for each task.
+        // We have to terminate the executor before getting task count since getTaskCount returns approximate
+        // count and while it's running it seems like possible to return an unexpected value.
+        scheduledExecutor.shutdown();
+        scheduledExecutor.awaitTermination(Long.MAX_VALUE, TimeUnit.MILLISECONDS);
+        assertEquals(2, scheduledExecutor.getTaskCount());
     }
 }
