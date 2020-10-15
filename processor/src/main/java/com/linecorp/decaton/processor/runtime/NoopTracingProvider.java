@@ -18,6 +18,8 @@ package com.linecorp.decaton.processor.runtime;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 
+import com.linecorp.decaton.processor.DecatonProcessor;
+
 public enum NoopTracingProvider implements TracingProvider {
     INSTANCE;
     public enum NoopTrace implements TraceHandle {
@@ -31,6 +33,11 @@ public enum NoopTracingProvider implements TracingProvider {
 
         @Override
         public void processingCompletion() {}
+
+        @Override
+        public TraceHandle childFor(DecatonProcessor<?> processor) {
+            return this;
+        }
     }
 
     @Override

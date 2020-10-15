@@ -58,6 +58,8 @@ public interface TracingProvider {
          * Otherwise, this will be invoked by the thread that calls {@link DeferredCompletion#complete()}.
          */
         void processingCompletion();
+
+        TraceHandle childFor(DecatonProcessor<?> processor);
     }
 
     /**

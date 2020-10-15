@@ -19,9 +19,7 @@ package com.linecorp.decaton.processor.runtime;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 
-import brave.Span;
 import brave.kafka.clients.KafkaTracing;
-import brave.propagation.CurrentTraceContext.Scope;
 
 public class BraveTracingProvider implements TracingProvider {
     private final KafkaTracing kafkaTracing;
@@ -32,28 +30,10 @@ public class BraveTracingProvider implements TracingProvider {
 
     @Override
     public TraceHandle traceFor(ConsumerRecord<?, ?> record, String subscriptionId) {
-        final Span span = kafkaTracing.nextSpan(record).name("decaton").tag("subscriptionId", subscriptionId)
-                                      .start();
-        return new TraceHandle() {
-            private Scope scope;
-
-            @Override
-            public void processingStart() {
-                scope = kafkaTracing.messagingTracing().tracing().currentTraceContext().newScope(
-                        span.context());
-                span.annotate("decaton.pipeline.start");
-            }
-
-            @Override
-            public void processingReturn() {
-                span.annotate("decaton.pipeline.return");
-                scope.close();
-            }
-
-            @Override
-            public void processingCompletion() {
-                span.finish();
-            }
-        };
+        return new BraveTraceHandle(
+                kafkaTracing.messagingTracing(),
+                kafkaTracing.nextSpan(record).name("decaton").tag("subscriptionId", subscriptionId)
+                            .start());
     }
+
 }

@@ -25,6 +25,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.header.Header;
 
+import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.runtime.NoopTracingProvider.NoopTrace;
 import com.linecorp.decaton.processor.runtime.TracingProvider;
 
@@ -68,6 +69,11 @@ public class TestTracingProvider implements TracingProvider {
                 @Override
                 public void processingCompletion() {
                     openTraces.remove(recordTraceId);
+                }
+
+                @Override
+                public TraceHandle childFor(DecatonProcessor<?> processor) {
+                    return NoopTrace.INSTANCE;
                 }
             };
         } else {
