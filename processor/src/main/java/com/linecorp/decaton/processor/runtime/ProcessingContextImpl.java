@@ -99,8 +99,13 @@ public class ProcessingContextImpl<T> implements ProcessingContext<T> {
                 this.task.metadata(), taskData, this.task.taskDataBytes());
         DecatonProcessor<P> nextProcessor = downstreams.get(0);
         final TraceHandle parentTrace = request.trace();
-        final TraceHandle traceHandle = null == parentTrace ? NoopTrace.INSTANCE
-                                                            : parentTrace.childFor(nextProcessor);
+        TraceHandle tmpTraceHandle = NoopTrace.INSTANCE;
+        try {
+            tmpTraceHandle = parentTrace.childFor(nextProcessor);
+        } catch(Exception e) {
+            log.error("Exception from tracing", e);
+        }
+        final TraceHandle traceHandle = tmpTraceHandle;
         CompletableFuture<Void> future = new CompletableFuture<>();
         DeferredCompletion nextCompletion = () -> {
             future.complete(null);
@@ -116,13 +121,13 @@ public class ProcessingContextImpl<T> implements ProcessingContext<T> {
 
         try {
             try {
-                traceHandle.processingStart();
+                tmpTraceHandle.processingStart();
             } catch (Exception e) {
                 log.error("Exception from tracing", e);
             }
             nextProcessor.process(nextContext, taskData);
             try {
-                traceHandle.processingReturn();
+                tmpTraceHandle.processingReturn();
             } catch (Exception e) {
                 log.error("Exception from tracing", e);
             }

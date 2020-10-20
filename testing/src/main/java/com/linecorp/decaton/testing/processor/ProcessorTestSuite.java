@@ -46,6 +46,7 @@ import com.linecorp.decaton.processor.ProcessorProperties;
 import com.linecorp.decaton.processor.ProcessorsBuilder;
 import com.linecorp.decaton.processor.PropertySupplier;
 import com.linecorp.decaton.processor.SubscriptionStateListener;
+import com.linecorp.decaton.processor.TestTracingProvider;
 import com.linecorp.decaton.processor.runtime.ProcessorSubscription;
 import com.linecorp.decaton.processor.runtime.RetryConfig;
 import com.linecorp.decaton.processor.runtime.TracingProvider;

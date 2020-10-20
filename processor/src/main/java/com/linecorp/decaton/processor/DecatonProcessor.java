@@ -45,6 +45,13 @@ public interface DecatonProcessor<T> extends AutoCloseable {
     void process(ProcessingContext<T> context, T task) throws InterruptedException;
 
     /**
+     * @return The name of this processor. (Used in Zipkin traces).
+     */
+    default String name() {
+        return getClass().getSimpleName();
+    }
+
+    /**
      * The default close method which doesn't do anything.
      */
     @Override

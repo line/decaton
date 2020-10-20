@@ -28,7 +28,7 @@ class BraveTraceHandle implements TraceHandle {
     private final Span span;
     private Scope scope;
 
-    public BraveTraceHandle(MessagingTracing messagingTracing, Span span) {
+    BraveTraceHandle(MessagingTracing messagingTracing, Span span) {
         this.messagingTracing = messagingTracing;
         this.span = span;
     }
@@ -53,7 +53,7 @@ class BraveTraceHandle implements TraceHandle {
     @Override
     public TraceHandle childFor(DecatonProcessor<?> processor) {
         final Span childSpan = messagingTracing.tracing().tracer().newChild(span.context())
-                                               .name(processor.getClass().getSimpleName())
+                                               .name(processor.name())
                                                .start();
         return new BraveTraceHandle(messagingTracing, childSpan);
     }
