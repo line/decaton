@@ -49,7 +49,7 @@ import com.linecorp.decaton.processor.SubscriptionStateListener;
 import com.linecorp.decaton.processor.TestTracingProvider;
 import com.linecorp.decaton.processor.runtime.ProcessorSubscription;
 import com.linecorp.decaton.processor.runtime.RetryConfig;
-import com.linecorp.decaton.processor.runtime.TracingProvider;
+import com.linecorp.decaton.processor.TracingProvider;
 import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
 import com.linecorp.decaton.protocol.Decaton.TaskMetadataProto;
 import com.linecorp.decaton.testing.KafkaClusterRule;

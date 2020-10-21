@@ -56,7 +56,7 @@ import com.linecorp.decaton.processor.TaskMetadata;
 import com.linecorp.decaton.processor.TestTraceHandle;
 import com.linecorp.decaton.processor.TestTracingProvider;
 import com.linecorp.decaton.processor.runtime.NoopTracingProvider.NoopTrace;
-import com.linecorp.decaton.processor.runtime.TracingProvider.TraceHandle;
+import com.linecorp.decaton.processor.TracingProvider.TraceHandle;
 import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
 import com.linecorp.decaton.protocol.Decaton.TaskMetadataProto;
 import com.linecorp.decaton.protocol.Sample.HelloTask;

@@ -28,7 +28,7 @@ import com.linecorp.decaton.processor.DeferredCompletion;
 import com.linecorp.decaton.processor.ProcessingContext;
 import com.linecorp.decaton.processor.TaskMetadata;
 import com.linecorp.decaton.processor.runtime.NoopTracingProvider.NoopTrace;
-import com.linecorp.decaton.processor.runtime.TracingProvider.TraceHandle;
+import com.linecorp.decaton.processor.TracingProvider.TraceHandle;
 
 import lombok.extern.slf4j.Slf4j;
 

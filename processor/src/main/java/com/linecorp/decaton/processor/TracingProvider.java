@@ -14,7 +14,7 @@
  * under the License.
  */
 
-package com.linecorp.decaton.processor.runtime;
+package com.linecorp.decaton.processor;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 
@@ -22,6 +22,7 @@ import com.linecorp.decaton.client.KafkaProducerSupplier;
 import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.DeferredCompletion;
 import com.linecorp.decaton.processor.ProcessingContext;
+import com.linecorp.decaton.processor.runtime.RetryConfig;
 
 /**
  * Interface for distributed tracing implementations that track traces via Kafka {@link ConsumerRecord}s

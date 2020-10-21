@@ -16,7 +16,7 @@
 
 package com.linecorp.decaton.processor;
 
-import com.linecorp.decaton.processor.runtime.TracingProvider.TraceHandle;
+import com.linecorp.decaton.processor.TracingProvider.TraceHandle;
 
 public class TestTraceHandle implements TraceHandle {
     private final String traceId;

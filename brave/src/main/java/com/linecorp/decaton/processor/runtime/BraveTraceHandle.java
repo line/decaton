@@ -17,7 +17,7 @@
 package com.linecorp.decaton.processor.runtime;
 
 import com.linecorp.decaton.processor.DecatonProcessor;
-import com.linecorp.decaton.processor.runtime.TracingProvider.TraceHandle;
+import com.linecorp.decaton.processor.TracingProvider.TraceHandle;
 
 import brave.Span;
 import brave.messaging.MessagingTracing;

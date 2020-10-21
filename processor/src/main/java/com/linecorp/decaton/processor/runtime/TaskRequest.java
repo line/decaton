@@ -19,7 +19,7 @@ package com.linecorp.decaton.processor.runtime;
 import org.apache.kafka.common.TopicPartition;
 
 import com.linecorp.decaton.processor.DeferredCompletion;
-import com.linecorp.decaton.processor.runtime.TracingProvider.TraceHandle;
+import com.linecorp.decaton.processor.TracingProvider.TraceHandle;
 
 import lombok.Getter;
 import lombok.ToString;

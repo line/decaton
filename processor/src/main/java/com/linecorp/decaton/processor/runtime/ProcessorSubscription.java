@@ -42,9 +42,10 @@ import com.linecorp.decaton.processor.DeferredCompletion;
 import com.linecorp.decaton.processor.ProcessorProperties;
 import com.linecorp.decaton.processor.Property;
 import com.linecorp.decaton.processor.SubscriptionStateListener;
+import com.linecorp.decaton.processor.TracingProvider;
 import com.linecorp.decaton.processor.metrics.Metrics;
 import com.linecorp.decaton.processor.metrics.Metrics.SubscriptionMetrics;
-import com.linecorp.decaton.processor.runtime.TracingProvider.TraceHandle;
+import com.linecorp.decaton.processor.TracingProvider.TraceHandle;
 import com.linecorp.decaton.processor.runtime.Utils.Timer;
 
 import lombok.extern.slf4j.Slf4j;

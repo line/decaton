@@ -19,6 +19,7 @@ package com.linecorp.decaton.processor.runtime;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 
 import com.linecorp.decaton.processor.DecatonProcessor;
+import com.linecorp.decaton.processor.TracingProvider;
 
 public enum NoopTracingProvider implements TracingProvider {
     INSTANCE;

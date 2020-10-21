@@ -19,6 +19,8 @@ package com.linecorp.decaton.processor.runtime;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 
+import com.linecorp.decaton.processor.TracingProvider;
+
 import brave.kafka.clients.KafkaTracing;
 
 public class BraveTracingProvider implements TracingProvider {

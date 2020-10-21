@@ -25,7 +25,6 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.header.Header;
 
 import com.linecorp.decaton.processor.runtime.NoopTracingProvider.NoopTrace;
-import com.linecorp.decaton.processor.runtime.TracingProvider;
 
 import lombok.extern.slf4j.Slf4j;
 
