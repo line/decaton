@@ -20,6 +20,7 @@ import com.linecorp.decaton.processor.runtime.TracingProvider.TraceHandle;
 
 public class TestTraceHandle implements TraceHandle {
     private final String traceId;
+    private String previousTraceId;
 
     public TestTraceHandle(String traceId) {
         this.traceId = traceId;
@@ -28,12 +29,13 @@ public class TestTraceHandle implements TraceHandle {
 
     @Override
     public void processingStart() {
+        previousTraceId = TestTracingProvider.traceId.get();
         TestTracingProvider.traceId.set(traceId);
     }
 
     @Override
     public void processingReturn() {
-        TestTracingProvider.traceId.remove();
+        TestTracingProvider.traceId.set(previousTraceId);
     }
 
     @Override

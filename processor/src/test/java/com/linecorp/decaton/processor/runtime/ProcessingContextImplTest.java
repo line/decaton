@@ -39,7 +39,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.BiConsumer;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.kafka.common.TopicPartition;
 import org.junit.Rule;
@@ -55,6 +55,7 @@ import com.linecorp.decaton.processor.ProcessingContext;
 import com.linecorp.decaton.processor.TaskMetadata;
 import com.linecorp.decaton.processor.TestTraceHandle;
 import com.linecorp.decaton.processor.TestTracingProvider;
+import com.linecorp.decaton.processor.runtime.NoopTracingProvider.NoopTrace;
 import com.linecorp.decaton.processor.runtime.TracingProvider.TraceHandle;
 import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
 import com.linecorp.decaton.protocol.Decaton.TaskMetadataProto;
@@ -65,7 +66,7 @@ public class ProcessingContextImplTest {
         private final String name;
         private final DecatonProcessor<HelloTask> impl;
 
-        public NamedProcessor(String name, DecatonProcessor<HelloTask> impl) {
+        private NamedProcessor(String name, DecatonProcessor<HelloTask> impl) {
             this.name = name;
             this.impl = impl;
         }
@@ -145,60 +146,31 @@ public class ProcessingContextImplTest {
 
     @Test(timeout = 5000)
     public void testPush_Level1_Sync() throws InterruptedException {
-        TraceHandle handle = new TestTraceHandle("testPush_Level1_Sync");
-        try {
-            ProcessingContextImpl<HelloTask> context = context(handle,
-                                                               new NamedProcessor("Noop", (ctx, task) ->
-                                                                       assertEquals("testPush_Level1_Sync-Noop",
-                                                                                    TestTracingProvider
-                                                                                            .getCurrentTraceId())));
-            CompletableFuture<Void> future = context.push(TASK);
-            assertTrue(future.isDone());
-        } finally {
-            handle.processingCompletion();
-        }
-        TestTracingProvider.assertAllTracesWereClosed();
+        ProcessingContextImpl<HelloTask> context = context(NoopTrace.INSTANCE, (ctx, task) -> { /* noop */ });
+
+        CompletableFuture<Void> future = context.push(TASK);
+        assertTrue(future.isDone());
     }
 
     @Test(timeout = 5000)
     public void testPush_Level1_Async() throws InterruptedException {
         CountDownLatch latch = new CountDownLatch(1);
         ExecutorService executor = Executors.newSingleThreadExecutor();
-        TraceHandle handle = new TestTraceHandle("testPush_Level1_Async");
 
-        try {
-            ProcessingContextImpl<HelloTask> context = context(handle,
-                                                               new NamedProcessor("Async", (ctx, task) -> {
-                                                                   DeferredCompletion comp =
-                                                                           ctx.deferCompletion();
-                                                                   assertEquals("testPush_Level1_Async-Async",
-                                                                                TestTracingProvider
-                                                                                        .getCurrentTraceId());
-                                                                   executor.execute(() -> {
-                                                                       // Trace ID is not propagated unless the implementation does so manually
-                                                                       assertNull(TestTracingProvider
-                                                                                          .getCurrentTraceId());
-                                                                       safeAwait(latch);
-                                                                       comp.complete();
-                                                                   });
-                                                               }));
+        ProcessingContextImpl<HelloTask> context = context(NoopTrace.INSTANCE, (ctx, task) -> {
+            DeferredCompletion comp = ctx.deferCompletion();
+            executor.execute(() -> {
+                safeAwait(latch);
+                comp.complete();
+            });
+        });
 
-            CompletableFuture<Void> future = context.push(TASK);
-            assertFalse(future.isDone());
-            // The trace for this processor should no longer be "current"
-            // (because sync execution has finished)
-            // but it is should still be "open"
-            assertNull(TestTracingProvider.getCurrentTraceId());
-            assertThat(TestTracingProvider.getOpenTraces(), hasItem("testPush_Level1_Async-Async"));
+        CompletableFuture<Void> future = context.push(TASK);
+        assertFalse(future.isDone());
 
-            latch.countDown();
-            terminateExecutor(executor);
-            assertTrue(future.isDone());
-            assertThat(TestTracingProvider.getOpenTraces(), not(hasItem("testPush_Level1_Async-Async")));
-        } finally {
-            handle.processingCompletion();
-        }
-        TestTracingProvider.assertAllTracesWereClosed();
+        latch.countDown();
+        terminateExecutor(executor);
+        assertTrue(future.isDone());
     }
 
     /**
@@ -208,23 +180,15 @@ public class ProcessingContextImplTest {
      */
     @Test(timeout = 5000)
     public void testPush_Level1_MultiPush_BothSync() throws InterruptedException {
-        TraceHandle handle = new TestTraceHandle("testPush_Level1_MultiPush_BothSync");
+        ProcessingContextImpl<HelloTask> context = context(NoopTrace.INSTANCE, (ctx, task) -> { /* noop */ });
 
-        try {
-            ProcessingContextImpl<HelloTask> context =
-                    context(handle, (ctx, task) -> { /* noop */ });
+        CompletableFuture<Void> f1 = context.push(TASK);
+        CompletableFuture<Void> f2 = context.push(TASK);
+        CompletableFuture<Void> fAll = CompletableFuture.allOf(f1, f2);
 
-            CompletableFuture<Void> f1 = context.push(TASK);
-            CompletableFuture<Void> f2 = context.push(TASK);
-            CompletableFuture<Void> fAll = CompletableFuture.allOf(f1, f2);
-
-            assertTrue(f1.isDone());
-            assertTrue(f2.isDone());
-            assertTrue(fAll.isDone());
-        } finally {
-            handle.processingCompletion();
-        }
-        TestTracingProvider.assertAllTracesWereClosed();
+        assertTrue(f1.isDone());
+        assertTrue(f2.isDone());
+        assertTrue(fAll.isDone());
     }
 
     /**
@@ -237,60 +201,39 @@ public class ProcessingContextImplTest {
         CountDownLatch[] latches = latches(2);
         ExecutorService[] executors = executors(2);
         AtomicInteger processCount = new AtomicInteger();
-        TraceHandle handle = new TestTraceHandle("testPush_Level1_MultiPush_BothAsync");
 
-        try {
-            ProcessingContextImpl<HelloTask> context = context(handle,
-                                                               (ctx, task) -> {
-                                                                   DeferredCompletion comp =
-                                                                           ctx.deferCompletion();
-                                                                   int i = processCount.getAndIncrement();
-                                                                   executors[i].execute(() -> {
-                                                                       safeAwait(latches[i]);
-                                                                       comp.complete();
-                                                                   });
-                                                               });
+        ProcessingContextImpl<HelloTask> context = context(NoopTrace.INSTANCE, (ctx, task) -> {
+            DeferredCompletion comp = ctx.deferCompletion();
+            int i = processCount.getAndIncrement();
+            executors[i].execute(() -> {
+                safeAwait(latches[i]);
+                comp.complete();
+            });
+        });
 
-            CompletableFuture<Void> f1 = context.push(TASK);
-            CompletableFuture<Void> f2 = context.push(TASK);
-            CompletableFuture<Void> fAll = CompletableFuture.allOf(f1, f2);
+        CompletableFuture<Void> f1 = context.push(TASK);
+        CompletableFuture<Void> f2 = context.push(TASK);
+        CompletableFuture<Void> fAll = CompletableFuture.allOf(f1, f2);
 
-            assertFalse(fAll.isDone());
-            latches[0].countDown();
-            terminateExecutor(executors[0]);
-            assertTrue(f1.isDone());
-            assertFalse(fAll.isDone());
-            latches[1].countDown();
-            terminateExecutor(executors[1]);
-            assertTrue(f2.isDone());
-            assertTrue(fAll.isDone());
-        } finally {
-            handle.processingCompletion();
-        }
-        TestTracingProvider.assertAllTracesWereClosed();
+        assertFalse(fAll.isDone());
+        latches[0].countDown();
+        terminateExecutor(executors[0]);
+        assertTrue(f1.isDone());
+        assertFalse(fAll.isDone());
+        latches[1].countDown();
+        terminateExecutor(executors[1]);
+        assertTrue(f2.isDone());
+        assertTrue(fAll.isDone());
     }
 
     @Test(timeout = 5000)
     public void testPush_Level2_Sync() throws InterruptedException {
-        TraceHandle handle = new TestTraceHandle("testPush_Level2_Sync");
+        ProcessingContextImpl<HelloTask> context = context(NoopTrace.INSTANCE, ProcessingContext::push,
+                                                           processorMock);
 
-        try {
-            ProcessingContextImpl<HelloTask> context =
-                    context(handle, (ctx, task) -> {
-                        try {
-                            ctx.push(TASK);
-                        } catch (InterruptedException e) {
-                            throw new RuntimeException(e);
-                        }
-                    }, processorMock);
-
-            CompletableFuture<Void> future = context.push(TASK);
-            assertTrue(future.isDone());
-            verify(processorMock, times(1)).process(any(), eq(TASK));
-        } finally {
-            handle.processingCompletion();
-        }
-        TestTracingProvider.assertAllTracesWereClosed();
+        CompletableFuture<Void> future = context.push(TASK);
+        assertTrue(future.isDone());
+        verify(processorMock, times(1)).process(any(), eq(TASK));
     }
 
     @Test(timeout = 5000)
@@ -306,20 +249,13 @@ public class ProcessingContextImplTest {
             });
             return null;
         }).when(processorMock).process(any(), eq(TASK));
-        TraceHandle handle = new TestTraceHandle("testPush_Level2_Sync_ThenAsync");
 
-        try {
-            ProcessingContextImpl<HelloTask> context = context(handle, ProcessingContext::push, processorMock);
+        ProcessingContextImpl<HelloTask> context = context(NoopTrace.INSTANCE, ProcessingContext::push,
+                                                           processorMock);
 
-            CompletableFuture<Void> future = context.push(TASK);
-            assertTrue(future.isDone());
-            verify(processorMock, times(1)).process(any(), eq(TASK));
-        } finally {
-            latch.countDown();
-            terminateExecutor(executor);
-            handle.processingCompletion();
-        }
-        TestTracingProvider.assertAllTracesWereClosed();
+        CompletableFuture<Void> future = context.push(TASK);
+        assertTrue(future.isDone());
+        verify(processorMock, times(1)).process(any(), eq(TASK));
     }
 
     @Test(timeout = 5000)
@@ -335,25 +271,19 @@ public class ProcessingContextImplTest {
             });
             return null;
         }).when(processorMock).process(any(), eq(TASK));
-        TraceHandle handle = new TestTraceHandle("testPush_Level2_Async_ThenAsync");
 
-        try {
-            ProcessingContextImpl<HelloTask> context = context(handle,
-                                                               (ctx, task) -> ctx.deferCompletion()
-                                                                                 .completeWith(ctx.push(task)),
-                                                               processorMock);
+        ProcessingContextImpl<HelloTask> context = context(NoopTrace.INSTANCE,
+                                                           (ctx, task) -> ctx.deferCompletion()
+                                                                             .completeWith(ctx.push(task)),
+                                                           processorMock);
 
-            CompletableFuture<Void> future = context.push(TASK);
-            assertFalse(future.isDone());
-            verify(processorMock, times(1)).process(any(), eq(TASK));
+        CompletableFuture<Void> future = context.push(TASK);
+        assertFalse(future.isDone());
+        verify(processorMock, times(1)).process(any(), eq(TASK));
 
-            latch.countDown();
-            terminateExecutor(executor);
-            assertTrue(future.isDone());
-        } finally {
-            handle.processingCompletion();
-        }
-        TestTracingProvider.assertAllTracesWereClosed();
+        latch.countDown();
+        terminateExecutor(executor);
+        assertTrue(future.isDone());
     }
 
     /**
@@ -382,31 +312,25 @@ public class ProcessingContextImplTest {
             });
             return null;
         }).when(processorMock).process(any(), eq(TASK));
-        TraceHandle handle = new TestTraceHandle("testPush_Level2_MultiPush_SyncAndAsync");
 
-        try {
-            ProcessingContextImpl<HelloTask> context = context(handle,
-                                                               (ctx, task) -> ctx.deferCompletion()
-                                                                                 .completeWith(ctx.push(TASK)),
-                                                               processorMock);
+        ProcessingContextImpl<HelloTask> context = context(NoopTrace.INSTANCE,
+                                                           (ctx, task) -> ctx.deferCompletion()
+                                                                             .completeWith(ctx.push(TASK)),
+                                                           processorMock);
 
-            CompletableFuture<Void> f1 = context.push(TASK);
-            CompletableFuture<Void> f2 = context.push(TASK);
-            CompletableFuture<Void> fAll = CompletableFuture.allOf(f1, f2);
+        CompletableFuture<Void> f1 = context.push(TASK);
+        CompletableFuture<Void> f2 = context.push(TASK);
+        CompletableFuture<Void> fAll = CompletableFuture.allOf(f1, f2);
 
-            assertTrue(f1.isDone());
-            assertFalse(f2.isDone());
-            assertFalse(fAll.isDone());
+        assertTrue(f1.isDone());
+        assertFalse(f2.isDone());
+        assertFalse(fAll.isDone());
 
-            latch.countDown();
-            terminateExecutor(executor);
-            assertTrue(f1.isDone());
-            assertTrue(f2.isDone());
-            assertTrue(fAll.isDone());
-        } finally {
-            handle.processingCompletion();
-        }
-        TestTracingProvider.assertAllTracesWereClosed();
+        latch.countDown();
+        terminateExecutor(executor);
+        assertTrue(f1.isDone());
+        assertTrue(f2.isDone());
+        assertTrue(fAll.isDone());
     }
 
     @Test
@@ -419,33 +343,83 @@ public class ProcessingContextImplTest {
                 new TopicPartition("topic", 1), 1, null, "TEST", null, REQUEST.toByteArray());
         DecatonTask<byte[]> task = new DecatonTask<>(
                 TaskMetadata.fromProto(REQUEST.getMetadata()), TASK.toByteArray(), TASK.toByteArray());
-        TraceHandle handle = new TestTraceHandle("testRetry");
 
+        ProcessingContextImpl<byte[]> context =
+                spy(new ProcessingContextImpl<>("subscription", request, task, completion,
+                                                Collections.emptyList(), retryProcessor));
+
+        CompletableFuture<Void> produceFuture = context.retry();
+
+        verify(context, times(1)).deferCompletion();
+        verify(retryProcessor, times(1)).process(any(), eq(TASK.toByteArray()));
+        verify(completion, times(1)).complete();
+        assertTrue(produceFuture.isDone());
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void testRetry_NOT_CONFIGURED() throws InterruptedException {
+        context(NoopTrace.INSTANCE).retry();
+    }
+
+    @Test(timeout = 5000)
+    public void testTrace_Sync() throws InterruptedException {
+        TraceHandle handle = new TestTraceHandle("testTrace_Sync");
+        final AtomicReference<String> traceDuringProcessing = new AtomicReference<>();
         try {
-            ProcessingContextImpl<byte[]> context =
-                    spy(new ProcessingContextImpl<>("subscription", request, task, completion,
-                                                    Collections.emptyList(), retryProcessor));
-
-            CompletableFuture<Void> produceFuture = context.retry();
-
-            verify(context, times(1)).deferCompletion();
-            verify(retryProcessor, times(1)).process(any(), eq(TASK.toByteArray()));
-            verify(completion, times(1)).complete();
-            assertTrue(produceFuture.isDone());
+            ProcessingContextImpl<HelloTask> context = context(handle,
+                                                               new NamedProcessor("Noop", (ctx, task) ->
+                                                                       traceDuringProcessing
+                                                                               .set(TestTracingProvider
+                                                                                            .getCurrentTraceId())
+                                                               ));
+            CompletableFuture<Void> future = context.push(TASK);
+            assertTrue(future.isDone());
+            assertNull(TestTracingProvider.getCurrentTraceId());
+            assertEquals("testTrace_Sync-Noop", traceDuringProcessing.get());
         } finally {
             handle.processingCompletion();
         }
         TestTracingProvider.assertAllTracesWereClosed();
     }
 
-    @Test(expected = IllegalStateException.class)
-    public void testRetry_NOT_CONFIGURED() throws InterruptedException {
-        TraceHandle handle = new TestTraceHandle("testRetry_NOT_CONFIGURED");
+    @Test(timeout = 5000)
+    public void testTrace_Async() throws InterruptedException {
+        CountDownLatch latch = new CountDownLatch(1);
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        TraceHandle handle = new TestTraceHandle("testTrace_Async");
+        final AtomicReference<String> traceDuringSyncProcessing = new AtomicReference<>();
+        final AtomicReference<String> traceDuringAsyncProcessing = new AtomicReference<>();
         try {
-            context(handle).retry();
+            ProcessingContextImpl<HelloTask> context =
+                    context(handle, new NamedProcessor("Async", (ctx, task) -> {
+                        DeferredCompletion comp = ctx.deferCompletion();
+                        traceDuringSyncProcessing.set(TestTracingProvider.getCurrentTraceId());
+                        executor.execute(() -> {
+                            traceDuringAsyncProcessing.set(TestTracingProvider.getCurrentTraceId());
+                            safeAwait(latch);
+                            comp.complete();
+                        });
+                    }));
+
+            CompletableFuture<Void> future = context.push(TASK);
+            assertFalse(future.isDone());
+            // The trace for this processor should no longer be "current"
+            // (because sync execution has finished)
+            // but it is should still be "open"
+            assertNull(TestTracingProvider.getCurrentTraceId());
+            assertThat(TestTracingProvider.getOpenTraces(), hasItem("testTrace_Async-Async"));
+
+            latch.countDown();
+            terminateExecutor(executor);
+            assertTrue(future.isDone());
+            assertThat(TestTracingProvider.getOpenTraces(), not(hasItem("testTrace_Async-Async")));
+
+            assertEquals("testTrace_Async-Async", traceDuringSyncProcessing.get());
+            // Trace ID is not propagated unless the implementation does so manually
+            assertNull(traceDuringAsyncProcessing.get());
         } finally {
             handle.processingCompletion();
-            TestTracingProvider.assertAllTracesWereClosed();
         }
+        TestTracingProvider.assertAllTracesWereClosed();
     }
 }

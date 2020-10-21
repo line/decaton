@@ -16,7 +16,9 @@
 
 package com.linecorp.decaton.processor;
 
+import static org.hamcrest.CoreMatchers.startsWith;
 import static org.junit.Assert.assertEquals;
+import static org.hamcrest.MatcherAssert.assertThat;
 
 import java.time.Duration;
 import java.util.Map;
@@ -37,7 +39,6 @@ import com.linecorp.decaton.testing.processor.ProcessingGuarantee.GuaranteeType;
 import com.linecorp.decaton.testing.processor.ProcessorTestSuite;
 import com.linecorp.decaton.testing.processor.ProducedRecord;
 import com.linecorp.decaton.testing.processor.TestTracingProducer;
-import com.linecorp.decaton.testing.processor.TestTracingProvider;
 
 public class TracingTest {
     public static class TracePropagation implements ProcessingGuarantee {
@@ -56,7 +57,10 @@ public class TracingTest {
 
         @Override
         public void doAssert() {
-            assertEquals(consumedTraceIds, producedTraceIds);
+            assertEquals(producedTraceIds.keySet(), consumedTraceIds.keySet());
+            for (Map.Entry<String, String> e: producedTraceIds.entrySet()) {
+                assertThat(consumedTraceIds.get(e.getKey()), startsWith(e.getValue()));
+            }
             TestTracingProvider.assertAllTracesWereClosed();
         }
     }
