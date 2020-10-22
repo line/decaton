@@ -36,12 +36,11 @@ class BraveTraceHandle implements TraceHandle {
     @Override
     public void processingStart() {
         scope = messagingTracing.tracing().currentTraceContext().newScope(span.context());
-        span.annotate("decaton.start");
     }
 
     @Override
     public void processingReturn() {
-        span.annotate("decaton.return");
+        span.annotate("return");
         scope.close();
     }
 

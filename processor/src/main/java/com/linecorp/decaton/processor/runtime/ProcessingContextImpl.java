@@ -20,7 +20,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Supplier;
 
 import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.DecatonTask;
@@ -34,15 +33,6 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class ProcessingContextImpl<T> implements ProcessingContext<T> {
-    private static <T> T loggingExceptions(Supplier<T> block, String message, T fallback) {
-        try {
-            return block.get();
-        } catch (Exception e) {
-            log.error(message, e);
-            return fallback;
-        }
-    }
-
     private final String subscriptionId;
     private final TaskRequest request;
     private final DecatonTask<T> task;
@@ -109,8 +99,8 @@ public class ProcessingContextImpl<T> implements ProcessingContext<T> {
                 this.task.metadata(), taskData, this.task.taskDataBytes());
         DecatonProcessor<P> nextProcessor = downstreams.get(0);
         final TraceHandle parentTrace = request.trace();
-        final TraceHandle traceHandle = loggingExceptions(() -> parentTrace.childFor(nextProcessor),
-                                                          "Exception from tracing", NoopTrace.INSTANCE);
+        final TraceHandle traceHandle = Utils.loggingExceptions(() -> parentTrace.childFor(nextProcessor),
+                                                                "Exception from tracing", NoopTrace.INSTANCE);
         CompletableFuture<Void> future = new CompletableFuture<>();
         DeferredCompletion nextCompletion = () -> {
             future.complete(null);
