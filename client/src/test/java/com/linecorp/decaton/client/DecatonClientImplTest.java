@@ -22,6 +22,7 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+import java.time.Duration;
 import java.util.Properties;
 import java.util.function.Supplier;
 
@@ -113,5 +114,29 @@ public class DecatonClientImplTest {
         ProducerRecord<String, DecatonTaskRequest> record = captor.getValue();
         assertEquals(5678, record.timestamp().longValue());
         assertEquals(5678, record.value().getMetadata().getTimestampMillis());
+    }
+
+    @Test
+    public void testDelaySetExternally() {
+        client.put("key", HelloTask.getDefaultInstance(), 5678, 1234);
+
+        verify(producer, times(1)).send(captor.capture(), any(Callback.class));
+        ProducerRecord<String, DecatonTaskRequest> record = captor.getValue();
+        assertEquals(5678, record.timestamp().longValue());
+        assertEquals(5678, record.value().getMetadata().getTimestampMillis());
+        assertEquals(6912, record.value().getMetadata().getScheduledTimeMillis());
+    }
+
+    @Test
+    public void testDelayDurationSetExternally() {
+        doReturn(1234L).when(timestampSupplier).get();
+
+        client.put("key", HelloTask.getDefaultInstance(), Duration.ofMinutes(3));
+
+        verify(producer, times(1)).send(captor.capture(), any(Callback.class));
+        ProducerRecord<String, DecatonTaskRequest> record = captor.getValue();
+        assertEquals(1234, record.timestamp().longValue());
+        assertEquals(1234, record.value().getMetadata().getTimestampMillis());
+        assertEquals(181234, record.value().getMetadata().getScheduledTimeMillis());
     }
 }

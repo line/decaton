@@ -16,6 +16,7 @@
 
 package com.linecorp.decaton.client;
 
+import java.time.Duration;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
@@ -65,6 +66,31 @@ public class DecatonClientImpl<T> implements DecatonClient<T> {
         TaskMetadataProto taskMetadata =
                 TaskMetadataProto.newBuilder()
                                  .setTimestampMillis(timestamp)
+                                 .setSourceApplicationId(applicationId)
+                                 .setSourceInstanceId(instanceId)
+                                 .build();
+        DecatonTaskRequest request =
+                DecatonTaskRequest.newBuilder()
+                                  .setMetadata(taskMetadata)
+                                  .setSerializedTask(ByteString.copyFrom(serializedTask))
+                                  .build();
+
+        return producer.sendRequest(key, request);
+    }
+
+    @Override
+    public CompletableFuture<PutTaskResult> put(String key, T task, Duration delayDuration) {
+        return put(key, task, timestampSupplier.get(), delayDuration.toMillis());
+    }
+
+    @Override
+    public CompletableFuture<PutTaskResult> put(String key, T task, long timestamp, long delayInMillis) {
+        byte[] serializedTask = serializer.serialize(task);
+
+        TaskMetadataProto taskMetadata =
+                TaskMetadataProto.newBuilder()
+                                 .setTimestampMillis(timestamp)
+                                 .setScheduledTimeMillis(timestamp + delayInMillis)
                                  .setSourceApplicationId(applicationId)
                                  .setSourceInstanceId(instanceId)
                                  .build();

@@ -16,6 +16,7 @@
 
 package com.linecorp.decaton.client;
 
+import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
@@ -45,6 +46,25 @@ public interface DecatonClient<T> extends AutoCloseable {
      * @return a {@link CompletableFuture} which represents the result of task put.
      */
     CompletableFuture<PutTaskResult> put(String key, T task, long timestamp);
+
+    /**
+     * Put a task onto associated decaton queue with specifying arbitrary delay duration.`
+     * @param key the criteria to shuffle and order tasks. null can be specified if it doesn't matters.
+     * @param task an instance of task. Should never be null.
+     * @param delayDuration duration which is used to set delay of task metadata.
+     * @return a {@link CompletableFuture} which represents the result of task put.
+     */
+    CompletableFuture<PutTaskResult> put(String key, T task, Duration delayDuration);
+
+    /**
+     * Put a task onto associated decaton queue with specifying arbitrary timestamp and arbitrary delay.
+     * @param key the criteria to shuffle and order tasks. null can be specified if it doesn't matters.
+     * @param task an instance of task. Should never be null.
+     * @param timestamp milliseconds precision timestamp which is to be used to set timestamp of task metadata.
+     * @param delayInMillis milliseconds which is used to set delay duration of task metadata.
+     * @return a {@link CompletableFuture} which represents the result of task put.
+     */
+    CompletableFuture<PutTaskResult> put(String key, T task, long timestamp, long delayInMillis);
 
     /**
      * Put a task onto associated decaton queue.
