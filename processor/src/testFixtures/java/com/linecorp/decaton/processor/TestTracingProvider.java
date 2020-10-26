@@ -49,7 +49,7 @@ public class TestTracingProvider implements TracingProvider {
     }
 
     @Override
-    public TraceHandle traceFor(ConsumerRecord<?, ?> record, String subscriptionId) {
+    public RecordTraceHandle traceFor(ConsumerRecord<?, ?> record, String subscriptionId) {
         final Header header = record.headers().lastHeader(TRACE_HEADER);
         if (null != header) {
             final String recordTraceId = new String(header.value(), StandardCharsets.UTF_8);

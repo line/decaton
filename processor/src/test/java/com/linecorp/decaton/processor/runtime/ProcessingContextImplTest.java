@@ -55,8 +55,8 @@ import com.linecorp.decaton.processor.ProcessingContext;
 import com.linecorp.decaton.processor.TaskMetadata;
 import com.linecorp.decaton.processor.TestTraceHandle;
 import com.linecorp.decaton.processor.TestTracingProvider;
+import com.linecorp.decaton.processor.TracingProvider.RecordTraceHandle;
 import com.linecorp.decaton.processor.runtime.NoopTracingProvider.NoopTrace;
-import com.linecorp.decaton.processor.TracingProvider.TraceHandle;
 import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
 import com.linecorp.decaton.protocol.Decaton.TaskMetadataProto;
 import com.linecorp.decaton.protocol.Sample.HelloTask;
@@ -110,7 +110,7 @@ public class ProcessingContextImplTest {
     }
 
     @SafeVarargs
-    private static ProcessingContextImpl<HelloTask> context(TraceHandle traceHandle,
+    private static ProcessingContextImpl<HelloTask> context(RecordTraceHandle traceHandle,
                                                             DecatonProcessor<HelloTask>... processors) {
         TaskRequest request = new TaskRequest(
                 new TopicPartition("topic", 1), 1, null, "TEST",
@@ -363,7 +363,7 @@ public class ProcessingContextImplTest {
 
     @Test(timeout = 5000)
     public void testTrace_Sync() throws InterruptedException {
-        TraceHandle handle = new TestTraceHandle("testTrace_Sync");
+        RecordTraceHandle handle = new TestTraceHandle("testTrace_Sync");
         final AtomicReference<String> traceDuringProcessing = new AtomicReference<>();
         try {
             ProcessingContextImpl<HelloTask> context = context(handle,
@@ -386,7 +386,7 @@ public class ProcessingContextImplTest {
     public void testTrace_Async() throws InterruptedException {
         CountDownLatch latch = new CountDownLatch(1);
         ExecutorService executor = Executors.newSingleThreadExecutor();
-        TraceHandle handle = new TestTraceHandle("testTrace_Async");
+        RecordTraceHandle handle = new TestTraceHandle("testTrace_Async");
         final AtomicReference<String> traceDuringSyncProcessing = new AtomicReference<>();
         final AtomicReference<String> traceDuringAsyncProcessing = new AtomicReference<>();
         try {

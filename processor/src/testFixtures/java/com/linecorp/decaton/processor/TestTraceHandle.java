@@ -16,9 +16,10 @@
 
 package com.linecorp.decaton.processor;
 
-import com.linecorp.decaton.processor.TracingProvider.TraceHandle;
+import com.linecorp.decaton.processor.TracingProvider.ProcessorTraceHandle;
+import com.linecorp.decaton.processor.TracingProvider.RecordTraceHandle;
 
-public class TestTraceHandle implements TraceHandle {
+public class TestTraceHandle implements RecordTraceHandle, ProcessorTraceHandle {
     private final String traceId;
     private String previousTraceId;
 
@@ -44,7 +45,7 @@ public class TestTraceHandle implements TraceHandle {
     }
 
     @Override
-    public TraceHandle childFor(DecatonProcessor<?> processor) {
+    public ProcessorTraceHandle childFor(DecatonProcessor<?> processor) {
         final String childTraceId = traceId + "-" + processor.name();
         return new TestTraceHandle(childTraceId);
     }

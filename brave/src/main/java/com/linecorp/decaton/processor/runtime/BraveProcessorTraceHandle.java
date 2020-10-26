@@ -16,22 +16,28 @@
 
 package com.linecorp.decaton.processor.runtime;
 
-import com.linecorp.decaton.processor.TracingProvider.TraceHandle;
+import com.linecorp.decaton.processor.TracingProvider.ProcessorTraceHandle;
 
 import brave.Span;
 import brave.messaging.MessagingTracing;
+import brave.propagation.CurrentTraceContext.Scope;
 
-class BraveTraceHandle implements TraceHandle {
-    protected final MessagingTracing messagingTracing;
-    protected final Span span;
+final class BraveProcessorTraceHandle extends BraveTraceHandle implements ProcessorTraceHandle {
+    private Scope scope;
 
-    BraveTraceHandle(MessagingTracing messagingTracing, Span span) {
-        this.messagingTracing = messagingTracing;
-        this.span = span;
+    BraveProcessorTraceHandle(MessagingTracing messagingTracing, Span span) {
+        super(messagingTracing, span);
     }
 
     @Override
-    public void processingCompletion() {
-        span.finish();
+    public void processingStart() {
+        scope = messagingTracing.tracing().currentTraceContext().newScope(span.context());
+    }
+
+    @Override
+    public void processingReturn() {
+        span.annotate("return");
+        scope.close();
     }
 }
+

@@ -109,11 +109,6 @@ public class ProcessPipeline<T> implements AutoCloseable {
         Timer timer = Utils.timer();
         CompletableFuture<Void> processResult;
         try (LoggingContext ignored = context.loggingContext()) {
-            try {
-                request.trace().processingStart();
-            } catch(Exception e) {
-                log.error("Exception from tracing", e);
-            }
             processResult = context.push(task.taskData());
         } catch (Exception e) {
             if (e instanceof InterruptedException) {
@@ -126,11 +121,6 @@ public class ProcessPipeline<T> implements AutoCloseable {
                       scope, request, e);
         } finally {
             Duration elapsed = timer.duration();
-            try {
-                request.trace().processingReturn();
-            } catch(Exception e) {
-                log.error("Exception from tracing", e);
-            }
             if (log.isTraceEnabled()) {
                 log.trace("Processing task [{}] took {} ns", request.id(), Utils.formatNanos(elapsed));
             }

@@ -26,8 +26,9 @@ import com.linecorp.decaton.processor.DecatonTask;
 import com.linecorp.decaton.processor.DeferredCompletion;
 import com.linecorp.decaton.processor.ProcessingContext;
 import com.linecorp.decaton.processor.TaskMetadata;
+import com.linecorp.decaton.processor.TracingProvider.ProcessorTraceHandle;
+import com.linecorp.decaton.processor.TracingProvider.RecordTraceHandle;
 import com.linecorp.decaton.processor.runtime.NoopTracingProvider.NoopTrace;
-import com.linecorp.decaton.processor.TracingProvider.TraceHandle;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -98,9 +99,10 @@ public class ProcessingContextImpl<T> implements ProcessingContext<T> {
         DecatonTask<P> task = new DecatonTask<>(
                 this.task.metadata(), taskData, this.task.taskDataBytes());
         DecatonProcessor<P> nextProcessor = downstreams.get(0);
-        final TraceHandle parentTrace = request.trace();
-        final TraceHandle traceHandle = Utils.loggingExceptions(() -> parentTrace.childFor(nextProcessor),
-                                                                "Exception from tracing", NoopTrace.INSTANCE);
+        final RecordTraceHandle parentTrace = request.trace();
+        final ProcessorTraceHandle traceHandle = Utils.loggingExceptions(
+                () -> parentTrace.childFor(nextProcessor),
+                "Exception from tracing", NoopTrace.INSTANCE);
         CompletableFuture<Void> future = new CompletableFuture<>();
         DeferredCompletion nextCompletion = () -> {
             future.complete(null);

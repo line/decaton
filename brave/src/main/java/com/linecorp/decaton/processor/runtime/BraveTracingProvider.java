@@ -25,17 +25,15 @@ import brave.kafka.clients.KafkaTracing;
 
 public class BraveTracingProvider implements TracingProvider {
     private final KafkaTracing kafkaTracing;
-
     public BraveTracingProvider(KafkaTracing kafkaTracing) {
         this.kafkaTracing = kafkaTracing;
     }
 
     @Override
-    public TraceHandle traceFor(ConsumerRecord<?, ?> record, String subscriptionId) {
-        return new BraveTraceHandle(
+    public BraveRecordTraceHandle traceFor(ConsumerRecord<?, ?> record, String subscriptionId) {
+        return new BraveRecordTraceHandle(
                 kafkaTracing.messagingTracing(),
                 kafkaTracing.nextSpan(record).name("decaton").tag("subscriptionId", subscriptionId)
                             .start());
     }
-
 }

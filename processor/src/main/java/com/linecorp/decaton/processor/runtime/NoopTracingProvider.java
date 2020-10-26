@@ -23,7 +23,7 @@ import com.linecorp.decaton.processor.TracingProvider;
 
 public enum NoopTracingProvider implements TracingProvider {
     INSTANCE;
-    public enum NoopTrace implements TraceHandle {
+    public enum NoopTrace implements RecordTraceHandle, ProcessorTraceHandle {
         INSTANCE;
 
         @Override
@@ -36,13 +36,13 @@ public enum NoopTracingProvider implements TracingProvider {
         public void processingCompletion() {}
 
         @Override
-        public TraceHandle childFor(DecatonProcessor<?> processor) {
+        public ProcessorTraceHandle childFor(DecatonProcessor<?> processor) {
             return this;
         }
     }
 
     @Override
-    public TraceHandle traceFor(ConsumerRecord<?, ?> record, String subscriptionId) {
+    public RecordTraceHandle traceFor(ConsumerRecord<?, ?> record, String subscriptionId) {
         return NoopTrace.INSTANCE;
     }
 }

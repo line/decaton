@@ -43,6 +43,7 @@ import com.linecorp.decaton.processor.ProcessorProperties;
 import com.linecorp.decaton.processor.Property;
 import com.linecorp.decaton.processor.SubscriptionStateListener;
 import com.linecorp.decaton.processor.TracingProvider;
+import com.linecorp.decaton.processor.TracingProvider.RecordTraceHandle;
 import com.linecorp.decaton.processor.metrics.Metrics;
 import com.linecorp.decaton.processor.metrics.Metrics.SubscriptionMetrics;
 import com.linecorp.decaton.processor.TracingProvider.TraceHandle;
@@ -358,7 +359,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
             PartitionContext context = contexts.get(tp);
             DeferredCompletion offsetCompletion = context.registerOffset(record.offset());
             TracingProvider provider = scope.tracingProvider();
-            TraceHandle trace = provider.traceFor(record, scope.subscriptionId());
+            RecordTraceHandle trace = provider.traceFor(record, scope.subscriptionId());
             final DeferredCompletion tracingCompletion = () -> {
                 try {
                     trace.processingCompletion();
