@@ -14,14 +14,12 @@
  * under the License.
  */
 
-package com.linecorp.decaton.processor.runtime;
+package com.linecorp.decaton.processor;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 
 import com.linecorp.decaton.client.KafkaProducerSupplier;
-import com.linecorp.decaton.processor.DecatonProcessor;
-import com.linecorp.decaton.processor.DeferredCompletion;
-import com.linecorp.decaton.processor.ProcessingContext;
+import com.linecorp.decaton.processor.runtime.RetryConfig;
 
 /**
  * Interface for distributed tracing implementations that track traces via Kafka {@link ConsumerRecord}s
@@ -33,6 +31,19 @@ import com.linecorp.decaton.processor.ProcessingContext;
  */
 public interface TracingProvider {
     interface TraceHandle {
+        /**
+         * Invoked when processing is considered complete (whether normally or exceptionally).
+         * This will be invoked by the thread that calls {@link DeferredCompletion#complete()},
+         * or a decaton thread if processing was synchronous
+         * (i.e. {@link ProcessingContext#deferCompletion()} was never called).
+         */
+        void processingCompletion();
+    }
+
+    /**
+     * Handle for tracing the execution of a specific {@link DecatonProcessor}
+     */
+    interface ProcessorTraceHandle extends TraceHandle {
         /**
          * Invoked by the thread that will perform processing immediately before processing
          * Implementations may wish to associate the passed trace with the current thread
@@ -49,15 +60,15 @@ public interface TracingProvider {
          * for some time after this call in the case of an asynchronous processor.
          */
         void processingReturn();
+    }
 
+    interface RecordTraceHandle extends TraceHandle {
         /**
-         * Invoked when processing is considered complete (whether normally or exceptionally).
-         * If all processors in the pipeline are synchronous
-         * (i.e. {@link ProcessingContext#deferCompletion()} was never called),
-         * this will be invoked by the thread that performed processing immediately after processingReturn.
-         * Otherwise, this will be invoked by the thread that calls {@link DeferredCompletion#complete()}.
+         * @return A handle for tracing the execution of the given processor.
+         *         The returned trace will likely capture some details of this processor
+         *         e.g. its {@link DecatonProcessor#name()}.
          */
-        void processingCompletion();
+        ProcessorTraceHandle childFor(DecatonProcessor<?> processor);
     }
 
     /**
@@ -67,5 +78,5 @@ public interface TracingProvider {
      * @return an implementation-specific value to use when tracing processing of the given record.
      * The returned {@link TraceHandle} must be thread-safe.
      */
-    TraceHandle traceFor(ConsumerRecord<?, ?> record, String subscriptionId);
+    RecordTraceHandle traceFor(ConsumerRecord<?, ?> record, String subscriptionId);
 }

@@ -16,33 +16,22 @@
 
 package com.linecorp.decaton.processor.runtime;
 
-import org.apache.kafka.clients.consumer.ConsumerRecord;
-
 import com.linecorp.decaton.processor.DecatonProcessor;
-import com.linecorp.decaton.processor.TracingProvider;
+import com.linecorp.decaton.processor.TracingProvider.RecordTraceHandle;
 
-public enum NoopTracingProvider implements TracingProvider {
-    INSTANCE;
-    public enum NoopTrace implements RecordTraceHandle, ProcessorTraceHandle {
-        INSTANCE;
+import brave.Span;
+import brave.messaging.MessagingTracing;
 
-        @Override
-        public void processingStart() {}
-
-        @Override
-        public void processingReturn() {}
-
-        @Override
-        public void processingCompletion() {}
-
-        @Override
-        public ProcessorTraceHandle childFor(DecatonProcessor<?> processor) {
-            return this;
-        }
+final class BraveRecordTraceHandle extends BraveTraceHandle implements RecordTraceHandle {
+    BraveRecordTraceHandle(MessagingTracing messagingTracing, Span span) {
+        super(messagingTracing, span);
     }
 
     @Override
-    public RecordTraceHandle traceFor(ConsumerRecord<?, ?> record, String subscriptionId) {
-        return NoopTrace.INSTANCE;
+    public BraveProcessorTraceHandle childFor(DecatonProcessor<?> processor) {
+        final Span childSpan = messagingTracing.tracing().tracer().newChild(span.context())
+                                               .name(processor.name())
+                                               .start();
+        return new BraveProcessorTraceHandle(messagingTracing, childSpan);
     }
 }

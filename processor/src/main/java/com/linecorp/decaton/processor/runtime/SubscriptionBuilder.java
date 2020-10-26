@@ -36,6 +36,7 @@ import com.linecorp.decaton.processor.ProcessorsBuilder;
 import com.linecorp.decaton.processor.PropertySupplier;
 import com.linecorp.decaton.processor.SubscriptionStateListener;
 import com.linecorp.decaton.processor.TaskMetadata;
+import com.linecorp.decaton.processor.TracingProvider;
 
 import lombok.AccessLevel;
 import lombok.Setter;

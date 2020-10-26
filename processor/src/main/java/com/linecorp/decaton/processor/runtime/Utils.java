@@ -27,13 +27,17 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import lombok.extern.slf4j.Slf4j;
+
 /**
  * A collection of utilities method which are used just internally.
  */
+@Slf4j
 final class Utils {
     private static final Logger logger = LoggerFactory.getLogger(Utils.class);
 
@@ -42,6 +46,15 @@ final class Utils {
             ThreadLocal.withInitial(() -> NumberFormat.getNumberInstance(Locale.US));
 
     private Utils() {}
+
+    static <T> T loggingExceptions(Supplier<T> block, String message, T fallback) {
+        try {
+            return block.get();
+        } catch (Exception e) {
+            log.error(message, e);
+            return fallback;
+        }
+    }
 
     static class Timer {
         private final long t0;

@@ -16,7 +16,12 @@
 
 package com.linecorp.decaton.processor.runtime;
 
+import static org.hamcrest.CoreMatchers.hasItem;
+import static org.hamcrest.CoreMatchers.not;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -34,6 +39,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.kafka.common.TopicPartition;
 import org.junit.Rule;
@@ -47,11 +53,36 @@ import com.linecorp.decaton.processor.DecatonTask;
 import com.linecorp.decaton.processor.DeferredCompletion;
 import com.linecorp.decaton.processor.ProcessingContext;
 import com.linecorp.decaton.processor.TaskMetadata;
+import com.linecorp.decaton.processor.TestTraceHandle;
+import com.linecorp.decaton.processor.TestTracingProvider;
+import com.linecorp.decaton.processor.TracingProvider.RecordTraceHandle;
+import com.linecorp.decaton.processor.runtime.NoopTracingProvider.NoopTrace;
 import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
 import com.linecorp.decaton.protocol.Decaton.TaskMetadataProto;
 import com.linecorp.decaton.protocol.Sample.HelloTask;
 
 public class ProcessingContextImplTest {
+    private static class NamedProcessor implements DecatonProcessor<HelloTask> {
+        private final String name;
+        private final DecatonProcessor<HelloTask> impl;
+
+        private NamedProcessor(String name, DecatonProcessor<HelloTask> impl) {
+            this.name = name;
+            this.impl = impl;
+        }
+
+        @Override
+        public String name() {
+            return name;
+        }
+
+        @Override
+        public void process(ProcessingContext<HelloTask> ctx, HelloTask task)
+                throws InterruptedException {
+            impl.process(ctx, task);
+        }
+    }
+
     private static class MockCompletion implements DeferredCompletion {
         @Override
         public void complete() {
@@ -71,7 +102,7 @@ public class ProcessingContextImplTest {
     public MockitoRule rule = MockitoJUnit.rule();
 
     @Mock
-    private DecatonProcessor<HelloTask> processorMock;
+    private NamedProcessor processorMock;
 
     private static void terminateExecutor(ExecutorService executor) throws InterruptedException {
         executor.shutdown();
@@ -79,9 +110,11 @@ public class ProcessingContextImplTest {
     }
 
     @SafeVarargs
-    private static ProcessingContextImpl<HelloTask> context(DecatonProcessor<HelloTask>... processors) {
+    private static ProcessingContextImpl<HelloTask> context(RecordTraceHandle traceHandle,
+                                                            DecatonProcessor<HelloTask>... processors) {
         TaskRequest request = new TaskRequest(
-                new TopicPartition("topic", 1), 1, null, "TEST", null, REQUEST.toByteArray());
+                new TopicPartition("topic", 1), 1, null, "TEST",
+                traceHandle, REQUEST.toByteArray());
         DecatonTask<HelloTask> task = new DecatonTask<>(
                 TaskMetadata.fromProto(REQUEST.getMetadata()), TASK, TASK.toByteArray());
         return new ProcessingContextImpl<>("subscription", request, task, Arrays.asList(processors), null);
@@ -113,7 +146,7 @@ public class ProcessingContextImplTest {
 
     @Test(timeout = 5000)
     public void testPush_Level1_Sync() throws InterruptedException {
-        ProcessingContextImpl<HelloTask> context = context((ctx, task) -> { /* noop */ });
+        ProcessingContextImpl<HelloTask> context = context(NoopTrace.INSTANCE, (ctx, task) -> { /* noop */ });
 
         CompletableFuture<Void> future = context.push(TASK);
         assertTrue(future.isDone());
@@ -124,7 +157,7 @@ public class ProcessingContextImplTest {
         CountDownLatch latch = new CountDownLatch(1);
         ExecutorService executor = Executors.newSingleThreadExecutor();
 
-        ProcessingContextImpl<HelloTask> context = context((ctx, task) -> {
+        ProcessingContextImpl<HelloTask> context = context(NoopTrace.INSTANCE, (ctx, task) -> {
             DeferredCompletion comp = ctx.deferCompletion();
             executor.execute(() -> {
                 safeAwait(latch);
@@ -147,7 +180,7 @@ public class ProcessingContextImplTest {
      */
     @Test(timeout = 5000)
     public void testPush_Level1_MultiPush_BothSync() throws InterruptedException {
-        ProcessingContextImpl<HelloTask> context = context((ctx, task) -> { /* noop */ });
+        ProcessingContextImpl<HelloTask> context = context(NoopTrace.INSTANCE, (ctx, task) -> { /* noop */ });
 
         CompletableFuture<Void> f1 = context.push(TASK);
         CompletableFuture<Void> f2 = context.push(TASK);
@@ -169,7 +202,7 @@ public class ProcessingContextImplTest {
         ExecutorService[] executors = executors(2);
         AtomicInteger processCount = new AtomicInteger();
 
-        ProcessingContextImpl<HelloTask> context = context((ctx, task) -> {
+        ProcessingContextImpl<HelloTask> context = context(NoopTrace.INSTANCE, (ctx, task) -> {
             DeferredCompletion comp = ctx.deferCompletion();
             int i = processCount.getAndIncrement();
             executors[i].execute(() -> {
@@ -195,7 +228,8 @@ public class ProcessingContextImplTest {
 
     @Test(timeout = 5000)
     public void testPush_Level2_Sync() throws InterruptedException {
-        ProcessingContextImpl<HelloTask> context = context(ProcessingContext::push, processorMock);
+        ProcessingContextImpl<HelloTask> context = context(NoopTrace.INSTANCE, ProcessingContext::push,
+                                                           processorMock);
 
         CompletableFuture<Void> future = context.push(TASK);
         assertTrue(future.isDone());
@@ -216,7 +250,8 @@ public class ProcessingContextImplTest {
             return null;
         }).when(processorMock).process(any(), eq(TASK));
 
-        ProcessingContextImpl<HelloTask> context = context(ProcessingContext::push, processorMock);
+        ProcessingContextImpl<HelloTask> context = context(NoopTrace.INSTANCE, ProcessingContext::push,
+                                                           processorMock);
 
         CompletableFuture<Void> future = context.push(TASK);
         assertTrue(future.isDone());
@@ -237,9 +272,10 @@ public class ProcessingContextImplTest {
             return null;
         }).when(processorMock).process(any(), eq(TASK));
 
-        ProcessingContextImpl<HelloTask> context = context(
-                (ctx, task) -> ctx.deferCompletion().completeWith(ctx.push(task)),
-                processorMock);
+        ProcessingContextImpl<HelloTask> context = context(NoopTrace.INSTANCE,
+                                                           (ctx, task) -> ctx.deferCompletion()
+                                                                             .completeWith(ctx.push(task)),
+                                                           processorMock);
 
         CompletableFuture<Void> future = context.push(TASK);
         assertFalse(future.isDone());
@@ -277,8 +313,10 @@ public class ProcessingContextImplTest {
             return null;
         }).when(processorMock).process(any(), eq(TASK));
 
-        ProcessingContextImpl<HelloTask> context = context(
-                (ctx, task) -> ctx.deferCompletion().completeWith(ctx.push(TASK)), processorMock);
+        ProcessingContextImpl<HelloTask> context = context(NoopTrace.INSTANCE,
+                                                           (ctx, task) -> ctx.deferCompletion()
+                                                                             .completeWith(ctx.push(TASK)),
+                                                           processorMock);
 
         CompletableFuture<Void> f1 = context.push(TASK);
         CompletableFuture<Void> f2 = context.push(TASK);
@@ -320,6 +358,68 @@ public class ProcessingContextImplTest {
 
     @Test(expected = IllegalStateException.class)
     public void testRetry_NOT_CONFIGURED() throws InterruptedException {
-        context().retry();
+        context(NoopTrace.INSTANCE).retry();
+    }
+
+    @Test(timeout = 5000)
+    public void testTrace_Sync() throws InterruptedException {
+        RecordTraceHandle handle = new TestTraceHandle("testTrace_Sync");
+        final AtomicReference<String> traceDuringProcessing = new AtomicReference<>();
+        try {
+            ProcessingContextImpl<HelloTask> context = context(handle,
+                                                               new NamedProcessor("Noop", (ctx, task) ->
+                                                                       traceDuringProcessing
+                                                                               .set(TestTracingProvider
+                                                                                            .getCurrentTraceId())
+                                                               ));
+            CompletableFuture<Void> future = context.push(TASK);
+            assertTrue(future.isDone());
+            assertNull(TestTracingProvider.getCurrentTraceId());
+            assertEquals("testTrace_Sync-Noop", traceDuringProcessing.get());
+        } finally {
+            handle.processingCompletion();
+        }
+        TestTracingProvider.assertAllTracesWereClosed();
+    }
+
+    @Test(timeout = 5000)
+    public void testTrace_Async() throws InterruptedException {
+        CountDownLatch latch = new CountDownLatch(1);
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        RecordTraceHandle handle = new TestTraceHandle("testTrace_Async");
+        final AtomicReference<String> traceDuringSyncProcessing = new AtomicReference<>();
+        final AtomicReference<String> traceDuringAsyncProcessing = new AtomicReference<>();
+        try {
+            ProcessingContextImpl<HelloTask> context =
+                    context(handle, new NamedProcessor("Async", (ctx, task) -> {
+                        DeferredCompletion comp = ctx.deferCompletion();
+                        traceDuringSyncProcessing.set(TestTracingProvider.getCurrentTraceId());
+                        executor.execute(() -> {
+                            traceDuringAsyncProcessing.set(TestTracingProvider.getCurrentTraceId());
+                            safeAwait(latch);
+                            comp.complete();
+                        });
+                    }));
+
+            CompletableFuture<Void> future = context.push(TASK);
+            assertFalse(future.isDone());
+            // The trace for this processor should no longer be "current"
+            // (because sync execution has finished)
+            // but it is should still be "open"
+            assertNull(TestTracingProvider.getCurrentTraceId());
+            assertThat(TestTracingProvider.getOpenTraces(), hasItem("testTrace_Async-Async"));
+
+            latch.countDown();
+            terminateExecutor(executor);
+            assertTrue(future.isDone());
+            assertThat(TestTracingProvider.getOpenTraces(), not(hasItem("testTrace_Async-Async")));
+
+            assertEquals("testTrace_Async-Async", traceDuringSyncProcessing.get());
+            // Trace ID is not propagated unless the implementation does so manually
+            assertNull(traceDuringAsyncProcessing.get());
+        } finally {
+            handle.processingCompletion();
+        }
+        TestTracingProvider.assertAllTracesWereClosed();
     }
 }

@@ -14,11 +14,10 @@
  * under the License.
  */
 
-package com.linecorp.decaton.testing.processor;
-
-import static org.junit.Assert.assertEquals;
+package com.linecorp.decaton.processor;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Collections;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -26,18 +25,21 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.header.Header;
 
 import com.linecorp.decaton.processor.runtime.NoopTracingProvider.NoopTrace;
-import com.linecorp.decaton.processor.runtime.TracingProvider;
 
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class TestTracingProvider implements TracingProvider {
     public static final String TRACE_HEADER = "test-trace-id";
-    private static final ThreadLocal<String> traceId = new ThreadLocal<>();
-    private static final Set<String> openTraces = ConcurrentHashMap.newKeySet();
+    static final ThreadLocal<String> traceId = new ThreadLocal<>();
+    static final Set<String> openTraces = ConcurrentHashMap.newKeySet();
 
     public static String getCurrentTraceId() {
         return traceId.get();
+    }
+
+    public static Set<String> getOpenTraces() {
+        return Collections.unmodifiableSet(openTraces);
     }
 
     public static void assertAllTracesWereClosed() {
@@ -47,31 +49,15 @@ public class TestTracingProvider implements TracingProvider {
     }
 
     @Override
-    public TraceHandle traceFor(ConsumerRecord<?, ?> record, String subscriptionId) {
+    public RecordTraceHandle traceFor(ConsumerRecord<?, ?> record, String subscriptionId) {
         final Header header = record.headers().lastHeader(TRACE_HEADER);
         if (null != header) {
             final String recordTraceId = new String(header.value(), StandardCharsets.UTF_8);
             traceId.set(recordTraceId);
-            openTraces.add(recordTraceId);
-            return new TraceHandle() {
-                @Override
-                public void processingStart() {
-                    traceId.set(recordTraceId);
-                }
-
-                @Override
-                public void processingReturn() {
-                    assertEquals(recordTraceId, traceId.get());
-                    traceId.remove();
-                }
-
-                @Override
-                public void processingCompletion() {
-                    openTraces.remove(recordTraceId);
-                }
-            };
+            return new TestTraceHandle(recordTraceId);
         } else {
             return NoopTrace.INSTANCE;
         }
     }
+
 }

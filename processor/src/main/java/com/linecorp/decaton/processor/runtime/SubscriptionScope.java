@@ -19,6 +19,7 @@ package com.linecorp.decaton.processor.runtime;
 import java.util.Optional;
 
 import com.linecorp.decaton.processor.ProcessorProperties;
+import com.linecorp.decaton.processor.TracingProvider;
 
 import lombok.AllArgsConstructor;
 import lombok.EqualsAndHashCode;

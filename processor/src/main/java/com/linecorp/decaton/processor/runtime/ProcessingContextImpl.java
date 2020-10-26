@@ -26,7 +26,13 @@ import com.linecorp.decaton.processor.DecatonTask;
 import com.linecorp.decaton.processor.DeferredCompletion;
 import com.linecorp.decaton.processor.ProcessingContext;
 import com.linecorp.decaton.processor.TaskMetadata;
+import com.linecorp.decaton.processor.TracingProvider.ProcessorTraceHandle;
+import com.linecorp.decaton.processor.TracingProvider.RecordTraceHandle;
+import com.linecorp.decaton.processor.runtime.NoopTracingProvider.NoopTrace;
 
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
 public class ProcessingContextImpl<T> implements ProcessingContext<T> {
     private final String subscriptionId;
     private final TaskRequest request;
@@ -90,18 +96,38 @@ public class ProcessingContextImpl<T> implements ProcessingContext<T> {
             return CompletableFuture.completedFuture(null);
         }
 
-        CompletableFuture<Void> future = new CompletableFuture<>();
-        DeferredCompletion nextCompletion = () -> future.complete(null);
-
         DecatonTask<P> task = new DecatonTask<>(
                 this.task.metadata(), taskData, this.task.taskDataBytes());
         DecatonProcessor<P> nextProcessor = downstreams.get(0);
+        final RecordTraceHandle parentTrace = request.trace();
+        final ProcessorTraceHandle traceHandle = Utils.loggingExceptions(
+                () -> parentTrace.childFor(nextProcessor),
+                "Exception from tracing", NoopTrace.INSTANCE);
+        CompletableFuture<Void> future = new CompletableFuture<>();
+        DeferredCompletion nextCompletion = () -> {
+            future.complete(null);
+            try {
+                traceHandle.processingCompletion();
+            } catch (Exception e) {
+                log.error("Exception from tracing", e);
+            }
+        };
         ProcessingContextImpl<P> nextContext = new ProcessingContextImpl<>(
                 subscriptionId, request, task, nextCompletion,
                 downstreams.subList(1, downstreams.size()), retryQueueingProcessor);
 
         try {
+            try {
+                traceHandle.processingStart();
+            } catch (Exception e) {
+                log.error("Exception from tracing", e);
+            }
             nextProcessor.process(nextContext, taskData);
+            try {
+                traceHandle.processingReturn();
+            } catch (Exception e) {
+                log.error("Exception from tracing", e);
+            }
         } finally {
             if (!nextContext.completionDeferred.get()) {
                 // If process didn't requested for deferred completion, we understand it as process
