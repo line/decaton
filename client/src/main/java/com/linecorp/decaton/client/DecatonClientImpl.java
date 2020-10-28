@@ -16,7 +16,6 @@
 
 package com.linecorp.decaton.client;
 
-import java.time.Duration;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
@@ -79,24 +78,12 @@ public class DecatonClientImpl<T> implements DecatonClient<T> {
     }
 
     @Override
-    public CompletableFuture<PutTaskResult> put(String key, T task, Duration delayDuration) {
-        return put(key, task, timestampSupplier.get(), delayDuration.toMillis());
-    }
-
-    @Override
-    public CompletableFuture<PutTaskResult> put(String key, T task, long timestamp, long delayInMillis) {
+    public CompletableFuture<PutTaskResult> put(String key, T task, TaskMetaData overrideTaskMetaData) {
         byte[] serializedTask = serializer.serialize(task);
 
-        TaskMetadataProto taskMetadata =
-                TaskMetadataProto.newBuilder()
-                                 .setTimestampMillis(timestamp)
-                                 .setScheduledTimeMillis(timestamp + delayInMillis)
-                                 .setSourceApplicationId(applicationId)
-                                 .setSourceInstanceId(instanceId)
-                                 .build();
         DecatonTaskRequest request =
                 DecatonTaskRequest.newBuilder()
-                                  .setMetadata(taskMetadata)
+                                  .setMetadata(convertToTaskMetadataProto(overrideTaskMetaData))
                                   .setSerializedTask(ByteString.copyFrom(serializedTask))
                                   .build();
 
@@ -117,4 +104,29 @@ public class DecatonClientImpl<T> implements DecatonClient<T> {
     public void close() throws Exception {
         producer.close();
     }
+
+    private TaskMetadataProto convertToTaskMetadataProto(TaskMetaData overrideTaskMetadata) {
+        final TaskMetadataProto.Builder
+                taskMetadataProtoBuilder = TaskMetadataProto.newBuilder()
+                                                            .setSourceApplicationId(applicationId)
+                                                            .setSourceInstanceId(instanceId);
+        if (timestampSupplier != null) {
+            taskMetadataProtoBuilder.setTimestampMillis(timestampSupplier.get());
+        } else {
+            taskMetadataProtoBuilder.setTimestampMillis(System.currentTimeMillis());
+        }
+        if (overrideTaskMetadata == null) {
+            return taskMetadataProtoBuilder.build();
+        }
+        final Long timestamp = overrideTaskMetadata.getTimestamp();
+        final Long scheduledTime = overrideTaskMetadata.getScheduledTime();
+        if (timestamp != null && timestamp > 0) {
+            taskMetadataProtoBuilder.setTimestampMillis(timestamp);
+        }
+        if (scheduledTime != null && scheduledTime > 0) {
+            taskMetadataProtoBuilder.setScheduledTimeMillis(scheduledTime);
+        }
+        return taskMetadataProtoBuilder.build();
+    }
+
 }

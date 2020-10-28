@@ -16,11 +16,13 @@
 
 package com.linecorp.decaton.client;
 
-import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
 import com.linecorp.decaton.common.Serializer;
+
+import lombok.Builder;
+import lombok.Value;
 
 /**
  * Decaton client interface to use for putting tasks on decaton queue.
@@ -51,20 +53,10 @@ public interface DecatonClient<T> extends AutoCloseable {
      * Put a task onto associated decaton queue with specifying arbitrary delay duration.`
      * @param key the criteria to shuffle and order tasks. null can be specified if it doesn't matters.
      * @param task an instance of task. Should never be null.
-     * @param delayDuration duration which is used to set delay of task metadata.
+     * @param overrideTaskMetadata taskMetaData which can be set by users and used for event publish.
      * @return a {@link CompletableFuture} which represents the result of task put.
      */
-    CompletableFuture<PutTaskResult> put(String key, T task, Duration delayDuration);
-
-    /**
-     * Put a task onto associated decaton queue with specifying arbitrary timestamp and arbitrary delay.
-     * @param key the criteria to shuffle and order tasks. null can be specified if it doesn't matters.
-     * @param task an instance of task. Should never be null.
-     * @param timestamp milliseconds precision timestamp which is to be used to set timestamp of task metadata.
-     * @param delayInMillis milliseconds which is used to set delay duration of task metadata.
-     * @return a {@link CompletableFuture} which represents the result of task put.
-     */
-    CompletableFuture<PutTaskResult> put(String key, T task, long timestamp, long delayInMillis);
+    CompletableFuture<PutTaskResult> put(String key, T task, TaskMetaData overrideTaskMetadata);
 
     /**
      * Put a task onto associated decaton queue.
@@ -131,5 +123,14 @@ public interface DecatonClient<T> extends AutoCloseable {
      */
     static <T> DecatonClientBuilder<T> producing(String topic, Serializer<T> serializer) {
         return new DecatonClientBuilder<>(topic, serializer);
+    }
+
+    @Builder
+    @Value
+    class TaskMetaData {
+        /** timestamp of task metadata */
+        Long timestamp;
+        /** scheduledTime for event processing, it should be (timestamp + delayDuration) in milliseconds */
+        Long scheduledTime;
     }
 }

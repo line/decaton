@@ -17,12 +17,13 @@
 package com.linecorp.decaton.client;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
-import java.time.Duration;
 import java.util.Properties;
 import java.util.function.Supplier;
 
@@ -38,6 +39,7 @@ import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
 
+import com.linecorp.decaton.client.DecatonClient.TaskMetaData;
 import com.linecorp.decaton.protobuf.ProtocolBuffersSerializer;
 import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
 import com.linecorp.decaton.protocol.Sample.HelloTask;
@@ -117,8 +119,13 @@ public class DecatonClientImplTest {
     }
 
     @Test
-    public void testDelaySetExternally() {
-        client.put("key", HelloTask.getDefaultInstance(), 5678, 1234);
+    public void testTaskMetaDataSetExternally() {
+        doReturn(1234L).when(timestampSupplier).get();
+
+        client.put("key", HelloTask.getDefaultInstance(), TaskMetaData.builder()
+                                                                      .timestamp(5678L)
+                                                                      .scheduledTime(6912L)
+                                                                      .build());
 
         verify(producer, times(1)).send(captor.capture(), any(Callback.class));
         ProducerRecord<String, DecatonTaskRequest> record = captor.getValue();
@@ -128,15 +135,30 @@ public class DecatonClientImplTest {
     }
 
     @Test
-    public void testDelayDurationSetExternally() {
+    public void testWithScheduledTimeSetExternally() {
         doReturn(1234L).when(timestampSupplier).get();
 
-        client.put("key", HelloTask.getDefaultInstance(), Duration.ofMinutes(3));
+        client.put("key", HelloTask.getDefaultInstance(), TaskMetaData.builder()
+                                                                      .scheduledTime(181234L)
+                                                                      .build());
 
         verify(producer, times(1)).send(captor.capture(), any(Callback.class));
         ProducerRecord<String, DecatonTaskRequest> record = captor.getValue();
         assertEquals(1234, record.timestamp().longValue());
         assertEquals(1234, record.value().getMetadata().getTimestampMillis());
         assertEquals(181234, record.value().getMetadata().getScheduledTimeMillis());
+    }
+
+    @Test
+    public void testWithEmptyTaskMetaDataSetExternally() {
+        doReturn(1234L).when(timestampSupplier).get();
+
+        client.put("key", HelloTask.getDefaultInstance(), TaskMetaData.builder().build());
+
+        verify(producer, times(1)).send(captor.capture(), any(Callback.class));
+        ProducerRecord<String, DecatonTaskRequest> record = captor.getValue();
+        assertTrue(record.value().getMetadata().getTimestampMillis() > 0);
+        assertNotNull(record.value().getMetadata().getSourceApplicationId());
+        assertNotNull(record.value().getMetadata().getSourceInstanceId());
     }
 }

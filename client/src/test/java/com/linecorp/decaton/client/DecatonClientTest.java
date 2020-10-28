@@ -23,7 +23,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doReturn;
 
-import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -56,13 +55,7 @@ public class DecatonClientTest {
         }
 
         @Override
-        public CompletableFuture<PutTaskResult> put(String key, HelloTask task, Duration delayDuration) {
-            return null;
-        }
-
-        @Override
-        public CompletableFuture<PutTaskResult> put(String key, HelloTask task, long timestamp,
-                                                    long delayInMillis) {
+        public CompletableFuture<PutTaskResult> put(String key, HelloTask task, TaskMetaData overrideTaskMetaData) {
             return null;
         }
 
