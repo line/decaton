@@ -55,7 +55,7 @@ public class DecatonClientTest {
         }
 
         @Override
-        public CompletableFuture<PutTaskResult> put(String key, HelloTask task, TaskMetaData overrideTaskMetaData) {
+        public CompletableFuture<PutTaskResult> put(String key, HelloTask task, TaskMetadata overrideTaskMetadata) {
             return null;
         }
 

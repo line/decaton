@@ -60,34 +60,18 @@ public class DecatonClientImpl<T> implements DecatonClient<T> {
 
     @Override
     public CompletableFuture<PutTaskResult> put(String key, T task, long timestamp) {
-        byte[] serializedTask = serializer.serialize(task);
+        TaskMetadataProto taskMetadata = TaskMetadataProto.newBuilder()
+                                                          .setTimestampMillis(timestamp)
+                                                          .setSourceApplicationId(applicationId)
+                                                          .setSourceInstanceId(instanceId)
+                                                          .build();
 
-        TaskMetadataProto taskMetadata =
-                TaskMetadataProto.newBuilder()
-                                 .setTimestampMillis(timestamp)
-                                 .setSourceApplicationId(applicationId)
-                                 .setSourceInstanceId(instanceId)
-                                 .build();
-        DecatonTaskRequest request =
-                DecatonTaskRequest.newBuilder()
-                                  .setMetadata(taskMetadata)
-                                  .setSerializedTask(ByteString.copyFrom(serializedTask))
-                                  .build();
-
-        return producer.sendRequest(key, request);
+        return put(key, task, taskMetadata);
     }
 
     @Override
-    public CompletableFuture<PutTaskResult> put(String key, T task, TaskMetaData overrideTaskMetaData) {
-        byte[] serializedTask = serializer.serialize(task);
-
-        DecatonTaskRequest request =
-                DecatonTaskRequest.newBuilder()
-                                  .setMetadata(convertToTaskMetadataProto(overrideTaskMetaData))
-                                  .setSerializedTask(ByteString.copyFrom(serializedTask))
-                                  .build();
-
-        return producer.sendRequest(key, request);
+    public CompletableFuture<PutTaskResult> put(String key, T task, TaskMetadata overrideTaskMetadata) {
+        return put(key, task, convertToTaskMetadataProto(overrideTaskMetadata));
     }
 
     @Override
@@ -105,27 +89,34 @@ public class DecatonClientImpl<T> implements DecatonClient<T> {
         producer.close();
     }
 
-    private TaskMetadataProto convertToTaskMetadataProto(TaskMetaData overrideTaskMetadata) {
+    private CompletableFuture<PutTaskResult> put(String key, T task, TaskMetadataProto taskMetadataProto) {
+        byte[] serializedTask = serializer.serialize(task);
+
+        DecatonTaskRequest request =
+                DecatonTaskRequest.newBuilder()
+                                  .setMetadata(taskMetadataProto)
+                                  .setSerializedTask(ByteString.copyFrom(serializedTask))
+                                  .build();
+
+        return producer.sendRequest(key, request);
+    }
+
+    private TaskMetadataProto convertToTaskMetadataProto(TaskMetadata overrideTaskMetadata) {
         final TaskMetadataProto.Builder
                 taskMetadataProtoBuilder = TaskMetadataProto.newBuilder()
                                                             .setSourceApplicationId(applicationId)
-                                                            .setSourceInstanceId(instanceId);
-        if (timestampSupplier != null) {
-            taskMetadataProtoBuilder.setTimestampMillis(timestampSupplier.get());
-        } else {
-            taskMetadataProtoBuilder.setTimestampMillis(System.currentTimeMillis());
-        }
-        if (overrideTaskMetadata == null) {
-            return taskMetadataProtoBuilder.build();
-        }
+                                                            .setSourceInstanceId(instanceId)
+                                                            .setTimestampMillis(timestampSupplier.get());
+
         final Long timestamp = overrideTaskMetadata.getTimestamp();
         final Long scheduledTime = overrideTaskMetadata.getScheduledTime();
-        if (timestamp != null && timestamp > 0) {
+        if (timestamp != null) {
             taskMetadataProtoBuilder.setTimestampMillis(timestamp);
         }
-        if (scheduledTime != null && scheduledTime > 0) {
+        if (scheduledTime != null) {
             taskMetadataProtoBuilder.setScheduledTimeMillis(scheduledTime);
         }
+
         return taskMetadataProtoBuilder.build();
     }
 
