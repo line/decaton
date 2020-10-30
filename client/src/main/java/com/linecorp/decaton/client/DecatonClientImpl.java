@@ -60,21 +60,18 @@ public class DecatonClientImpl<T> implements DecatonClient<T> {
 
     @Override
     public CompletableFuture<PutTaskResult> put(String key, T task, long timestamp) {
-        byte[] serializedTask = serializer.serialize(task);
+        TaskMetadataProto taskMetadata = TaskMetadataProto.newBuilder()
+                                                          .setTimestampMillis(timestamp)
+                                                          .setSourceApplicationId(applicationId)
+                                                          .setSourceInstanceId(instanceId)
+                                                          .build();
 
-        TaskMetadataProto taskMetadata =
-                TaskMetadataProto.newBuilder()
-                                 .setTimestampMillis(timestamp)
-                                 .setSourceApplicationId(applicationId)
-                                 .setSourceInstanceId(instanceId)
-                                 .build();
-        DecatonTaskRequest request =
-                DecatonTaskRequest.newBuilder()
-                                  .setMetadata(taskMetadata)
-                                  .setSerializedTask(ByteString.copyFrom(serializedTask))
-                                  .build();
+        return put(key, task, taskMetadata);
+    }
 
-        return producer.sendRequest(key, request);
+    @Override
+    public CompletableFuture<PutTaskResult> put(String key, T task, TaskMetadata overrideTaskMetadata) {
+        return put(key, task, convertToTaskMetadataProto(overrideTaskMetadata));
     }
 
     @Override
@@ -91,4 +88,36 @@ public class DecatonClientImpl<T> implements DecatonClient<T> {
     public void close() throws Exception {
         producer.close();
     }
+
+    private CompletableFuture<PutTaskResult> put(String key, T task, TaskMetadataProto taskMetadataProto) {
+        byte[] serializedTask = serializer.serialize(task);
+
+        DecatonTaskRequest request =
+                DecatonTaskRequest.newBuilder()
+                                  .setMetadata(taskMetadataProto)
+                                  .setSerializedTask(ByteString.copyFrom(serializedTask))
+                                  .build();
+
+        return producer.sendRequest(key, request);
+    }
+
+    private TaskMetadataProto convertToTaskMetadataProto(TaskMetadata overrideTaskMetadata) {
+        final TaskMetadataProto.Builder
+                taskMetadataProtoBuilder = TaskMetadataProto.newBuilder()
+                                                            .setSourceApplicationId(applicationId)
+                                                            .setSourceInstanceId(instanceId)
+                                                            .setTimestampMillis(timestampSupplier.get());
+
+        final Long timestamp = overrideTaskMetadata.getTimestamp();
+        final Long scheduledTime = overrideTaskMetadata.getScheduledTime();
+        if (timestamp != null) {
+            taskMetadataProtoBuilder.setTimestampMillis(timestamp);
+        }
+        if (scheduledTime != null) {
+            taskMetadataProtoBuilder.setScheduledTimeMillis(scheduledTime);
+        }
+
+        return taskMetadataProtoBuilder.build();
+    }
+
 }
