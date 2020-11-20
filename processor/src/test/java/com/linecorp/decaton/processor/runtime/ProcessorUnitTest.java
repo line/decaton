@@ -73,7 +73,7 @@ public class ProcessorUnitTest {
                                   .setSerializedTask(HelloTask.getDefaultInstance().toByteString())
                                   .build();
 
-        taskRequest = new TaskRequest(topicPartition, 1, completion, null, null, request.toByteArray());
+        taskRequest = new TaskRequest(topicPartition, 1, completion, null, null, null, request.toByteArray());
     }
 
     @Test(timeout = 1000)

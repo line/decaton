@@ -21,6 +21,8 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import org.apache.kafka.common.header.Headers;
+
 import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.DecatonTask;
 import com.linecorp.decaton.processor.DeferredCompletion;
@@ -37,6 +39,7 @@ public class ProcessingContextImpl<T> implements ProcessingContext<T> {
     private final String subscriptionId;
     private final TaskRequest request;
     private final DecatonTask<T> task;
+    private final Headers headers;
     private final DeferredCompletion completion;
     private final List<DecatonProcessor<T>> downstreams;
     private final DecatonProcessor<byte[]> retryQueueingProcessor;
@@ -55,6 +58,7 @@ public class ProcessingContextImpl<T> implements ProcessingContext<T> {
         this.downstreams = Collections.unmodifiableList(downstreams);
         this.retryQueueingProcessor = retryQueueingProcessor;
         completionDeferred = new AtomicBoolean();
+        headers = request.headers();
     }
 
     public ProcessingContextImpl(String subscriptionId, TaskRequest request, DecatonTask<T> task,
@@ -71,6 +75,11 @@ public class ProcessingContextImpl<T> implements ProcessingContext<T> {
     @Override
     public String key() {
         return request.key();
+    }
+
+    @Override
+    public Headers headers() {
+        return headers;
     }
 
     @Override
