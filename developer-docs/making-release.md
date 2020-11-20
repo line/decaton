@@ -22,7 +22,7 @@ sonatypePassword=// OSS Sonatype password that you created at step 1
 
 ## Releasing SNAPSHOT version
 
-Run `./script/publish.sh`.
+Run `./scripts/publish.sh`.
 
 NOTE: It takes some moment (~1h) until the published version becomes visible to users.
 
