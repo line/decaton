@@ -81,7 +81,7 @@ public class ProcessPipelineTest {
 
     private static TaskRequest taskRequest() {
         return new TaskRequest(
-                new TopicPartition("topic", 1), 1, mock(DeferredCompletion.class), "TEST", NoopTrace.INSTANCE, REQUEST.toByteArray());
+                new TopicPartition("topic", 1), 1, mock(DeferredCompletion.class), "TEST", null, NoopTrace.INSTANCE, REQUEST.toByteArray());
     }
 
     @Rule

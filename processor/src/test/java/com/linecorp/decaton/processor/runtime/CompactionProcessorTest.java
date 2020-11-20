@@ -104,7 +104,7 @@ public class CompactionProcessorTest {
                 taskData,
                 taskData.toByteArray());
         TaskRequest request = new TaskRequest(
-                new TopicPartition("topic", 1), 1, null, name, null, null);
+                new TopicPartition("topic", 1), 1, null, name, null, null, null);
         ProcessingContext<HelloTask> context =
                 spy(new ProcessingContextImpl<>("subscription", request, task, completion,
                                                 Collections.singletonList(downstream),

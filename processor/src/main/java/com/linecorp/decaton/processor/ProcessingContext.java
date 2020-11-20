@@ -18,6 +18,9 @@ package com.linecorp.decaton.processor;
 
 import java.util.concurrent.CompletableFuture;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.header.Headers;
+
 import com.linecorp.decaton.processor.runtime.LoggingContext;
 
 public interface ProcessingContext<T> {
@@ -34,6 +37,12 @@ public interface ProcessingContext<T> {
      * task.
      */
     String key();
+
+    /**
+     * Returns the {@link Headers} which is associated to the source {@link ConsumerRecord} of the task.
+     * @return an instance of {@link Headers}
+     */
+    Headers headers();
 
     /**
      * Returns the subscriptionId of the current processing context.
