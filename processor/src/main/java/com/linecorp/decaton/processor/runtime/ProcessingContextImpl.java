@@ -39,7 +39,6 @@ public class ProcessingContextImpl<T> implements ProcessingContext<T> {
     private final String subscriptionId;
     private final TaskRequest request;
     private final DecatonTask<T> task;
-    private final Headers headers;
     private final DeferredCompletion completion;
     private final List<DecatonProcessor<T>> downstreams;
     private final DecatonProcessor<byte[]> retryQueueingProcessor;
@@ -58,7 +57,6 @@ public class ProcessingContextImpl<T> implements ProcessingContext<T> {
         this.downstreams = Collections.unmodifiableList(downstreams);
         this.retryQueueingProcessor = retryQueueingProcessor;
         completionDeferred = new AtomicBoolean();
-        headers = request.headers();
     }
 
     public ProcessingContextImpl(String subscriptionId, TaskRequest request, DecatonTask<T> task,
@@ -79,7 +77,7 @@ public class ProcessingContextImpl<T> implements ProcessingContext<T> {
 
     @Override
     public Headers headers() {
-        return headers;
+        return request.headers();
     }
 
     @Override
