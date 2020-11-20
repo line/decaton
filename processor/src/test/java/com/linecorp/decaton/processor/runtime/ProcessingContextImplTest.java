@@ -340,8 +340,7 @@ public class ProcessingContextImplTest {
         DeferredCompletion completion = spy(new MockCompletion());
 
         TaskRequest request = new TaskRequest(
-                new TopicPartition("topic", 1), 1, null, "TEST",
-                null, null, REQUEST.toByteArray());
+                new TopicPartition("topic", 1), 1, null, "TEST", null, null, REQUEST.toByteArray());
         DecatonTask<byte[]> task = new DecatonTask<>(
                 TaskMetadata.fromProto(REQUEST.getMetadata()), TASK.toByteArray(), TASK.toByteArray());
 
