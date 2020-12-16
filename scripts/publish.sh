@@ -87,6 +87,6 @@ else
     fi
 
     echo "Publishing Decaton $version"
-    ./gradlew -P snapshot=false clean build publish
+    ./gradlew -P snapshot=false clean build validateDocs publish
     bump_version $version
 fi
