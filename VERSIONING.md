@@ -52,7 +52,14 @@ You can see the list of changes that has been made by particular version at [Rel
 Guide for developers
 ====================
 
-It is a developer's (and reviewer's) responsibility to properly bump the required part of the version number along with the patch for the intended changes.
-Upon submitting a PR, one should include the diff for changing the version according to the content of the patch.
-For example, if the current version is `1.2.0`, if the PR contains a newly added public API that doesn't break backward compatibility, the PR should bump the version to `1.3.0`.
-If there is a conflict with changing the version upon merging PR, the greater version should always be adopted. For example, if the previously merged PR bumped the version to `1.3.0` but the PR now being merged has set to `1.2.1`, then the author of the PR being merged should be rebased onto the latest master to ensure the version is fixed at `1.3.0`.
+It is a developer's (and reviewer's) responsibility to mark each PR with labels indicating three types of changes that the PR introduces.
+* PR containing a breaking change should be tagged by label: `breaking change`
+* PR containing a new feature should be tagged by label: `new feature`
+* PR containing a bugfix should be tagged by label: `bugfix`
+
+It is a release handler's responsibility to properly bump the required part of the version number along with the patch for the intended changes.
+Release handler should go through the PRs that will be included in the upcoming release, and decide which part of the version to increment.
+Say the current version is `1.2.3`,
+* If any of PR introduces a breaking change, the next version is `2.0.0`
+* If any of PR introduces a backward-compatible new feature/functionality the next version is `1.3.0`
+* If any of PR introduces a backward-compatible bugfixes, the next version is `1.2.4`
