@@ -39,7 +39,7 @@ import com.linecorp.decaton.processor.Property;
 import com.linecorp.decaton.processor.runtime.AssignmentManager.AssignmentConfig;
 import com.linecorp.decaton.processor.runtime.AssignmentManager.AssignmentStore;
 import com.linecorp.decaton.processor.runtime.CommitManager.OffsetsStore;
-import com.linecorp.decaton.processor.runtime.TaskConsumer.PartitionStates;
+import com.linecorp.decaton.processor.runtime.ConsumeManager.PartitionStates;
 import com.linecorp.decaton.processor.runtime.Utils.Task;
 
 public class PartitionContexts implements OffsetsStore, AssignmentStore, PartitionStates {

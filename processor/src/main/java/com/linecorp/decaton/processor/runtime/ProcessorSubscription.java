@@ -39,7 +39,7 @@ import com.linecorp.decaton.processor.TracingProvider;
 import com.linecorp.decaton.processor.TracingProvider.RecordTraceHandle;
 import com.linecorp.decaton.processor.metrics.Metrics;
 import com.linecorp.decaton.processor.metrics.Metrics.SubscriptionMetrics;
-import com.linecorp.decaton.processor.runtime.TaskConsumer.ConsumerHandler;
+import com.linecorp.decaton.processor.runtime.ConsumeManager.ConsumerHandler;
 import com.linecorp.decaton.processor.runtime.Utils.Timer;
 
 import lombok.extern.slf4j.Slf4j;
@@ -56,7 +56,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
     private final SubscriptionMetrics metrics;
     private final CommitManager commitManager;
     private final AssignmentManager assignManager;
-    private final TaskConsumer taskConsumer;
+    private final ConsumeManager consumeManager;
 
     class Handler implements ConsumerHandler {
         @Override
@@ -167,7 +167,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
         metrics = Metrics.withTags("subscription", scope.subscriptionId()).new SubscriptionMetrics();
 
         Consumer<String, byte[]> consumer = consumerSupplier.get();
-        taskConsumer = new TaskConsumer(consumer, contexts, new Handler(), metrics);
+        consumeManager = new ConsumeManager(consumer, contexts, new Handler(), metrics);
         commitManager = new CommitManager(
                 consumer, props.get(ProcessorProperties.CONFIG_COMMIT_INTERVAL_MS), contexts);
         assignManager = new AssignmentManager(contexts);
@@ -207,11 +207,11 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
     @Override
     public void run() {
         updateState(SubscriptionStateListener.State.INITIALIZING);
-        taskConsumer.init(subscribeTopics());
+        consumeManager.init(subscribeTopics());
 
         try {
             while (!terminated.get()) {
-                taskConsumer.poll();
+                consumeManager.poll();
 
                 Timer timer = Utils.timer();
                 contexts.maybeHandlePropertyReload();
@@ -241,7 +241,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
 
             processors.destroySingletonScope(scope.subscriptionId());
 
-            taskConsumer.close();
+            consumeManager.close();
             log.info("ProcessorSubscription {} terminated in {} ms", scope,
                      timer.elapsedMillis());
 

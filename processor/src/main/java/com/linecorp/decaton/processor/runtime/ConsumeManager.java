@@ -28,6 +28,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.common.TopicPartition;
 
 import com.linecorp.decaton.processor.metrics.Metrics.SubscriptionMetrics;
+import com.linecorp.decaton.processor.runtime.ProcessorSubscription.Handler;
 import com.linecorp.decaton.processor.runtime.Utils.Timer;
 
 import lombok.extern.slf4j.Slf4j;
@@ -36,7 +37,7 @@ import lombok.extern.slf4j.Slf4j;
  * Implements workflow of consuming tasks from Kafka.
  */
 @Slf4j
-class TaskConsumer implements AutoCloseable {
+class ConsumeManager implements AutoCloseable {
     private static final long POLL_TIMEOUT_MILLIS = 100;
 
     /**
@@ -101,10 +102,10 @@ class TaskConsumer implements AutoCloseable {
     private final SubscriptionMetrics metrics;
     private final AtomicBoolean consumerClosing;
 
-    TaskConsumer(Consumer<String, byte[]> consumer,
-                 PartitionStates states,
-                 ConsumerHandler handler,
-                 SubscriptionMetrics metrics) {
+    ConsumeManager(Consumer<String, byte[]> consumer,
+                   PartitionStates states,
+                   ConsumerHandler handler,
+                   SubscriptionMetrics metrics) {
         this.consumer = consumer;
         this.states = states;
         this.handler = handler;
@@ -112,6 +113,10 @@ class TaskConsumer implements AutoCloseable {
         consumerClosing = new AtomicBoolean();
     }
 
+    /**
+     * Initialize consumer to being fetching records from the given topics.
+     * @param subscribeTopics list of topics to fetch records from.
+     */
     void init(Collection<String> subscribeTopics) {
         List<TopicPartition> pausedPartitions = new ArrayList<>();
         consumer.subscribe(subscribeTopics, new ConsumerRebalanceListener() {
@@ -144,6 +149,16 @@ class TaskConsumer implements AutoCloseable {
         });
     }
 
+    /**
+     * Run a single {@link Consumer#poll(long)} to obtain records from subscribing topics.
+     * For each consumed record, {@link Handler#receive(ConsumerRecord)} called.
+     * After finish processing consumed records, {@link PartitionStates#updatePartitionsStatus()} called.
+     * According to the values from {@link PartitionStates#partitionsNeedsPause()} and
+     * {@link PartitionStates#partitionsNeedsResume()}, the underlying consumer is instructed to stop/resume
+     * fetching records from particular partitions and {@link PartitionStates#partitionsPaused(List)} and/or
+     * {@link PartitionStates#partitionsResumed(List)} called when there were some partitions newly
+     * paused/resumed.
+     */
     void poll() {
         Timer timer = Utils.timer();
         ConsumerRecords<String, byte[]> records = consumer.poll(POLL_TIMEOUT_MILLIS);
