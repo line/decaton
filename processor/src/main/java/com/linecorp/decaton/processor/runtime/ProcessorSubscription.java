@@ -124,16 +124,10 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
                 // If it fails even at 2nd attempt... no idea let it die.
                 offsetCompletion = context.registerOffset(record.offset());
             }
+
             TracingProvider provider = scope.tracingProvider();
             RecordTraceHandle trace = provider.traceFor(record, scope.subscriptionId());
-            final DeferredCompletion tracingCompletion = () -> {
-                try {
-                    trace.processingCompletion();
-                } catch (Exception e) {
-                    log.error("Exception from tracing", e);
-                }
-            };
-            DeferredCompletion completion = DeferredCompletion.combine(offsetCompletion, tracingCompletion);
+            DeferredCompletion completion = wrapForTracing(offsetCompletion, trace);
 
             if (blacklistedKeysFilter.shouldTake(record)) {
                 TaskRequest taskRequest =
@@ -143,6 +137,19 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
             } else {
                 completion.complete();
             }
+        }
+
+        private DeferredCompletion wrapForTracing(DeferredCompletion offsetCompletion,
+                                                  RecordTraceHandle trace) {
+            return () -> {
+                // Marking offset as complete should be done with highest priority.
+                offsetCompletion.complete();
+                try {
+                    trace.processingCompletion();
+                } catch (Exception e) {
+                    log.error("Exception from tracing", e);
+                }
+            };
         }
     }
 
