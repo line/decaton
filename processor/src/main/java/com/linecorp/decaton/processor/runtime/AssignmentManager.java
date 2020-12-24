@@ -42,8 +42,7 @@ class AssignmentManager {
      */
     @Value
     @Accessors(fluent = true)
-    static
-    class AssignmentConfig {
+    static class AssignmentConfig {
         boolean paused;
     }
 
