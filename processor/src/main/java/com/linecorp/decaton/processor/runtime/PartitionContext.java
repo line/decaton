@@ -106,10 +106,6 @@ public class PartitionContext {
         metrics.close();
     }
 
-    public boolean isOffsetRegressing(long offset) {
-        return commitControl.isRegressing(offset);
-    }
-
     public void addRequest(TaskRequest request) {
         partitionProcessor.addTask(request);
         if (lastQueueStarvedTime > 0) {

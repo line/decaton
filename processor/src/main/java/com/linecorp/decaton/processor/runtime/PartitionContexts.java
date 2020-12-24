@@ -17,15 +17,17 @@
 package com.linecorp.decaton.processor.runtime;
 
 import static java.util.stream.Collectors.toList;
-import static java.util.stream.Collectors.toSet;
+import static java.util.stream.Collectors.toMap;
 
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Function;
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
@@ -34,9 +36,13 @@ import org.slf4j.LoggerFactory;
 
 import com.linecorp.decaton.processor.ProcessorProperties;
 import com.linecorp.decaton.processor.Property;
+import com.linecorp.decaton.processor.runtime.AssignmentManager.AssignmentConfig;
+import com.linecorp.decaton.processor.runtime.AssignmentManager.AssignmentStore;
+import com.linecorp.decaton.processor.runtime.CommitManager.OffsetsStore;
+import com.linecorp.decaton.processor.runtime.ConsumeManager.PartitionStates;
 import com.linecorp.decaton.processor.runtime.Utils.Task;
 
-public class PartitionContexts {
+public class PartitionContexts implements OffsetsStore, AssignmentStore, PartitionStates {
     private static final Logger logger = LoggerFactory.getLogger(PartitionContexts.class);
 
     private final SubscriptionScope scope;
@@ -74,6 +80,28 @@ public class PartitionContexts {
         return contexts.get(tp);
     }
 
+    @Override
+    public Set<TopicPartition> assignedPartitions() {
+        return contexts.keySet();
+    }
+
+    @Override
+    public void addPartitions(Map<TopicPartition, AssignmentConfig> partitions) {
+        for (Entry<TopicPartition, AssignmentConfig> entry : partitions.entrySet()) {
+            TopicPartition tp = entry.getKey();
+            AssignmentConfig conf = entry.getValue();
+            initContext(tp, conf.paused());
+        }
+    }
+
+    @Override
+    public void removePartition(Collection<TopicPartition> partitions) {
+        destroyProcessors(partitions);
+        for (TopicPartition tp : partitions) {
+            contexts.remove(tp).resume(); // Partition might have been paused to resume to cleanup some states.
+        }
+    }
+
     /**
      * Instantiate new {@link PartitionContext} and put it to contexts
      *
@@ -81,7 +109,8 @@ public class PartitionContexts {
      * @param paused denotes the instantiated partition should be paused
      * @return instantiated context
      */
-    public PartitionContext initContext(TopicPartition tp, boolean paused) {
+    // visible for testing
+    PartitionContext initContext(TopicPartition tp, boolean paused) {
         PartitionContext context = instantiateContext(tp);
         if (paused) {
             context.pause();
@@ -91,25 +120,15 @@ public class PartitionContexts {
     }
 
     /**
-     * Destroy processors for passed partitions and remove those from contexts
-     * @param partitions partitions to be destroyed
-     */
-    public void dropContexts(Collection<TopicPartition> partitions) {
-        destroyProcessors(partitions);
-        for (TopicPartition tp : partitions) {
-            contexts.remove(tp).resume(); // Partition might have been paused to resume to cleanup some states.
-        }
-    }
-
-    /**
      * Destroy all processors without removing context from contexts
      */
     public void destroyAllProcessors() {
         destroyProcessors(contexts.keySet());
     }
 
-    // visible for testing
-    public Map<TopicPartition, OffsetAndMetadata> commitOffsets() {
+
+    @Override
+    public Map<TopicPartition, OffsetAndMetadata> commitReadyOffsets() {
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
         for (PartitionContext context : contexts.values()) {
             context.offsetWaitingCommit().ifPresent(
@@ -119,7 +138,8 @@ public class PartitionContexts {
         return offsets;
     }
 
-    public void updateCommittedOffsets(Map<TopicPartition, OffsetAndMetadata> offsets) {
+    @Override
+    public void storeCommittedOffsets(Map<TopicPartition, OffsetAndMetadata> offsets) {
         for (Entry<TopicPartition, OffsetAndMetadata> entry : offsets.entrySet()) {
             TopicPartition tp = entry.getKey();
             long offset = entry.getValue().offset();
@@ -154,7 +174,13 @@ public class PartitionContexts {
         return processingRateProp.value() == RateLimiter.PAUSED || reloadRequested.get();
     }
 
-    public Collection<TopicPartition> partitionsNeedsPause() {
+    @Override
+    public void updatePartitionsStatus() {
+        updateHighWatermarks();
+    }
+
+    @Override
+    public List<TopicPartition> partitionsNeedsPause() {
         boolean pausingAll = pausingAllProcessing();
         return contexts.values().stream()
                        .filter(c -> !c.paused())
@@ -163,7 +189,8 @@ public class PartitionContexts {
                        .collect(toList());
     }
 
-    public Collection<TopicPartition> partitionsNeedsResume() {
+    @Override
+    public List<TopicPartition> partitionsNeedsResume() {
         boolean pausingAll = pausingAllProcessing();
         return contexts.values().stream()
                        .filter(PartitionContext::paused)
@@ -172,9 +199,18 @@ public class PartitionContexts {
                        .collect(toList());
     }
 
-    public Set<TopicPartition> pausedPartitions() {
-        return contexts.values().stream().filter(PartitionContext::paused).map(PartitionContext::topicPartition)
-                       .collect(toSet());
+    @Override
+    public void partitionsPaused(List<TopicPartition> partitions) {
+        for (TopicPartition tp : partitions) {
+            contexts.get(tp).pause();
+        }
+    }
+
+    @Override
+    public void partitionsResumed(List<TopicPartition> partitions) {
+        for (TopicPartition tp : partitions) {
+            contexts.get(tp).resume();
+        }
     }
 
     /**
@@ -200,11 +236,11 @@ public class PartitionContexts {
         Set<TopicPartition> topicPartitions = new HashSet<>(contexts.keySet());
 
         logger.info("Start dropping partition contexts");
-        dropContexts(topicPartitions);
+        removePartition(topicPartitions);
         logger.info("Finished dropping partition contexts. Start recreating partition contexts");
-        for (TopicPartition tp : topicPartitions) {
-            initContext(tp, true);
-        }
+        Map<TopicPartition, AssignmentConfig> configs = topicPartitions.stream().collect(
+                toMap(Function.identity(), tp -> new AssignmentConfig(true)));
+        addPartitions(configs);
         logger.info("Completed reloading property");
     }
 
