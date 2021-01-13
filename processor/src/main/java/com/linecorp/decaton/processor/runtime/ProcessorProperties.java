@@ -102,6 +102,17 @@ public class ProcessorProperties extends AbstractDecatonProperties {
             PropertyDefinition.define("decaton.group.rebalance.timeout.ms", Long.class, 1000L,
                                       v -> v instanceof Long && (Long) v >= 0);
 
+    /**
+     * Timeout for processor close. Decaton waits up to this time for tasks currently in-progress to finish.
+     * Any tasks that do not complete within this timeout will mean async task processing code may still
+     * be running even after {@link ProcessorSubscription#close()} returns, which might lead to errors from e.g.
+     * shutting down dependencies of this {@link ProcessorSubscription} that are still in use from async tasks.
+     * Reloadable: yes
+     */
+    public static final PropertyDefinition<Long> CONFIG_CLOSE_TIMEOUT_MS =
+            PropertyDefinition.define("decaton.processing.close.timeout.ms", Long.class, 0L,
+                                      v -> v instanceof Long && (Long) v >= 0);
+
     public static final List<PropertyDefinition<?>> PROPERTY_DEFINITIONS =
             Collections.unmodifiableList(Arrays.asList(
                     CONFIG_IGNORE_KEYS,
@@ -109,7 +120,8 @@ public class ProcessorProperties extends AbstractDecatonProperties {
                     CONFIG_PARTITION_CONCURRENCY,
                     CONFIG_MAX_PENDING_RECORDS,
                     CONFIG_COMMIT_INTERVAL_MS,
-                    CONFIG_GROUP_REBALANCE_TIMEOUT_MS));
+                    CONFIG_GROUP_REBALANCE_TIMEOUT_MS,
+                    CONFIG_CLOSE_TIMEOUT_MS));
 
     /**
      * Find and return a {@link PropertyDefinition} from its name.
