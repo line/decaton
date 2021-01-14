@@ -54,6 +54,14 @@ public class DecatonRunner implements Runner {
         props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, config.bootstrapServers());
         props.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "decaton-benchmark");
         props.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, "decaton-benchmark");
+        // Unless we reset the offset to the earliest, there's a possibility to hit a timing issue causing
+        // some records missing from processing.
+        // In particular, when a ProcessorSubscription initiates, it starts calling KafkaConsumer#poll, but
+        // at that time the offset might not have initialized (reset) to 0. If we start producing tasks before
+        // it completes fetching the current offset from the broker (which is zero), the offset counter might
+        // increments before it obtains offset information and consequences to reset the offset to a larger
+        // value than zero with the default "latest" reset policy.
+        props.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
         List<Property<?>> properties = new ArrayList<>();
         for (Map.Entry<String, String> entry : config.parameters().entrySet()) {
