@@ -66,11 +66,13 @@ public class ProcessorUnit implements AsyncShutdownable {
         Timer timer = Utils.timer();
         try {
             pipeline.scheduleThenProcess(request);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.warn("Scheduling and/or processing interrupted. Shutdown initiated={}, request: {}",
+                     terminated, request);
         } catch (Exception e) {
-            if (e instanceof InterruptedException) {
-                Thread.currentThread().interrupt();
-            }
-            log.error("Error while processing request {}. Offset of this will left uncommitted", request);
+            log.error("Error while processing request {}. Corresponding offset will be left uncommitted.",
+                      request, e);
         } finally {
             // This metric measures the total amount of time the processors were processing tasks including time
             // for scheduling those tasks and is used to refer processor threads utilization, so it needs to measure
