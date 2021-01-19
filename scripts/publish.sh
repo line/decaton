@@ -27,8 +27,8 @@ cd $(dirname $0)/..
 # Ensure current branch is master and up-to-date
 # Also checks there is no local modification to avoid it's included in build for making release artfiact
 validate_git_status() {
-    if [ $(git rev-parse --abbrev-ref HEAD) != "master" ]; then
-        echo "git branch must be set to master"
+    if [ $(git rev-parse --abbrev-ref HEAD) != "0.0.46" ]; then
+        echo "git branch must be set to 0.0.46"
         exit 1
     fi
 
@@ -55,7 +55,7 @@ bump_version() {
     git add gradle.properties
     git commit -m "Release $version"
 
-    git push origin master
+    git push origin 0.0.46
 
     tag="v$version"
     git tag $tag
