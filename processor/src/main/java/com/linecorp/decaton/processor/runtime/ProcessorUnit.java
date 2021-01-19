@@ -70,7 +70,8 @@ public class ProcessorUnit implements AsyncShutdownable {
             if (e instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
             }
-            log.error("Error while processing request {}. Offset of this will left uncommitted", request);
+            log.error("Error while processing request {}. Corresponding offset will be left uncommitted.",
+                      request, e);
         } finally {
             // This metric measures the total amount of time the processors were processing tasks including time
             // for scheduling those tasks and is used to refer processor threads utilization, so it needs to measure
