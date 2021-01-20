@@ -29,8 +29,8 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.context.ConfigurableApplicationContext;
 
 import com.linecorp.decaton.processor.DecatonProcessor;
-import com.linecorp.decaton.processor.ProcessorsBuilder;
-import com.linecorp.decaton.processor.runtime.DecatonProcessingContext;
+import com.linecorp.decaton.processor.runtime.ProcessorsBuilder;
+import com.linecorp.decaton.processor.runtime.internal.DecatonProcessingContext;
 import com.linecorp.decaton.processor.runtime.DecatonProcessorSupplier;
 
 /**

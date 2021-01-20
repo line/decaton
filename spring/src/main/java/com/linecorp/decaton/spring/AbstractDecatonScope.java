@@ -27,9 +27,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectFactory;
 import org.springframework.beans.factory.config.Scope;
 
-import com.linecorp.decaton.processor.runtime.DecatonProcessingContext;
+import com.linecorp.decaton.processor.runtime.internal.DecatonProcessingContext;
 
-public abstract class AbstractDecatonScope implements Scope {
+abstract class AbstractDecatonScope implements Scope {
     private static final Logger logger = LoggerFactory.getLogger(AbstractDecatonScope.class);
 
     private static final String SCOPED_BEAN_NAME_DELIMITER = "/";

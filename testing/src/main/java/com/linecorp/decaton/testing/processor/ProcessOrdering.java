@@ -29,7 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
-import com.linecorp.decaton.processor.TaskMetadata;
+import com.linecorp.decaton.processor.runtime.TaskMetadata;
 
 public class ProcessOrdering implements ProcessingGuarantee {
     private final Map<TestTask, Long> taskToOffset = new HashMap<>();

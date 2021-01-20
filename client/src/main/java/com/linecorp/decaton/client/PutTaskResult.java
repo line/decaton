@@ -28,7 +28,7 @@ public class PutTaskResult {
         this.id = id;
     }
 
-    PutTaskResult(RecordMetadata metadata) {
+    public PutTaskResult(RecordMetadata metadata) {
         this(metadataToTaskId(metadata));
     }
 

@@ -29,7 +29,11 @@ import org.junit.ClassRule;
 import org.junit.Test;
 
 import com.linecorp.decaton.client.DecatonClient;
+import com.linecorp.decaton.processor.runtime.DynamicProperty;
+import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.ProcessorSubscription;
+import com.linecorp.decaton.processor.runtime.ProcessorsBuilder;
+import com.linecorp.decaton.processor.runtime.StaticPropertySupplier;
 import com.linecorp.decaton.protobuf.ProtocolBuffersDeserializer;
 import com.linecorp.decaton.protocol.Sample.HelloTask;
 import com.linecorp.decaton.testing.KafkaClusterRule;

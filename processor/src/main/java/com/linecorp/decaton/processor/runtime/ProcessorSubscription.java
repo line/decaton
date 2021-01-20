@@ -32,15 +32,24 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 
 import com.linecorp.decaton.processor.DeferredCompletion;
-import com.linecorp.decaton.processor.ProcessorProperties;
-import com.linecorp.decaton.processor.Property;
-import com.linecorp.decaton.processor.SubscriptionStateListener;
-import com.linecorp.decaton.processor.TracingProvider;
-import com.linecorp.decaton.processor.TracingProvider.RecordTraceHandle;
+import com.linecorp.decaton.processor.tracing.TracingProvider;
+import com.linecorp.decaton.processor.tracing.TracingProvider.RecordTraceHandle;
 import com.linecorp.decaton.processor.metrics.Metrics;
 import com.linecorp.decaton.processor.metrics.Metrics.SubscriptionMetrics;
-import com.linecorp.decaton.processor.runtime.ConsumeManager.ConsumerHandler;
-import com.linecorp.decaton.processor.runtime.Utils.Timer;
+import com.linecorp.decaton.processor.runtime.internal.AssignmentManager;
+import com.linecorp.decaton.processor.runtime.internal.AsyncShutdownable;
+import com.linecorp.decaton.processor.runtime.internal.BlacklistedKeysFilter;
+import com.linecorp.decaton.processor.runtime.internal.CommitManager;
+import com.linecorp.decaton.processor.runtime.internal.ConsumeManager;
+import com.linecorp.decaton.processor.runtime.internal.ConsumeManager.ConsumerHandler;
+import com.linecorp.decaton.processor.runtime.internal.SubscriptionScope;
+import com.linecorp.decaton.processor.runtime.internal.TaskRequest;
+import com.linecorp.decaton.processor.runtime.internal.Utils;
+import com.linecorp.decaton.processor.runtime.internal.Utils.Timer;
+import com.linecorp.decaton.processor.runtime.internal.OffsetRegressionException;
+import com.linecorp.decaton.processor.runtime.internal.PartitionContext;
+import com.linecorp.decaton.processor.runtime.internal.PartitionContexts;
+import com.linecorp.decaton.processor.runtime.internal.Processors;
 
 import lombok.extern.slf4j.Slf4j;
 

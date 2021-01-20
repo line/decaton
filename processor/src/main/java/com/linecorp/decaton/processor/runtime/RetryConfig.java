@@ -70,7 +70,7 @@ public class RetryConfig {
         return builder().backoff(backoff).build();
     }
 
-    String retryTopicOrDefault(String originalTopic) {
+    public String retryTopicOrDefault(String originalTopic) {
         if (retryTopic == null) {
             return originalTopic + DEFAULT_RETRY_TOPIC_SUFFIX;
         } else {

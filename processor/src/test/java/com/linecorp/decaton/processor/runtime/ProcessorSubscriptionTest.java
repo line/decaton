@@ -37,12 +37,10 @@ import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
 
-import com.linecorp.decaton.processor.DecatonTask;
-import com.linecorp.decaton.processor.ProcessorProperties;
-import com.linecorp.decaton.processor.ProcessorsBuilder;
-import com.linecorp.decaton.processor.SubscriptionStateListener;
-import com.linecorp.decaton.processor.SubscriptionStateListener.State;
-import com.linecorp.decaton.processor.TaskMetadata;
+import com.linecorp.decaton.processor.runtime.SubscriptionStateListener.State;
+import com.linecorp.decaton.processor.runtime.internal.PartitionContexts;
+import com.linecorp.decaton.processor.runtime.internal.SubscriptionScope;
+import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider;
 
 public class ProcessorSubscriptionTest {
     @Rule

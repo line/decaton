@@ -20,6 +20,7 @@ import java.util.Properties;
 
 import org.apache.kafka.clients.producer.Producer;
 
+import com.linecorp.decaton.client.internal.DecatonClientImpl;
 import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
 
 /**

@@ -26,14 +26,14 @@ import java.util.function.Function;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 
-import com.linecorp.decaton.processor.DecatonTask;
-import com.linecorp.decaton.processor.ProcessorProperties;
-import com.linecorp.decaton.processor.ProcessorsBuilder;
-import com.linecorp.decaton.processor.Property;
-import com.linecorp.decaton.processor.StaticPropertySupplier;
-import com.linecorp.decaton.processor.SubscriptionStateListener;
-import com.linecorp.decaton.processor.TaskExtractor;
-import com.linecorp.decaton.processor.TaskMetadata;
+import com.linecorp.decaton.processor.runtime.DecatonTask;
+import com.linecorp.decaton.processor.runtime.ProcessorProperties;
+import com.linecorp.decaton.processor.runtime.ProcessorsBuilder;
+import com.linecorp.decaton.processor.runtime.Property;
+import com.linecorp.decaton.processor.runtime.StaticPropertySupplier;
+import com.linecorp.decaton.processor.runtime.SubscriptionStateListener;
+import com.linecorp.decaton.processor.runtime.TaskExtractor;
+import com.linecorp.decaton.processor.runtime.TaskMetadata;
 import com.linecorp.decaton.processor.runtime.ProcessorScope;
 import com.linecorp.decaton.processor.runtime.ProcessorSubscription;
 import com.linecorp.decaton.processor.runtime.SubscriptionBuilder;

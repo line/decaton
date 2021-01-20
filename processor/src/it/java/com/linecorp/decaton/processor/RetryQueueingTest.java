@@ -27,6 +27,7 @@ import org.junit.ClassRule;
 import org.junit.Test;
 
 import com.linecorp.decaton.processor.runtime.RetryConfig;
+import com.linecorp.decaton.processor.runtime.TaskMetadata;
 import com.linecorp.decaton.testing.KafkaClusterRule;
 import com.linecorp.decaton.testing.TestUtils;
 import com.linecorp.decaton.testing.processor.ProcessedRecord;

@@ -19,7 +19,7 @@ package com.linecorp.decaton.processor.runtime;
 import org.slf4j.MDC;
 
 import com.linecorp.decaton.processor.ProcessingContext;
-import com.linecorp.decaton.processor.TaskMetadata;
+import com.linecorp.decaton.processor.runtime.internal.TaskRequest;
 
 /**
  * The {@link LoggingContext} class allows users to write logs lines

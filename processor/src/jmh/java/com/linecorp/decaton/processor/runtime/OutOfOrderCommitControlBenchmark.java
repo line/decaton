@@ -35,7 +35,7 @@ import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Warmup;
 
 import com.linecorp.decaton.processor.DeferredCompletion;
-import com.linecorp.decaton.processor.ProcessorProperties;
+import com.linecorp.decaton.processor.runtime.internal.OutOfOrderCommitControl;
 
 /**
  * Benchmark performance of {@link OutOfOrderCommitControl}.
