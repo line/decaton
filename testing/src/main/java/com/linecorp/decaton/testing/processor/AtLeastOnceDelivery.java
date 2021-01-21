@@ -23,7 +23,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 
-import com.linecorp.decaton.processor.runtime.TaskMetadata;
+import com.linecorp.decaton.processor.TaskMetadata;
 
 public class AtLeastOnceDelivery implements ProcessingGuarantee {
     private final Set<String> producedIds = Collections.synchronizedSet(new HashSet<>());

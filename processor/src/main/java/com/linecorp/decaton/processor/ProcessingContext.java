@@ -21,9 +21,6 @@ import java.util.concurrent.CompletableFuture;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.header.Headers;
 
-import com.linecorp.decaton.processor.runtime.LoggingContext;
-import com.linecorp.decaton.processor.runtime.TaskMetadata;
-
 public interface ProcessingContext<T> {
     /**
      * Returns a {@link TaskMetadata} which is associated with the task that is currently being processed.

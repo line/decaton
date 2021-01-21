@@ -32,7 +32,6 @@ import org.junit.Test;
 
 import com.linecorp.decaton.client.DecatonClientBuilder.DefaultKafkaProducerSupplier;
 import com.linecorp.decaton.processor.runtime.RetryConfig;
-import com.linecorp.decaton.processor.runtime.TaskMetadata;
 import com.linecorp.decaton.processor.tracing.TestTracingProvider;
 import com.linecorp.decaton.testing.KafkaClusterRule;
 import com.linecorp.decaton.testing.processor.ProcessedRecord;

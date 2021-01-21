@@ -43,7 +43,7 @@ import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
 
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
-import com.linecorp.decaton.processor.runtime.TaskMetadata;
+import com.linecorp.decaton.processor.TaskMetadata;
 import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider;
 
 public class ExecutionSchedulerTest {

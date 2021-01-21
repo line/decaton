@@ -47,7 +47,7 @@ import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.runtime.DecatonTask;
 import com.linecorp.decaton.processor.DeferredCompletion;
 import com.linecorp.decaton.processor.ProcessingContext;
-import com.linecorp.decaton.processor.runtime.TaskMetadata;
+import com.linecorp.decaton.processor.TaskMetadata;
 import com.linecorp.decaton.processor.processors.CompactionProcessor.CompactChoice;
 import com.linecorp.decaton.processor.processors.CompactionProcessor.CompactingTask;
 import com.linecorp.decaton.processor.runtime.internal.ProcessingContextImpl;

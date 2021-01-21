@@ -50,7 +50,7 @@ import com.linecorp.decaton.processor.DeferredCompletion;
 import com.linecorp.decaton.processor.ProcessingContext;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.TaskExtractor;
-import com.linecorp.decaton.processor.runtime.TaskMetadata;
+import com.linecorp.decaton.processor.TaskMetadata;
 import com.linecorp.decaton.processor.metrics.Metrics;
 import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider;
 import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider.NoopTrace;

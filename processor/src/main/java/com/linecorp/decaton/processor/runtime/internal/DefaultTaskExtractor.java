@@ -21,7 +21,7 @@ import com.google.protobuf.InvalidProtocolBufferException;
 import com.linecorp.decaton.common.Deserializer;
 import com.linecorp.decaton.processor.runtime.DecatonTask;
 import com.linecorp.decaton.processor.runtime.TaskExtractor;
-import com.linecorp.decaton.processor.runtime.TaskMetadata;
+import com.linecorp.decaton.processor.TaskMetadata;
 import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
 
 import lombok.RequiredArgsConstructor;

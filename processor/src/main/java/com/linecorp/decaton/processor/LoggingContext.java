@@ -14,11 +14,10 @@
  * under the License.
  */
 
-package com.linecorp.decaton.processor.runtime;
+package com.linecorp.decaton.processor;
 
 import org.slf4j.MDC;
 
-import com.linecorp.decaton.processor.ProcessingContext;
 import com.linecorp.decaton.processor.runtime.internal.TaskRequest;
 
 /**

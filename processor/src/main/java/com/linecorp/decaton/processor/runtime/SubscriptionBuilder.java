@@ -31,6 +31,7 @@ import com.linecorp.decaton.client.internal.DecatonTaskProducer;
 import com.linecorp.decaton.client.KafkaProducerSupplier;
 import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.ProcessingContext;
+import com.linecorp.decaton.processor.TaskMetadata;
 import com.linecorp.decaton.processor.tracing.TracingProvider;
 import com.linecorp.decaton.processor.runtime.internal.ConsumerSupplier;
 import com.linecorp.decaton.processor.runtime.internal.DecatonProcessorSupplierImpl;

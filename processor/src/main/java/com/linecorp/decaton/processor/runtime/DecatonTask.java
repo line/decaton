@@ -16,6 +16,8 @@
 
 package com.linecorp.decaton.processor.runtime;
 
+import com.linecorp.decaton.processor.TaskMetadata;
+
 import lombok.Value;
 import lombok.experimental.Accessors;
 

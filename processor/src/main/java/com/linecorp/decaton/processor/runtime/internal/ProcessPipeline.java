@@ -29,7 +29,7 @@ import com.linecorp.decaton.processor.runtime.TaskExtractor;
 import com.linecorp.decaton.processor.metrics.Metrics;
 import com.linecorp.decaton.processor.metrics.Metrics.ProcessMetrics;
 import com.linecorp.decaton.processor.metrics.Metrics.TaskMetrics;
-import com.linecorp.decaton.processor.runtime.LoggingContext;
+import com.linecorp.decaton.processor.LoggingContext;
 import com.linecorp.decaton.processor.runtime.internal.Utils.Timer;
 
 import lombok.extern.slf4j.Slf4j;

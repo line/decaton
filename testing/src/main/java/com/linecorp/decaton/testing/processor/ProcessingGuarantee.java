@@ -21,7 +21,7 @@ import java.util.function.Supplier;
 import org.apache.kafka.clients.producer.KafkaProducer;
 
 import com.linecorp.decaton.processor.DecatonProcessor;
-import com.linecorp.decaton.processor.runtime.TaskMetadata;
+import com.linecorp.decaton.processor.TaskMetadata;
 import com.linecorp.decaton.processor.runtime.ProcessorSubscription;
 
 /**

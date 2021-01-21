@@ -14,7 +14,7 @@
  * under the License.
  */
 
-package com.linecorp.decaton.processor.runtime;
+package com.linecorp.decaton.processor;
 
 import com.linecorp.decaton.protocol.Decaton.TaskMetadataProto;
 

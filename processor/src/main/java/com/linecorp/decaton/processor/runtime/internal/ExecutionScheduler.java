@@ -22,7 +22,7 @@ import java.util.function.Supplier;
 
 import org.apache.kafka.common.TopicPartition;
 
-import com.linecorp.decaton.processor.runtime.TaskMetadata;
+import com.linecorp.decaton.processor.TaskMetadata;
 import com.linecorp.decaton.processor.metrics.Metrics;
 import com.linecorp.decaton.processor.metrics.Metrics.SchedulerMetrics;
 
