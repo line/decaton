@@ -25,6 +25,7 @@ import java.util.Properties;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 
+import com.linecorp.decaton.client.internal.DecatonClientImpl;
 import com.linecorp.decaton.client.kafka.PrintableAsciiStringSerializer;
 import com.linecorp.decaton.client.kafka.ProtocolBuffersKafkaSerializer;
 import com.linecorp.decaton.common.Serializer;

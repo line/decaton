@@ -30,7 +30,7 @@ import java.util.Map;
 import org.junit.ClassRule;
 import org.junit.Test;
 
-import com.linecorp.decaton.processor.SubscriptionStateListener.State;
+import com.linecorp.decaton.processor.runtime.SubscriptionStateListener.State;
 import com.linecorp.decaton.testing.KafkaClusterRule;
 import com.linecorp.decaton.testing.processor.ProcessorTestSuite;
 

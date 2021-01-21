@@ -27,16 +27,17 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 
 import com.linecorp.decaton.client.DecatonClientBuilder.DefaultKafkaProducerSupplier;
-import com.linecorp.decaton.client.DecatonTaskProducer;
+import com.linecorp.decaton.client.internal.DecatonTaskProducer;
 import com.linecorp.decaton.client.KafkaProducerSupplier;
 import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.ProcessingContext;
-import com.linecorp.decaton.processor.ProcessorProperties;
-import com.linecorp.decaton.processor.ProcessorsBuilder;
-import com.linecorp.decaton.processor.PropertySupplier;
-import com.linecorp.decaton.processor.SubscriptionStateListener;
 import com.linecorp.decaton.processor.TaskMetadata;
-import com.linecorp.decaton.processor.TracingProvider;
+import com.linecorp.decaton.processor.tracing.TracingProvider;
+import com.linecorp.decaton.processor.runtime.internal.ConsumerSupplier;
+import com.linecorp.decaton.processor.runtime.internal.DecatonProcessorSupplierImpl;
+import com.linecorp.decaton.processor.runtime.internal.DecatonTaskRetryQueueingProcessor;
+import com.linecorp.decaton.processor.runtime.internal.SubscriptionScope;
+import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider;
 
 import lombok.AccessLevel;
 import lombok.Setter;

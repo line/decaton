@@ -39,11 +39,11 @@ import com.linecorp.centraldogma.common.ChangeConflictException;
 import com.linecorp.centraldogma.common.EntryType;
 import com.linecorp.centraldogma.common.Query;
 import com.linecorp.centraldogma.common.Revision;
-import com.linecorp.decaton.processor.DynamicProperty;
-import com.linecorp.decaton.processor.ProcessorProperties;
-import com.linecorp.decaton.processor.Property;
-import com.linecorp.decaton.processor.PropertyDefinition;
-import com.linecorp.decaton.processor.PropertySupplier;
+import com.linecorp.decaton.processor.runtime.DynamicProperty;
+import com.linecorp.decaton.processor.runtime.ProcessorProperties;
+import com.linecorp.decaton.processor.runtime.Property;
+import com.linecorp.decaton.processor.runtime.PropertyDefinition;
+import com.linecorp.decaton.processor.runtime.PropertySupplier;
 
 /**
  * A {@link PropertySupplier} implementation with Central Dogma backend.

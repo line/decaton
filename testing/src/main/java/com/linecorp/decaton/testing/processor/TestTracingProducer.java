@@ -34,7 +34,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.header.internals.RecordHeader;
 
-import com.linecorp.decaton.processor.TestTracingProvider;
+import com.linecorp.decaton.processor.tracing.TestTracingProvider;
 import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
 
 public class TestTracingProducer implements Producer<String, DecatonTaskRequest> {
