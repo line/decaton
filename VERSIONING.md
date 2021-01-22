@@ -14,11 +14,12 @@ Given a version number MAJOR.MINOR.PATCH, increment the:
 Public APIs
 ===========
 
-We consider the following items as a Public API and each one of the changes made against those items in a backward-incompatible way is considered a "breaking change", so we bump the MAJOR version for the release shipping the change.
+We consider the following items as Public API and each one of the changes made against those items in a backward-incompatible way are considered a "breaking change", so we bump the MAJOR version for the release shipping the change.
 
 
-* Public interfaces, classes, and enums that are defined by source code in this project and are included in a published JAR
-  * NOTE: We will likely separate modules for public-APIs and non-public-APIs for the `processor` package in future
+* Public interfaces/classes/enums that are defined by source code in this project and are included in a published JAR, excluding ones with the following conditions.
+  * An interface/class/enum that belongs to a package containing subpackage `internal`. e.g, `com.linecorp.decaton.runtime.internal.Aclass`.
+  * A constructor/method/field that depends on at least one of internal items in its signature. e.g, `com.linecorp.decaton.LoggingContext`'s constructor that takes `com.linecorp.decaton.runtime.internal.TaskRequest` as an argument.
 * Configuration property keys
 * Metric names and tags
 
@@ -30,7 +31,6 @@ We DO NOT consider the following items as public APIs (just examples, not a comp
 * Java thread names
 * Classes from shadowed and relocated dependency (e.g, `protobuf-java`)
 * Classes and resources that are not included in published JAR (e.g, classes related only for testing, benchmarking, etc.)
-* `public` classes, interfaces, and enums that are under the internal modules
 
 
 Backward-compatible
