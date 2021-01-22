@@ -19,7 +19,7 @@ We consider the following items as Public API and each one of the changes made a
 
 * Public interfaces/classes/enums that are defined by source code in this project and are included in a published JAR, excluding ones with the following conditions.
   * An interface/class/enum that belongs to a package containing subpackage `internal`. e.g, `com.linecorp.decaton.runtime.internal.Aclass`.
-  * A method/constant/variable that depends on at least one of internal items in its signature. e.g, `com.linecorp.decaton.LoggingContext`'s constructor that takes `com.linecorp.decaton.runtime.internal.TaskRequest` as an argument.
+  * A constructor/method/field that depends on at least one of internal items in its signature. e.g, `com.linecorp.decaton.LoggingContext`'s constructor that takes `com.linecorp.decaton.runtime.internal.TaskRequest` as an argument.
 * Configuration property keys
 * Metric names and tags
 
