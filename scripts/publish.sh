@@ -17,9 +17,8 @@
 
 # A script to publish maven artifacts of Decaton.
 #
-# Usage: ./publish.sh [--release]
-#   *  --relese: publish new version of artifacts to Maven Central
-#   * otherwise: publish (or overwrite if exists) current SNAPSHOT version without changing version
+# Usage: ./publish.sh $RELEASE_VERSION
+#
 set -eu
 
 cd $(dirname $0)/..
@@ -47,17 +46,16 @@ validate_git_status() {
 
 # Bump version in gradle.properties and create a tag
 bump_version() {
-    version=$1
-    new_version=$(echo $version | awk -F '.' '{print $1"."$2"."$3+1}')
+    new_version=$1
 
-    sed -i "" -e "s/^version=$version/version=$new_version/" gradle.properties
+    sed -i "" -e "s/^version=.*$/version=$new_version/" gradle.properties
 
     git add gradle.properties
-    git commit -m "Release $version"
+    git commit -m "Release $new_version"
 
     git push origin master
 
-    tag="v$version"
+    tag="v$new_version"
     git tag $tag
     git push origin $tag
 }
@@ -68,25 +66,19 @@ bump_version() {
 
 validate_git_status
 
-is_snapshot=true
-if [[ $@ == *--release* ]]; then
-    is_snapshot=false
-fi
-
 # Extract version to be released
-version=$(grep "^version=" gradle.properties | cut -f 2 -d=)
-
-if [ $is_snapshot = true ]; then
-    echo "Publishing Decaton $version-SNAPSHOT"
-    ./gradlew clean build publish
-else
-    # prevent double publishing
-    if [ $(git tag | grep "^v$version\$" | wc -l) -ne 0 ]; then
-        echo "$version already released"
-        exit 1
-    fi
-
-    echo "Publishing Decaton $version"
-    ./gradlew -P snapshot=false clean build validateDocs publish
-    bump_version $version
+version="$1"
+if [ -z "$version" ]; then
+    echo "Usage: $0 RELEASE_VERSION" >&2
+    exit 1
 fi
+
+# prevent double publishing
+if [ $(git tag | grep "^v$version\$" | wc -l) -ne 0 ]; then
+    echo "$version already released"
+    exit 1
+fi
+
+echo "Publishing Decaton $version"
+./gradlew -P snapshot=false -P version="$version" clean build validateDocs publish
+bump_version $version
