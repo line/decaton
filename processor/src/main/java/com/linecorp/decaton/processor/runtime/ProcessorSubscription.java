@@ -130,6 +130,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
             } catch (OffsetRegressionException e) {
                 log.warn("Offset regression at partition {}", tp);
                 assignManager.repair(tp);
+                context = contexts.get(tp);
                 // If it fails even at 2nd attempt... no idea let it die.
                 offsetCompletion = context.registerOffset(record.offset());
             }
