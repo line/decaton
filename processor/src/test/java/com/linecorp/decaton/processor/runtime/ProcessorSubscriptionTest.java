@@ -16,36 +16,56 @@
 
 package com.linecorp.decaton.processor.runtime;
 
+import static java.util.Collections.singleton;
+import static java.util.Collections.singletonMap;
 import static org.junit.Assert.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.MockConsumer;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.Rule;
 import org.junit.Test;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
 
 import com.linecorp.decaton.processor.TaskMetadata;
 import com.linecorp.decaton.processor.runtime.SubscriptionStateListener.State;
-import com.linecorp.decaton.processor.runtime.internal.PartitionContexts;
 import com.linecorp.decaton.processor.runtime.internal.SubscriptionScope;
 import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider;
 
 public class ProcessorSubscriptionTest {
     @Rule
     public MockitoRule rule = MockitoJUnit.rule();
+
+    @Mock
+    Consumer<String, byte[]> consumer;
+
+    @Captor
+    ArgumentCaptor<Map<TopicPartition, OffsetAndMetadata>> offsetsCaptor;
 
     /**
      * A mock consumer which exposes rebalance listener so that can be triggered manually
@@ -64,12 +84,6 @@ public class ProcessorSubscriptionTest {
             super.subscribe(topics, listener);
         }
     }
-
-    @Mock
-    private Consumer<String, byte[]> consumerMock;
-
-    @Mock
-    private PartitionContexts contextsMock;
 
     private static SubscriptionScope scope(String topic) {
         return new SubscriptionScope(
@@ -120,5 +134,40 @@ public class ProcessorSubscriptionTest {
                                    State.RUNNING,
                                    State.SHUTTING_DOWN,
                                    State.TERMINATED), states);
+    }
+
+    @Test(timeout = 5000)
+    public void testOffsetRegression() throws Exception {
+        TopicPartition tp = new TopicPartition("topic", 0);
+        AtomicReference<ConsumerRebalanceListener> listener = new AtomicReference<>();
+        doAnswer(invocation -> {
+            listener.set(invocation.getArgument(1));
+            return null;
+        }).when(consumer).subscribe(any(Collection.class), any(ConsumerRebalanceListener.class));
+
+        ProcessorSubscription subscription = subscription(consumer, ignored -> {}, tp);
+        AtomicBoolean first = new AtomicBoolean();
+        CountDownLatch pollLatch = new CountDownLatch(1);
+        doAnswer(invocation -> {
+            if (first.compareAndSet(false, true)) {
+                listener.get().onPartitionsAssigned(singleton(tp));
+                return new ConsumerRecords<>(singletonMap(tp, Arrays.asList(
+                        // Feed one record, then a subsequent record of the regressing offset.
+                        new ConsumerRecord<>(tp.topic(), tp.partition(), 100L, "abc", new byte[0]),
+                        new ConsumerRecord<>(tp.topic(), tp.partition(), 99L, "abc", new byte[0]))));
+            } else {
+                pollLatch.countDown();
+                return ConsumerRecords.empty();
+            }
+        }).when(consumer).poll(anyLong());
+
+        subscription.start();
+        pollLatch.await();
+        subscription.close();
+
+        verify(consumer, times(1)).commitAsync(offsetsCaptor.capture(), any());
+        Map<TopicPartition, OffsetAndMetadata> offsets = offsetsCaptor.getValue();
+        OffsetAndMetadata offset = offsets.get(tp);
+        assertEquals(100L, offset.offset());
     }
 }
