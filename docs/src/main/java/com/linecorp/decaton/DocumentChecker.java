@@ -60,19 +60,8 @@ public final class DocumentChecker {
                                matcher.group(4) != null);
         }
 
-        boolean isHigherThanOrEqualsTo(Version other) {
-            int[] a = { major, minor, patch, snapshot ? 0 : 1 };
-            int[] b = { other.major, other.minor, other.patch, other.snapshot ? 0 : 1 };
-
-            for (int i = 0; i < a.length; i++) {
-                if (a[i] > b[i]) {
-                    return true;
-                }
-                if (a[i] < b[i]) {
-                    return false;
-                }
-            }
-            return true;
+        boolean hasHigherOrEqualMajorVersion(Version other) {
+            return major >= other.major;
         }
 
         @Override
@@ -142,7 +131,7 @@ public final class DocumentChecker {
                                   baseVersion, version));
             return errors;
         }
-        if (baseVersion.isHigherThanOrEqualsTo(version)) {
+        if (baseVersion.hasHigherOrEqualMajorVersion(version)) {
             return errors;
         }
 
