@@ -80,38 +80,6 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
             }
         }
 
-        private void waitForRemainingTasksCompletion(long timeoutMillis) {
-            Timer timer = Utils.timer();
-
-            while (true) {
-                contexts.updateHighWatermarks();
-
-                final int pendingTasksCount = contexts.totalPendingTasks();
-                Duration elapsed = timer.duration();
-                if (pendingTasksCount == 0) {
-                    if (log.isDebugEnabled()) {
-                        log.debug("Waiting for task completion is successful {} ms",
-                                  Utils.formatNum(elapsed.toMillis()));
-                    }
-                    return;
-                }
-
-                long remainingMs = timeoutMillis - elapsed.toMillis();
-                if (remainingMs <= 0) {
-                    log.warn("Timed out waiting {} tasks to complete after {} ms",
-                             pendingTasksCount, Utils.formatNum(elapsed.toMillis()));
-                    break;
-                }
-
-                try {
-                    Thread.sleep(Math.min(200L, remainingMs));
-                } catch (InterruptedException ignore) {
-                    Thread.currentThread().interrupt();
-                    break;
-                }
-            }
-        }
-
         @Override
         public void updateAssignment(Collection<TopicPartition> newAssignment) {
             assignManager.assign(newAssignment);
@@ -192,7 +160,40 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
                                  Processors<?> processors,
                                  ProcessorProperties props,
                                  SubscriptionStateListener stateListener) {
-        this(scope, consumerSupplier, processors, props, stateListener, new PartitionContexts(scope, processors));
+        this(scope, consumerSupplier, processors, props, stateListener,
+             new PartitionContexts(scope, processors));
+    }
+
+    private void waitForRemainingTasksCompletion(long timeoutMillis) {
+        Timer timer = Utils.timer();
+
+        while (true) {
+            contexts.updateHighWatermarks();
+
+            final int pendingTasksCount = contexts.totalPendingTasks();
+            Duration elapsed = timer.duration();
+            if (pendingTasksCount == 0) {
+                if (log.isDebugEnabled()) {
+                    log.debug("Waiting for task completion is successful {} ms",
+                              Utils.formatNum(elapsed.toMillis()));
+                }
+                return;
+            }
+
+            long remainingMs = timeoutMillis - elapsed.toMillis();
+            if (remainingMs <= 0) {
+                log.warn("Timed out waiting {} tasks to complete after {} ms",
+                         pendingTasksCount, Utils.formatNum(elapsed.toMillis()));
+                break;
+            }
+
+            try {
+                Thread.sleep(Math.min(200L, remainingMs));
+            } catch (InterruptedException ignore) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
     }
 
     private void updateState(SubscriptionStateListener.State newState) {
@@ -231,14 +232,15 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
                 commitManager.maybeCommitAsync();
                 metrics.commitOffsetTime.record(timer.duration());
             }
+            updateState(SubscriptionStateListener.State.SHUTTING_DOWN);
+            waitForRemainingTasksCompletion(
+                    scope.props().get(ProcessorProperties.CONFIG_CLOSE_TIMEOUT_MS).value());
         } catch (RuntimeException e) {
             log.error("Unknown exception thrown at subscription loop, thread will be terminated: {}", scope, e);
-        } finally {
             updateState(SubscriptionStateListener.State.SHUTTING_DOWN);
-
+        } finally {
             Timer timer = Utils.timer();
             contexts.destroyAllProcessors();
-
             // Since kafka-clients version 2.4.0 ConsumerRebalanceListener#onPartitionsRevoked gets triggered
             // at close so the same thing is supposed to happen, but its not true for older kafka-clients version
             // so we're manually handling this here instead of relying on rebalance listener for better compatibility

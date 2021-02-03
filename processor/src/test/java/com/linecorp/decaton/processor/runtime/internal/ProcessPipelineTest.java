@@ -49,7 +49,6 @@ import com.linecorp.decaton.processor.runtime.DecatonTask;
 import com.linecorp.decaton.processor.DeferredCompletion;
 import com.linecorp.decaton.processor.ProcessingContext;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
-import com.linecorp.decaton.processor.runtime.Property;
 import com.linecorp.decaton.processor.runtime.TaskExtractor;
 import com.linecorp.decaton.processor.TaskMetadata;
 import com.linecorp.decaton.processor.metrics.Metrics;
@@ -72,11 +71,7 @@ public class ProcessPipelineTest {
             new PartitionScope(
                     new SubscriptionScope("subscription", "topic",
                                           Optional.empty(),
-                                          ProcessorProperties.builder()
-                                                             .set(Property.ofStatic(
-                                                                     ProcessorProperties.CONFIG_CLOSE_TIMEOUT_MS,
-                                                                     30000L))
-                                                             .build(),
+                                          ProcessorProperties.builder().build(),
                                           NoopTracingProvider.INSTANCE),
                     new TopicPartition("topic", 0)),
             0);
