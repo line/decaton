@@ -18,6 +18,8 @@ package com.linecorp.decaton.processor.runtime.internal;
 
 import static java.util.stream.Collectors.toList;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.IntStream;
@@ -143,9 +145,10 @@ public class PartitionProcessor implements AsyncShutdownable {
     }
 
     @Override
-    public void awaitShutdown() throws InterruptedException {
+    public void awaitShutdown(Duration limit) throws InterruptedException {
+        final Instant absLimit = Instant.now().plus(limit);
         for (ProcessorUnit unit : units) {
-            unit.awaitShutdown();
+            unit.awaitShutdown(Duration.between(Instant.now(), absLimit));
         }
         Utils.runInParallel(
                 "DestroyThreadScopedProcessors",

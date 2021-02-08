@@ -16,11 +16,33 @@
 
 package com.linecorp.decaton.processor.runtime.internal;
 
+import java.time.Duration;
+import java.time.temporal.ChronoUnit;
+
 public interface AsyncShutdownable extends AutoCloseable {
+    /**
+     * Start the shutdown process but return without blocking.
+     * Actual shutdown may be ongoing asynchronously after this method returns.
+     * Use {@link #awaitShutdown()} to wait for shutdown to complete.
+     */
     void initiateShutdown();
 
-    void awaitShutdown() throws InterruptedException;
+    /**
+     * Block until shutdown completes, the given duration limit has passed,
+     * or this thread is interrupted.
+     */
+    void awaitShutdown(Duration limit) throws InterruptedException;
 
+    /**
+     * Block until shutdown completes or this thread is interrupted
+     */
+    default void awaitShutdown() throws InterruptedException {
+        awaitShutdown(ChronoUnit.FOREVER.getDuration());
+    }
+
+    /**
+     * Shut down, blocking until shutdown is complete
+     */
     @Override
     default void close() throws Exception {
         initiateShutdown();

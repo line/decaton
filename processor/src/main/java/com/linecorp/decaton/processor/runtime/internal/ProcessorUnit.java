@@ -16,6 +16,7 @@
 
 package com.linecorp.decaton.processor.runtime.internal;
 
+import java.time.Duration;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -88,8 +89,12 @@ public class ProcessorUnit implements AsyncShutdownable {
     }
 
     @Override
-    public void awaitShutdown() throws InterruptedException {
-        executor.awaitTermination(Long.MAX_VALUE, TimeUnit.SECONDS);
+    public void awaitShutdown(Duration limit) throws InterruptedException {
+        if(limit.getSeconds() > 0) {
+            executor.awaitTermination(limit.getSeconds(), TimeUnit.SECONDS);
+        } else {
+            executor.awaitTermination(limit.getNano(), TimeUnit.NANOSECONDS);
+        }
         metrics.close();
     }
 }

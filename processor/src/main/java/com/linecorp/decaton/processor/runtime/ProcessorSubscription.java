@@ -17,6 +17,7 @@
 package com.linecorp.decaton.processor.runtime;
 
 import java.time.Duration;
+import java.time.temporal.ChronoUnit;
 import java.util.Collection;
 import java.util.Optional;
 import java.util.Set;
@@ -268,8 +269,9 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
     }
 
     @Override
-    public void awaitShutdown() throws InterruptedException {
-        join();
+    public void awaitShutdown(Duration limit) throws InterruptedException {
+        final long limitMillis = Math.max(0, limit.getSeconds() * 1000L + limit.getNano() / 1000L);
+        join(limitMillis);
         metrics.close();
         log.info("Subscription thread terminated: {}", getName());
     }
