@@ -110,7 +110,7 @@ public class ProcessorProperties extends AbstractDecatonProperties {
      * Reloadable: yes
      */
     public static final PropertyDefinition<Long> CONFIG_CLOSE_TIMEOUT_MS =
-            PropertyDefinition.define("decaton.processing.close.timeout.ms", Long.class, 0L,
+            PropertyDefinition.define("decaton.processing.shutdown.timeout.ms", Long.class, 0L,
                                       v -> v instanceof Long && (Long) v >= 0);
 
     public static final List<PropertyDefinition<?>> PROPERTY_DEFINITIONS =
