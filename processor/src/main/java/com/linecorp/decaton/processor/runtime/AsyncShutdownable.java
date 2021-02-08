@@ -14,7 +14,7 @@
  * under the License.
  */
 
-package com.linecorp.decaton.processor.runtime.internal;
+package com.linecorp.decaton.processor.runtime;
 
 import java.time.Duration;
 import java.time.temporal.ChronoUnit;

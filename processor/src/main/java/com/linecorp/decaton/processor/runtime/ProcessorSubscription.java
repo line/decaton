@@ -17,7 +17,6 @@
 package com.linecorp.decaton.processor.runtime;
 
 import java.time.Duration;
-import java.time.temporal.ChronoUnit;
 import java.util.Collection;
 import java.util.Optional;
 import java.util.Set;
@@ -38,7 +37,6 @@ import com.linecorp.decaton.processor.tracing.TracingProvider.RecordTraceHandle;
 import com.linecorp.decaton.processor.metrics.Metrics;
 import com.linecorp.decaton.processor.metrics.Metrics.SubscriptionMetrics;
 import com.linecorp.decaton.processor.runtime.internal.AssignmentManager;
-import com.linecorp.decaton.processor.runtime.internal.AsyncShutdownable;
 import com.linecorp.decaton.processor.runtime.internal.BlacklistedKeysFilter;
 import com.linecorp.decaton.processor.runtime.internal.CommitManager;
 import com.linecorp.decaton.processor.runtime.internal.ConsumeManager;

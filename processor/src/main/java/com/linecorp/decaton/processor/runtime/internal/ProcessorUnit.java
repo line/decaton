@@ -25,6 +25,7 @@ import org.apache.kafka.common.TopicPartition;
 
 import com.linecorp.decaton.processor.metrics.Metrics;
 import com.linecorp.decaton.processor.metrics.Metrics.ResourceUtilizationMetrics;
+import com.linecorp.decaton.processor.runtime.AsyncShutdownable;
 import com.linecorp.decaton.processor.runtime.internal.Utils.Timer;
 
 import lombok.extern.slf4j.Slf4j;
