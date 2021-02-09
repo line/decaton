@@ -97,7 +97,7 @@ public class ProcessorSubscriptionTest {
         public synchronized void close(long timeout, TimeUnit unit) {}
     }
 
-    private static SubscriptionScope scope(String topic, Long waitForProcessingOnClose) {
+    private static SubscriptionScope scope(String topic, long waitForProcessingOnClose) {
         return new SubscriptionScope(
                 "subscription",
                 topic,

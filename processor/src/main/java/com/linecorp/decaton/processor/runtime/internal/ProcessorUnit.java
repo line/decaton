@@ -91,12 +91,7 @@ public class ProcessorUnit implements AsyncShutdownable {
 
     @Override
     public boolean awaitShutdown(Duration limit) throws InterruptedException {
-        final boolean clean;
-        if(limit.getSeconds() > 0) {
-            clean = executor.awaitTermination(limit.getSeconds(), TimeUnit.SECONDS);
-        } else {
-            clean = executor.awaitTermination(limit.getNano(), TimeUnit.NANOSECONDS);
-        }
+        final boolean clean = executor.awaitTermination(limit.toMillis(), TimeUnit.MILLISECONDS);
         metrics.close();
         return clean;
     }

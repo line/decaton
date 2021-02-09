@@ -268,8 +268,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
 
     @Override
     public boolean awaitShutdown(Duration limit) throws InterruptedException {
-        final long limitMillis = Math.max(0, limit.getSeconds() * 1000L + limit.getNano() / 1000L);
-        join(limitMillis);
+        join(limit.toMillis());
         metrics.close();
         if (isAlive()) {
             log.warn("Subscription thread didn't terminate within time limit: {}", getName());
