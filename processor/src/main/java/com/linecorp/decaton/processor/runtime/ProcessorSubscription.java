@@ -233,7 +233,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
             }
             updateState(SubscriptionStateListener.State.SHUTTING_DOWN);
             waitForRemainingTasksCompletion(
-                    scope.props().get(ProcessorProperties.CONFIG_CLOSE_TIMEOUT_MS).value());
+                    scope.props().get(ProcessorProperties.CONFIG_SHUTDOWN_TIMEOUT_MS).value());
         } catch (RuntimeException e) {
             log.error("Unknown exception thrown at subscription loop, thread will be terminated: {}", scope, e);
             updateState(SubscriptionStateListener.State.SHUTTING_DOWN);
@@ -267,10 +267,16 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
     }
 
     @Override
-    public void awaitShutdown(Duration limit) throws InterruptedException {
+    public boolean awaitShutdown(Duration limit) throws InterruptedException {
         final long limitMillis = Math.max(0, limit.getSeconds() * 1000L + limit.getNano() / 1000L);
         join(limitMillis);
         metrics.close();
-        log.info("Subscription thread terminated: {}", getName());
+        if (isAlive()) {
+            log.warn("Subscription thread didn't terminate within time limit: {}", getName());
+            return false;
+        } else {
+            log.info("Subscription thread terminated: {}", getName());
+            return true;
+        }
     }
 }

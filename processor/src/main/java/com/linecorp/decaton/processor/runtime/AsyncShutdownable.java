@@ -17,8 +17,18 @@
 package com.linecorp.decaton.processor.runtime;
 
 import java.time.Duration;
-import java.time.temporal.ChronoUnit;
+import java.util.concurrent.ExecutorService;
 
+/**
+ * Represents a service with a two-stage shutdown process, vaguely analogous to that of {@link ExecutorService}:
+ * allows us to initiate a shutdown that will proceed asynchronously and then subsequently await the completion
+ * of that asynchronous process. This can be useful e.g. when terminating several {@link ProcessorSubscription}s
+ * at once (e.g. for application shutdown) where we would like to "gracefully" shut down by allowing each
+ * subscription to finish processing all "in-flight" tasks, but would also like to shut down within a reasonable
+ * time frame: we can first call initiateShutdown on each instance, and then call awaitShutdown on each.
+ * Although the worst-case time is the same as simply calling close on each instance in turn, in practice this
+ * will usually lead to a quicker overall shutdown process.
+ */
 public interface AsyncShutdownable extends AutoCloseable {
     /**
      * Start the shutdown process but return without blocking.
@@ -28,16 +38,18 @@ public interface AsyncShutdownable extends AutoCloseable {
     void initiateShutdown();
 
     /**
-     * Block until shutdown completes, the given duration limit has passed,
-     * or this thread is interrupted.
+     * Block until shutdown completes, the given duration limit has passed, or this thread is interrupted.
+     * @param limit maximum time to block for
+     * @throws InterruptedException if this thread is interrupted
+     * @return true if shutdown completed, false if the limit elapsed before shutdown completed.
      */
-    void awaitShutdown(Duration limit) throws InterruptedException;
+    boolean awaitShutdown(Duration limit) throws InterruptedException;
 
     /**
      * Block until shutdown completes or this thread is interrupted
      */
     default void awaitShutdown() throws InterruptedException {
-        awaitShutdown(ChronoUnit.FOREVER.getDuration());
+        awaitShutdown(Duration.ofMillis(Long.MAX_VALUE));
     }
 
     /**

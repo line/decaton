@@ -146,14 +146,17 @@ public class PartitionProcessor implements AsyncShutdownable {
     }
 
     @Override
-    public void awaitShutdown(Duration limit) throws InterruptedException {
+    public boolean awaitShutdown(Duration limit) throws InterruptedException {
         final Instant absLimit = Instant.now().plus(limit);
+        boolean clean = true;
         for (ProcessorUnit unit : units) {
-            unit.awaitShutdown(Duration.between(Instant.now(), absLimit));
+            final Duration unitLimit = Duration.between(Instant.now(), absLimit);
+            clean &= unit.awaitShutdown(unitLimit.isNegative() ? Duration.ZERO : unitLimit);
         }
         Utils.runInParallel(
                 "DestroyThreadScopedProcessors",
                 IntStream.range(0, units.size()).mapToObj(this::destroyThreadProcessorTask).collect(toList()))
              .join();
+        return clean;
     }
 }
