@@ -85,14 +85,17 @@ public class ProcessorUnit implements AsyncShutdownable {
     @Override
     public void initiateShutdown() {
         terminated = true;
-        pipeline.close();
+        // Submit close as a task to the single-threaded executor, so that it closes after any in-flight tasks
+        // finish
+        executor.submit(() -> {
+            pipeline.close();
+            metrics.close();
+        });
         executor.shutdown();
     }
 
     @Override
     public boolean awaitShutdown(Duration limit) throws InterruptedException {
-        final boolean clean = executor.awaitTermination(limit.toMillis(), TimeUnit.MILLISECONDS);
-        metrics.close();
-        return clean;
+        return executor.awaitTermination(limit.toMillis(), TimeUnit.MILLISECONDS);
     }
 }

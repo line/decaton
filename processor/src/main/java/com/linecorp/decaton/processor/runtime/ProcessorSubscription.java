@@ -57,7 +57,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
     private final SubscriptionScope scope;
     private final AtomicBoolean terminated;
     private final BlacklistedKeysFilter blacklistedKeysFilter;
-    private final PartitionContexts contexts;
+    final PartitionContexts contexts;
     private final Processors<?> processors;
     private final Property<Long> rebalanceTimeoutMillis;
     private final SubscriptionStateListener stateListener;
@@ -257,6 +257,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
                      timer.elapsedMillis());
 
             updateState(SubscriptionStateListener.State.TERMINATED);
+            metrics.close();
         }
     }
 
@@ -269,9 +270,8 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
     @Override
     public boolean awaitShutdown(Duration limit) throws InterruptedException {
         join(limit.toMillis());
-        metrics.close();
         if (isAlive()) {
-            log.warn("Subscription thread didn't terminate within time limit: {}", getName());
+            log.info("Subscription thread didn't terminate within time limit: {}", getName());
             return false;
         } else {
             log.info("Subscription thread terminated: {}", getName());

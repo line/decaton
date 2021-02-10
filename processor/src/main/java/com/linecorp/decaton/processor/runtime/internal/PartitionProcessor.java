@@ -114,7 +114,7 @@ public class PartitionProcessor implements AsyncShutdownable {
     }
 
     @Override
-    public void initiateShutdown() {
+    public void close() throws Exception {
         // Shutdown sequence:
         // 1. ProcessorUnit#initiateShutdown => termination flag turns on, new tasks inflow stops.
         // 2. ProcessorPipeline#close => termination flag turns on, it becomes ready to return immediately for
@@ -126,7 +126,20 @@ public class PartitionProcessor implements AsyncShutdownable {
         // 5. ProcessorUnit#awaitShutdown => synchronize on executor termination, ensure there's no remaining
         // running tasks.
         // 6. Destroy all thread-scoped processors.
+        AsyncShutdownable.super.close();
+        Utils.runInParallel(
+                "DestroyThreadScopedProcessors",
+                IntStream.range(0, units.size()).mapToObj(this::destroyThreadProcessorTask).collect(toList()))
+             .join();
+    }
 
+    /**
+     * Note that this method does not destroy thread-scoped processors since that should only be done after
+     * all ProcessorUnits have shut down.
+     * @see #close()
+     */
+    @Override
+    public void initiateShutdown() {
         for (ProcessorUnit unit : units) {
             try {
                 unit.initiateShutdown();
@@ -153,10 +166,6 @@ public class PartitionProcessor implements AsyncShutdownable {
             final Duration unitLimit = Duration.between(Instant.now(), absLimit);
             clean &= unit.awaitShutdown(unitLimit.isNegative() ? Duration.ZERO : unitLimit);
         }
-        Utils.runInParallel(
-                "DestroyThreadScopedProcessors",
-                IntStream.range(0, units.size()).mapToObj(this::destroyThreadProcessorTask).collect(toList()))
-             .join();
         return clean;
     }
 }

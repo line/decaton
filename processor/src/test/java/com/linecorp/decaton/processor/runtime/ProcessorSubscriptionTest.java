@@ -234,6 +234,7 @@ public class ProcessorSubscriptionTest {
         asyncProcessingStarted.await();
         subscription.initiateShutdown();
         assertTrue(consumer.committed(singleton(tp)).isEmpty());
+        assertEquals(2, subscription.contexts.totalPendingTasks());
         letTasksComplete.countDown();
         subscription.awaitShutdown();
         assertEquals(12, consumer.committed(singleton(tp)).get(tp).offset());
