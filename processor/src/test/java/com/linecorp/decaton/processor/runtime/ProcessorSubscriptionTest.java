@@ -36,6 +36,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.Executors;
@@ -197,9 +198,11 @@ public class ProcessorSubscriptionTest {
         consumer.updateEndOffsets(singletonMap(tp, 10L));
         ExecutorService executor = Executors.newSingleThreadExecutor();
         CountDownLatch subscribed = new CountDownLatch(1);
+        Semaphore letTaskFinishBlocking = new Semaphore(1, true);
         CountDownLatch asyncProcessingStarted = new CountDownLatch(1);
         CountDownLatch letTasksComplete = new CountDownLatch(1);
         DecatonProcessor<String> processor = (context, task) -> {
+            letTaskFinishBlocking.acquire();
             final DeferredCompletion completion = context.deferCompletion();
             executor.submit(() -> {
                 try {
@@ -229,15 +232,20 @@ public class ProcessorSubscriptionTest {
         subscription.start();
         subscribed.await();
         consumer.rebalance(singleton(tp));
+        // First task finishes synchronous part of processing, starts async processing
+        // Second task blocks during synchronous part of processing
+        // Third task will be queued behind it
         consumer.addRecord(new ConsumerRecord<>(tp.topic(), tp.partition(), 10, "", NO_DATA));
         consumer.addRecord(new ConsumerRecord<>(tp.topic(), tp.partition(), 11, "", NO_DATA));
+        consumer.addRecord(new ConsumerRecord<>(tp.topic(), tp.partition(), 12, "", NO_DATA));
         asyncProcessingStarted.await();
         subscription.initiateShutdown();
         assertTrue(consumer.committed(singleton(tp)).isEmpty());
-        assertEquals(2, subscription.contexts.totalPendingTasks());
+        assertEquals(3, subscription.contexts.totalPendingTasks());
         letTasksComplete.countDown();
+        letTaskFinishBlocking.release(2);
         subscription.awaitShutdown();
-        assertEquals(12, consumer.committed(singleton(tp)).get(tp).offset());
+        assertEquals(13, consumer.committed(singleton(tp)).get(tp).offset());
         executor.shutdown();
         executor.awaitTermination(Long.MAX_VALUE, TimeUnit.SECONDS);
     }
