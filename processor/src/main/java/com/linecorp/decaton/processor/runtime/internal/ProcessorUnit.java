@@ -16,9 +16,9 @@
 
 package com.linecorp.decaton.processor.runtime.internal;
 
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 
 import org.apache.kafka.common.TopicPartition;
 
@@ -32,10 +32,9 @@ import lombok.extern.slf4j.Slf4j;
 public class ProcessorUnit implements AsyncShutdownable {
     private final ProcessPipeline<?> pipeline;
     private final ExecutorService executor;
-
     private final ResourceUtilizationMetrics metrics;
 
-    private volatile boolean terminated;
+    private volatile CompletableFuture<Void> shutdownFuture;
 
     public ProcessorUnit(ThreadScope scope, ProcessPipeline<?> pipeline) {
         this.pipeline = pipeline;
@@ -56,7 +55,7 @@ public class ProcessorUnit implements AsyncShutdownable {
     }
 
     private void processTask(TaskRequest request) {
-        if (terminated) {
+        if (terminated()) {
             // There's a chance that some tasks leftover in executor's queue are still attempted to be processed
             // even after this unit enters shutdown sequences.
             // In such case we should ignore all following tasks to quickly complete shutdown sequence.
@@ -80,16 +79,19 @@ public class ProcessorUnit implements AsyncShutdownable {
         }
     }
 
-    @Override
-    public void initiateShutdown() {
-        terminated = true;
-        pipeline.close();
-        executor.shutdown();
+    private boolean terminated() {
+        return shutdownFuture != null;
     }
 
     @Override
-    public void awaitShutdown() throws InterruptedException {
-        executor.awaitTermination(Long.MAX_VALUE, TimeUnit.SECONDS);
-        metrics.close();
+    public synchronized CompletableFuture<Void> startShutdown() {
+        if (!terminated()) {
+            pipeline.close();
+            CompletableFuture<Void> executorShutdown = new CompletableFuture<>();
+            executor.execute(() -> executorShutdown.complete(null));
+            executor.shutdown();
+            shutdownFuture = executorShutdown.whenComplete((unused, throwable) -> metrics.close());
+        }
+        return shutdownFuture;
     }
 }

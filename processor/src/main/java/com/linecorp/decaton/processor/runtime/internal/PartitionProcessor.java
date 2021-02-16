@@ -16,20 +16,17 @@
 
 package com.linecorp.decaton.processor.runtime.internal;
 
-import static java.util.stream.Collectors.toList;
-
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.IntStream;
+import java.util.concurrent.CompletableFuture;
 
 import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.linecorp.decaton.processor.DecatonProcessor;
-import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.metrics.Metrics;
-import com.linecorp.decaton.processor.runtime.internal.Utils.Task;
+import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 
 /**
  * This class is responsible for following portions:
@@ -52,6 +49,8 @@ public class PartitionProcessor implements AsyncShutdownable {
     // Sharing this limiter object with all processor threads
     // can make processing unfair but it likely gives better overall throughput
     private final RateLimiter rateLimiter;
+
+    private volatile CompletableFuture<Void> shutdownFuture;
 
     public PartitionProcessor(PartitionScope scope, Processors<?> processors) {
         this.scope = scope;
@@ -111,7 +110,7 @@ public class PartitionProcessor implements AsyncShutdownable {
     }
 
     @Override
-    public void initiateShutdown() {
+    public CompletableFuture<Void> startShutdown() {
         // Shutdown sequence:
         // 1. ProcessorUnit#initiateShutdown => termination flag turns on, new tasks inflow stops.
         // 2. ProcessorPipeline#close => termination flag turns on, it becomes ready to return immediately for
@@ -124,32 +123,27 @@ public class PartitionProcessor implements AsyncShutdownable {
         // running tasks.
         // 6. Destroy all thread-scoped processors.
 
-        for (ProcessorUnit unit : units) {
-            try {
-                unit.initiateShutdown();
-            } catch (RuntimeException e) {
-                logger.error("Processor unit threw exception on shutdown", e);
+        if (shutdownFuture == null) {
+            CompletableFuture[] cfs = new CompletableFuture[units.size()];
+            int i = 0;
+            for (ProcessorUnit unit : units) {
+                final int index = i++;
+                try {
+                    cfs[index] = unit.startShutdown().whenComplete(
+                            (unused, throwable) -> processors
+                                    .destroyThreadScope(scope.subscriptionId(), scope.topicPartition(), index));
+                } catch (RuntimeException e) {
+                    logger.error("Processor unit threw exception on shutdown", e);
+                }
             }
-        }
-        try {
-            rateLimiter.close();
-        } catch (Exception e) {
-            logger.error("Error thrown while closing rate limiter", e);
-        }
-    }
+            try {
+                rateLimiter.close();
+            } catch (Exception e) {
+                logger.error("Error thrown while closing rate limiter", e);
+            }
 
-    private Task destroyThreadProcessorTask(int i) {
-        return () -> processors.destroyThreadScope(scope.subscriptionId(), scope.topicPartition(), i);
-    }
-
-    @Override
-    public void awaitShutdown() throws InterruptedException {
-        for (ProcessorUnit unit : units) {
-            unit.awaitShutdown();
+            shutdownFuture = CompletableFuture.allOf(cfs);
         }
-        Utils.runInParallel(
-                "DestroyThreadScopedProcessors",
-                IntStream.range(0, units.size()).mapToObj(this::destroyThreadProcessorTask).collect(toList()))
-             .join();
+        return shutdownFuture;
     }
 }

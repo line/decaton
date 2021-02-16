@@ -20,7 +20,7 @@ import java.time.Duration;
 import java.util.Collection;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -32,8 +32,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 
 import com.linecorp.decaton.processor.DeferredCompletion;
-import com.linecorp.decaton.processor.tracing.TracingProvider;
-import com.linecorp.decaton.processor.tracing.TracingProvider.RecordTraceHandle;
 import com.linecorp.decaton.processor.metrics.Metrics;
 import com.linecorp.decaton.processor.metrics.Metrics.SubscriptionMetrics;
 import com.linecorp.decaton.processor.runtime.internal.AssignmentManager;
@@ -42,21 +40,22 @@ import com.linecorp.decaton.processor.runtime.internal.BlacklistedKeysFilter;
 import com.linecorp.decaton.processor.runtime.internal.CommitManager;
 import com.linecorp.decaton.processor.runtime.internal.ConsumeManager;
 import com.linecorp.decaton.processor.runtime.internal.ConsumeManager.ConsumerHandler;
-import com.linecorp.decaton.processor.runtime.internal.SubscriptionScope;
-import com.linecorp.decaton.processor.runtime.internal.TaskRequest;
-import com.linecorp.decaton.processor.runtime.internal.Utils;
-import com.linecorp.decaton.processor.runtime.internal.Utils.Timer;
 import com.linecorp.decaton.processor.runtime.internal.OffsetRegressionException;
 import com.linecorp.decaton.processor.runtime.internal.PartitionContext;
 import com.linecorp.decaton.processor.runtime.internal.PartitionContexts;
 import com.linecorp.decaton.processor.runtime.internal.Processors;
+import com.linecorp.decaton.processor.runtime.internal.SubscriptionScope;
+import com.linecorp.decaton.processor.runtime.internal.TaskRequest;
+import com.linecorp.decaton.processor.runtime.internal.Utils;
+import com.linecorp.decaton.processor.runtime.internal.Utils.Timer;
+import com.linecorp.decaton.processor.tracing.TracingProvider;
+import com.linecorp.decaton.processor.tracing.TracingProvider.RecordTraceHandle;
 
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class ProcessorSubscription extends Thread implements AsyncShutdownable {
     private final SubscriptionScope scope;
-    private final AtomicBoolean terminated;
     private final BlacklistedKeysFilter blacklistedKeysFilter;
     private final PartitionContexts contexts;
     private final Processors<?> processors;
@@ -66,6 +65,8 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
     private final CommitManager commitManager;
     private final AssignmentManager assignManager;
     private final ConsumeManager consumeManager;
+    private final CompletableFuture<Void> threadTerminate;
+    private volatile CompletableFuture<Void> shutdownFuture;
 
     class Handler implements ConsumerHandler {
         @Override
@@ -173,7 +174,6 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
         this.processors = processors;
         this.stateListener = stateListener;
         this.contexts = contexts;
-        terminated = new AtomicBoolean();
         metrics = Metrics.withTags("subscription", scope.subscriptionId()).new SubscriptionMetrics();
 
         Consumer<String, byte[]> consumer = consumerSupplier.get();
@@ -183,6 +183,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
         assignManager = new AssignmentManager(contexts);
         blacklistedKeysFilter = new BlacklistedKeysFilter(props);
         rebalanceTimeoutMillis = props.get(ProcessorProperties.CONFIG_GROUP_REBALANCE_TIMEOUT_MS);
+        threadTerminate = new CompletableFuture<>();
 
         setName(String.format("DecatonSubscriptionThread-%s", scope));
     }
@@ -220,7 +221,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
         consumeManager.init(subscribeTopics());
 
         try {
-            while (!terminated.get()) {
+            while (!terminated()) {
                 consumeManager.poll();
 
                 Timer timer = Utils.timer();
@@ -255,20 +256,24 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
             log.info("ProcessorSubscription {} terminated in {} ms", scope,
                      timer.elapsedMillis());
 
+            threadTerminate.complete(null);
             updateState(SubscriptionStateListener.State.TERMINATED);
         }
     }
 
     @Override
-    public void initiateShutdown() {
+    public synchronized CompletableFuture<Void> startShutdown() {
         log.info("Initiating shutdown of subscription thread: {}", getName());
-        terminated.set(true);
+        if (!terminated()) {
+            shutdownFuture = threadTerminate.whenComplete((unused, throwable) -> {
+                metrics.close();
+                log.info("Subscription thread terminated: {}", getName());
+            });
+        }
+        return shutdownFuture;
     }
 
-    @Override
-    public void awaitShutdown() throws InterruptedException {
-        join();
-        metrics.close();
-        log.info("Subscription thread terminated: {}", getName());
+    private boolean terminated() {
+        return shutdownFuture != null;
     }
 }

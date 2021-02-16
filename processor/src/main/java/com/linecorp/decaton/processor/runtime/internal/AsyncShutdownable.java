@@ -16,14 +16,13 @@
 
 package com.linecorp.decaton.processor.runtime.internal;
 
-public interface AsyncShutdownable extends AutoCloseable {
-    void initiateShutdown();
+import java.util.concurrent.CompletableFuture;
 
-    void awaitShutdown() throws InterruptedException;
+public interface AsyncShutdownable extends AutoCloseable {
+    CompletableFuture<Void> startShutdown();
 
     @Override
     default void close() throws Exception {
-        initiateShutdown();
-        awaitShutdown();
+        startShutdown().get();
     }
 }
