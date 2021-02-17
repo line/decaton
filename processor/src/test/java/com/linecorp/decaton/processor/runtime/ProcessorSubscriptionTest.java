@@ -52,6 +52,7 @@ import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
 import org.mockito.stubbing.Answer;
 
+import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.TaskMetadata;
 import com.linecorp.decaton.processor.runtime.SubscriptionStateListener.State;
 import com.linecorp.decaton.processor.runtime.internal.SubscriptionScope;
@@ -94,20 +95,20 @@ public class ProcessorSubscriptionTest {
     private static ProcessorSubscription subscription(Consumer<String, byte[]> consumer,
                                                       SubscriptionStateListener listener,
                                                       TopicPartition tp,
-                                                      CountDownLatch processLatch) {
+                                                      DecatonProcessor<String> processor) {
         SubscriptionScope scope = scope(tp.topic());
+        ProcessorsBuilder<String> builder =
+                ProcessorsBuilder.consuming(scope.topic(),
+                                            (byte[] bytes) -> new DecatonTask<>(
+                                                    TaskMetadata.builder().build(),
+                                                    new String(bytes), bytes));
+        if (processor != null) {
+            builder.thenProcess(processor);
+        }
         return new ProcessorSubscription(
                 scope,
                 () -> consumer,
-                ProcessorsBuilder.consuming(scope.topic(),
-                                            (byte[] bytes) -> new DecatonTask<>(
-                                                    TaskMetadata.builder().build(), "dummy", bytes))
-                                 .thenProcess((context, task) -> {
-                                     if (processLatch != null) {
-                                         processLatch.countDown();
-                                     }
-                                 })
-                                 .build(null),
+                builder.build(null),
                 scope.props(),
                 listener);
     }
@@ -153,8 +154,12 @@ public class ProcessorSubscriptionTest {
         feedOffsets.add(99L);
         feedOffsets.add(100L);
         feedOffsets.add(101L);
-        CountDownLatch processLatch = new CountDownLatch(feedOffsets.size());
-        ProcessorSubscription subscription = subscription(consumer, ignored -> {}, tp, processLatch);
+        CountDownLatch processLatch = new CountDownLatch(1);
+        ProcessorSubscription subscription = subscription(consumer, ignored -> {}, tp, (context, task) -> {
+            if ("101".equals(task)) {
+                processLatch.countDown();
+            }
+        });
 
         Map<TopicPartition, OffsetAndMetadata> committedOffsets = new HashMap<>();
         Answer<?> storeCommitOffsets = invocation -> {
@@ -173,7 +178,8 @@ public class ProcessorSubscriptionTest {
             if (offset != null) {
                 return new ConsumerRecords<>(singletonMap(tp, Collections.singletonList(
                         // Feed one record, then a subsequent record of the regressing offset.
-                        new ConsumerRecord<>(tp.topic(), tp.partition(), offset, "abc", new byte[0]))));
+                        new ConsumerRecord<>(tp.topic(), tp.partition(), offset, "abc",
+                                             String.valueOf(offset).getBytes()))));
             } else {
                 Thread.sleep(invocation.getArgument(0));
                 return ConsumerRecords.empty();
