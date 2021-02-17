@@ -22,16 +22,17 @@ import static org.junit.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -46,11 +47,10 @@ import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.Rule;
 import org.junit.Test;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
+import org.mockito.stubbing.Answer;
 
 import com.linecorp.decaton.processor.TaskMetadata;
 import com.linecorp.decaton.processor.runtime.SubscriptionStateListener.State;
@@ -63,9 +63,6 @@ public class ProcessorSubscriptionTest {
 
     @Mock
     Consumer<String, byte[]> consumer;
-
-    @Captor
-    ArgumentCaptor<Map<TopicPartition, OffsetAndMetadata>> offsetsCaptor;
 
     /**
      * A mock consumer which exposes rebalance listener so that can be triggered manually
@@ -96,7 +93,8 @@ public class ProcessorSubscriptionTest {
 
     private static ProcessorSubscription subscription(Consumer<String, byte[]> consumer,
                                                       SubscriptionStateListener listener,
-                                                      TopicPartition tp) {
+                                                      TopicPartition tp,
+                                                      CountDownLatch processLatch) {
         SubscriptionScope scope = scope(tp.topic());
         return new ProcessorSubscription(
                 scope,
@@ -104,6 +102,11 @@ public class ProcessorSubscriptionTest {
                 ProcessorsBuilder.consuming(scope.topic(),
                                             (byte[] bytes) -> new DecatonTask<>(
                                                     TaskMetadata.builder().build(), "dummy", bytes))
+                                 .thenProcess((context, task) -> {
+                                     if (processLatch != null) {
+                                         processLatch.countDown();
+                                     }
+                                 })
                                  .build(null),
                 scope.props(),
                 listener);
@@ -121,7 +124,7 @@ public class ProcessorSubscriptionTest {
             pollLatch.countDown();
         });
 
-        ProcessorSubscription subscription = subscription(consumer, states::add, tp);
+        ProcessorSubscription subscription = subscription(consumer, states::add, tp, null);
 
         subscription.start();
         pollLatch.await();
@@ -145,29 +148,44 @@ public class ProcessorSubscriptionTest {
             return null;
         }).when(consumer).subscribe(any(Collection.class), any(ConsumerRebalanceListener.class));
 
-        ProcessorSubscription subscription = subscription(consumer, ignored -> {}, tp);
+        BlockingQueue<Long> feedOffsets = new ArrayBlockingQueue<>(4);
+        feedOffsets.add(100L);
+        feedOffsets.add(99L);
+        feedOffsets.add(100L);
+        feedOffsets.add(101L);
+        CountDownLatch processLatch = new CountDownLatch(feedOffsets.size());
+        ProcessorSubscription subscription = subscription(consumer, ignored -> {}, tp, processLatch);
+
+        Map<TopicPartition, OffsetAndMetadata> committedOffsets = new HashMap<>();
+        Answer<?> storeCommitOffsets = invocation -> {
+            committedOffsets.putAll(invocation.getArgument(0));
+            return null;
+        };
+        doAnswer(storeCommitOffsets).when(consumer).commitSync(any(Map.class));
+        doAnswer(storeCommitOffsets).when(consumer).commitAsync(any(Map.class), any());
+
         AtomicBoolean first = new AtomicBoolean();
-        CountDownLatch pollLatch = new CountDownLatch(1);
         doAnswer(invocation -> {
             if (first.compareAndSet(false, true)) {
                 listener.get().onPartitionsAssigned(singleton(tp));
-                return new ConsumerRecords<>(singletonMap(tp, Arrays.asList(
+            }
+            Long offset = feedOffsets.poll();
+            if (offset != null) {
+                return new ConsumerRecords<>(singletonMap(tp, Collections.singletonList(
                         // Feed one record, then a subsequent record of the regressing offset.
-                        new ConsumerRecord<>(tp.topic(), tp.partition(), 100L, "abc", new byte[0]),
-                        new ConsumerRecord<>(tp.topic(), tp.partition(), 99L, "abc", new byte[0]))));
+                        new ConsumerRecord<>(tp.topic(), tp.partition(), offset, "abc", new byte[0]))));
             } else {
-                pollLatch.countDown();
+                Thread.sleep(invocation.getArgument(0));
                 return ConsumerRecords.empty();
             }
         }).when(consumer).poll(anyLong());
 
         subscription.start();
-        pollLatch.await();
+        processLatch.await();
         subscription.close();
 
-        verify(consumer, times(1)).commitAsync(offsetsCaptor.capture(), any());
-        Map<TopicPartition, OffsetAndMetadata> offsets = offsetsCaptor.getValue();
-        OffsetAndMetadata offset = offsets.get(tp);
-        assertEquals(100L, offset.offset());
+        OffsetAndMetadata offset = committedOffsets.get(tp);
+        // 101 + 1 is committed when offset=100 is completed.
+        assertEquals(102L, offset.offset());
     }
 }
