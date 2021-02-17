@@ -20,6 +20,8 @@ import java.time.Duration;
 import java.util.Collection;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -65,6 +67,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
     private final CommitManager commitManager;
     private final AssignmentManager assignManager;
     private final ConsumeManager consumeManager;
+    private final CompletableFuture<Void> shutdownFuture = new CompletableFuture<>();
 
     class Handler implements ConsumerHandler {
         @Override
@@ -258,6 +261,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
 
             updateState(SubscriptionStateListener.State.TERMINATED);
             metrics.close();
+            shutdownFuture.complete(null);
         }
     }
 
@@ -268,14 +272,8 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
     }
 
     @Override
-    public boolean awaitShutdown(Duration limit) throws InterruptedException {
-        join(limit.toMillis());
-        if (isAlive()) {
-            log.info("Subscription thread didn't terminate within time limit: {}", getName());
-            return false;
-        } else {
-            log.info("Subscription thread terminated: {}", getName());
-            return true;
-        }
+    public CompletionStage<Void> shutdownFuture() {
+        return shutdownFuture;
     }
+
 }

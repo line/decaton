@@ -16,10 +16,10 @@
 
 package com.linecorp.decaton.processor.runtime.internal;
 
-import java.time.Duration;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 
 import org.apache.kafka.common.TopicPartition;
 
@@ -34,10 +34,12 @@ import lombok.extern.slf4j.Slf4j;
 public class ProcessorUnit implements AsyncShutdownable {
     private final ProcessPipeline<?> pipeline;
     private final ExecutorService executor;
+    private final CompletableFuture<Void> executorShutdownFuture = new CompletableFuture<>();
 
     private final ResourceUtilizationMetrics metrics;
 
     private volatile boolean terminated;
+    private final CompletionStage<Void> shutdownFuture;
 
     public ProcessorUnit(ThreadScope scope, ProcessPipeline<?> pipeline) {
         this.pipeline = pipeline;
@@ -50,6 +52,10 @@ public class ProcessorUnit implements AsyncShutdownable {
                                    "partition", String.valueOf(tp.partition()),
                                    "subpartition", String.valueOf(scope.threadId()))
                 .new ResourceUtilizationMetrics();
+        shutdownFuture = executorShutdownFuture.thenAccept(v -> {
+            pipeline.close();
+            metrics.close();
+        });
     }
 
     public void putTask(TaskRequest request) {
@@ -87,15 +93,13 @@ public class ProcessorUnit implements AsyncShutdownable {
         terminated = true;
         // Submit close as a task to the single-threaded executor, so that it closes after any in-flight tasks
         // finish
-        executor.submit(() -> {
-            pipeline.close();
-            metrics.close();
-        });
+        executor.submit(() -> executorShutdownFuture.complete(null));
         executor.shutdown();
     }
 
     @Override
-    public boolean awaitShutdown(Duration limit) throws InterruptedException {
-        return executor.awaitTermination(limit.toMillis(), TimeUnit.MILLISECONDS);
+    public CompletionStage<Void> shutdownFuture() {
+        return shutdownFuture;
     }
+
 }
