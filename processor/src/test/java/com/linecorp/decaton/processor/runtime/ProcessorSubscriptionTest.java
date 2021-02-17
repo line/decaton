@@ -191,7 +191,7 @@ public class ProcessorSubscriptionTest {
         subscription.close();
 
         OffsetAndMetadata offset = committedOffsets.get(tp);
-        // 101 + 1 is committed when offset=100 is completed.
+        // 101 + 1 is committed when offset=101 is completed.
         assertEquals(102L, offset.offset());
     }
 }
