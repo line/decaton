@@ -16,9 +16,10 @@
 
 package com.linecorp.decaton.processor.runtime.internal;
 
-import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.apache.kafka.clients.consumer.Consumer;
@@ -117,7 +118,7 @@ public class ConsumeManager implements AutoCloseable {
      * @param subscribeTopics list of topics to fetch records from.
      */
     public void init(Collection<String> subscribeTopics) {
-        List<TopicPartition> pausedPartitions = new ArrayList<>();
+        Set<TopicPartition> pausedPartitions = new HashSet<>();
         consumer.subscribe(subscribeTopics, new ConsumerRebalanceListener() {
             @Override
             public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
@@ -139,6 +140,7 @@ public class ConsumeManager implements AutoCloseable {
                 // Consumer rebalance resets all pause states of assigned partitions even though they
                 // haven't moved over from/to different consumer instance.
                 // Need to re-call pause with originally paused partitions to bring state back consistent.
+                pausedPartitions.retainAll(partitions);
                 try {
                     consumer.pause(pausedPartitions);
                 } finally {
