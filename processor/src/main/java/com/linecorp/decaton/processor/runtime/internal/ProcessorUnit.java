@@ -52,10 +52,7 @@ public class ProcessorUnit implements AsyncShutdownable {
                                    "partition", String.valueOf(tp.partition()),
                                    "subpartition", String.valueOf(scope.threadId()))
                 .new ResourceUtilizationMetrics();
-        shutdownFuture = executorShutdownFuture.thenAccept(v -> {
-            pipeline.close();
-            metrics.close();
-        });
+        shutdownFuture = executorShutdownFuture.thenAccept(v -> metrics.close());
     }
 
     public void putTask(TaskRequest request) {
@@ -95,6 +92,7 @@ public class ProcessorUnit implements AsyncShutdownable {
         // finish
         executor.submit(() -> executorShutdownFuture.complete(null));
         executor.shutdown();
+        pipeline.close();
     }
 
     @Override

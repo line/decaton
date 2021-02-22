@@ -235,8 +235,9 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
                 metrics.commitOffsetTime.record(timer.duration());
             }
             updateState(SubscriptionStateListener.State.SHUTTING_DOWN);
-            waitForRemainingTasksCompletion(
-                    scope.props().get(ProcessorProperties.CONFIG_SHUTDOWN_TIMEOUT_MS).value());
+            final long timeoutMillis =
+                    scope.props().get(ProcessorProperties.CONFIG_SHUTDOWN_TIMEOUT_MS).value();
+            if (timeoutMillis > 0) { waitForRemainingTasksCompletion(timeoutMillis); }
         } catch (RuntimeException e) {
             log.error("Unknown exception thrown at subscription loop, thread will be terminated: {}", scope, e);
             updateState(SubscriptionStateListener.State.SHUTTING_DOWN);
