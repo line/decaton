@@ -83,7 +83,7 @@ public class PartitionProcessorTest {
         assertEquals(2, units.size());
         verify(units.get(0), times(1)).initiateShutdown();
         verify(units.get(1), times(1)).initiateShutdown();
-        verify(units.get(0), times(1)).awaitShutdown();
-        verify(units.get(1), times(1)).awaitShutdown();
+        verify(units.get(0), times(1)).shutdownFuture();
+        verify(units.get(1), times(1)).shutdownFuture();
     }
 }

@@ -16,14 +16,16 @@
 
 package com.linecorp.decaton.processor.runtime.internal;
 
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 
 import org.apache.kafka.common.TopicPartition;
 
 import com.linecorp.decaton.processor.metrics.Metrics;
 import com.linecorp.decaton.processor.metrics.Metrics.ResourceUtilizationMetrics;
+import com.linecorp.decaton.processor.runtime.AsyncShutdownable;
 import com.linecorp.decaton.processor.runtime.internal.Utils.Timer;
 
 import lombok.extern.slf4j.Slf4j;
@@ -32,10 +34,12 @@ import lombok.extern.slf4j.Slf4j;
 public class ProcessorUnit implements AsyncShutdownable {
     private final ProcessPipeline<?> pipeline;
     private final ExecutorService executor;
+    private final CompletableFuture<Void> executorShutdownFuture = new CompletableFuture<>();
 
     private final ResourceUtilizationMetrics metrics;
 
     private volatile boolean terminated;
+    private final CompletionStage<Void> shutdownFuture;
 
     public ProcessorUnit(ThreadScope scope, ProcessPipeline<?> pipeline) {
         this.pipeline = pipeline;
@@ -48,6 +52,7 @@ public class ProcessorUnit implements AsyncShutdownable {
                                    "partition", String.valueOf(tp.partition()),
                                    "subpartition", String.valueOf(scope.threadId()))
                 .new ResourceUtilizationMetrics();
+        shutdownFuture = executorShutdownFuture.thenAccept(v -> metrics.close());
     }
 
     public void putTask(TaskRequest request) {
@@ -83,13 +88,16 @@ public class ProcessorUnit implements AsyncShutdownable {
     @Override
     public void initiateShutdown() {
         terminated = true;
-        pipeline.close();
+        // Submit close as a task to the single-threaded executor, so that it closes after any in-flight tasks
+        // finish
+        executor.submit(() -> executorShutdownFuture.complete(null));
         executor.shutdown();
+        pipeline.close();
     }
 
     @Override
-    public void awaitShutdown() throws InterruptedException {
-        executor.awaitTermination(Long.MAX_VALUE, TimeUnit.SECONDS);
-        metrics.close();
+    public CompletionStage<Void> shutdownFuture() {
+        return shutdownFuture;
     }
+
 }

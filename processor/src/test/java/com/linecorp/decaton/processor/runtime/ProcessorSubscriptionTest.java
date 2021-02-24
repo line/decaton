@@ -19,10 +19,12 @@ package com.linecorp.decaton.processor.runtime;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonMap;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doAnswer;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -34,8 +36,12 @@ import java.util.Optional;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
@@ -53,12 +59,15 @@ import org.mockito.junit.MockitoRule;
 import org.mockito.stubbing.Answer;
 
 import com.linecorp.decaton.processor.DecatonProcessor;
+import com.linecorp.decaton.processor.DeferredCompletion;
 import com.linecorp.decaton.processor.TaskMetadata;
 import com.linecorp.decaton.processor.runtime.SubscriptionStateListener.State;
 import com.linecorp.decaton.processor.runtime.internal.SubscriptionScope;
 import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider;
 
 public class ProcessorSubscriptionTest {
+    public static final byte[] NO_DATA = {};
+
     @Rule
     public MockitoRule rule = MockitoJUnit.rule();
 
@@ -70,7 +79,7 @@ public class ProcessorSubscriptionTest {
      * ({@link MockConsumer} doesn't simulate rebalance listener invocation. refs: KAFKA-6968).
      */
     private static class DecatonMockConsumer extends MockConsumer<String, byte[]> {
-        private volatile ConsumerRebalanceListener rebalanceListener;
+        volatile ConsumerRebalanceListener rebalanceListener;
 
         private DecatonMockConsumer() {
             super(OffsetResetStrategy.LATEST);
@@ -81,14 +90,18 @@ public class ProcessorSubscriptionTest {
             rebalanceListener = listener;
             super.subscribe(topics, listener);
         }
+
+        @Override
+        public synchronized void close(long timeout, TimeUnit unit) {}
     }
 
-    private static SubscriptionScope scope(String topic) {
+    private static SubscriptionScope scope(String topic, long waitForProcessingOnClose) {
         return new SubscriptionScope(
                 "subscription",
                 topic,
                 Optional.empty(),
-                ProcessorProperties.builder().build(),
+                ProcessorProperties.builder().set(Property.ofStatic(
+                        ProcessorProperties.CONFIG_SHUTDOWN_TIMEOUT_MS, waitForProcessingOnClose)).build(),
                 NoopTracingProvider.INSTANCE);
     }
 
@@ -96,7 +109,7 @@ public class ProcessorSubscriptionTest {
                                                       SubscriptionStateListener listener,
                                                       TopicPartition tp,
                                                       DecatonProcessor<String> processor) {
-        SubscriptionScope scope = scope(tp.topic());
+        SubscriptionScope scope = scope(tp.topic(), 0L);
         ProcessorsBuilder<String> builder =
                 ProcessorsBuilder.consuming(scope.topic(),
                                             (byte[] bytes) -> new DecatonTask<>(
@@ -193,5 +206,70 @@ public class ProcessorSubscriptionTest {
         OffsetAndMetadata offset = committedOffsets.get(tp);
         // 101 + 1 is committed when offset=101 is completed.
         assertEquals(102L, offset.offset());
+    }
+
+    @Test(timeout = 10000L)
+    public void testTerminateAsync() throws Exception {
+        TopicPartition tp = new TopicPartition("topic", 0);
+        DecatonMockConsumer consumer = new DecatonMockConsumer() {
+            @Override
+            public synchronized ConsumerRecords<String, byte[]> poll(Duration timeout) {
+                rebalanceListener.onPartitionsAssigned(assignment());
+                return super.poll(timeout);
+            }
+        };
+        consumer.updateEndOffsets(singletonMap(tp, 10L));
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        CountDownLatch subscribed = new CountDownLatch(1);
+        Semaphore letTaskFinishBlocking = new Semaphore(1, true);
+        CountDownLatch asyncProcessingStarted = new CountDownLatch(1);
+        CountDownLatch letTasksComplete = new CountDownLatch(1);
+        DecatonProcessor<String> processor = (context, task) -> {
+            letTaskFinishBlocking.acquire();
+            final DeferredCompletion completion = context.deferCompletion();
+            executor.submit(() -> {
+                try {
+                    letTasksComplete.await();
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+                completion.complete();
+            });
+            asyncProcessingStarted.countDown();
+        };
+        SubscriptionScope scope = scope(tp.topic(), 9000L);
+        final ProcessorSubscription subscription = new ProcessorSubscription(
+                scope,
+                () -> consumer,
+                ProcessorsBuilder.consuming(scope.topic(),
+                                            (byte[] bytes) -> new DecatonTask<>(
+                                                    TaskMetadata.builder().build(), "dummy", bytes))
+                                 .thenProcess(processor)
+                                 .build(null),
+                scope.props(),
+                newState -> {
+                    if (newState == State.RUNNING) {
+                        subscribed.countDown();
+                    }
+                });
+        subscription.start();
+        subscribed.await();
+        consumer.rebalance(singleton(tp));
+        // First task finishes synchronous part of processing, starts async processing
+        // Second task blocks during synchronous part of processing
+        // Third task will be queued behind it
+        consumer.addRecord(new ConsumerRecord<>(tp.topic(), tp.partition(), 10, "", NO_DATA));
+        consumer.addRecord(new ConsumerRecord<>(tp.topic(), tp.partition(), 11, "", NO_DATA));
+        consumer.addRecord(new ConsumerRecord<>(tp.topic(), tp.partition(), 12, "", NO_DATA));
+        asyncProcessingStarted.await();
+        subscription.initiateShutdown();
+        assertTrue(consumer.committed(singleton(tp)).isEmpty());
+        assertEquals(3, subscription.contexts.totalPendingTasks());
+        letTasksComplete.countDown();
+        letTaskFinishBlocking.release(2);
+        subscription.awaitShutdown();
+        assertEquals(13, consumer.committed(singleton(tp)).get(tp).offset());
+        executor.shutdown();
+        executor.awaitTermination(Long.MAX_VALUE, TimeUnit.SECONDS);
     }
 }

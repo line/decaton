@@ -23,6 +23,7 @@ import java.util.Map;
 
 import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.runtime.internal.AbstractDecatonProperties;
+import com.linecorp.decaton.processor.runtime.internal.OutOfOrderCommitControl;
 import com.linecorp.decaton.processor.runtime.internal.RateLimiter;
 
 /**
@@ -91,15 +92,35 @@ public class ProcessorProperties extends AbstractDecatonProperties {
                                       v -> v instanceof Long && (Long) v >= 0);
     /**
      * Timeout for consumer group rebalance.
-     * Decaton waits up to this time for tasks currently in-progress to finish and then start rebalancing
-     * operations.
-     * Failing to join on tasks completion within this timeout would cause offset commit to not to happen
-     * which might consequence duplicate processing.
+     * Decaton waits up to this time for tasks currently pending or in-progress to finish before allowing a
+     * rebalance to proceed.
+     * Any tasks that do not complete within this timeout will not have their offsets committed before the
+     * rebalance, meaning they may be processed multiple times (as they will be processed again after the
+     * rebalance). If {@link #CONFIG_PARTITION_CONCURRENCY} is greater than 1, this situation might also cause
+     * other records from the same partition to be processed multiple times (see
+     * {@link OutOfOrderCommitControl}).
+     * Generally, this should be set such that {@link #CONFIG_MAX_PENDING_RECORDS} can be comfortably processed
+     * within this timeout.
      *
      * Reloadable: yes
      */
     public static final PropertyDefinition<Long> CONFIG_GROUP_REBALANCE_TIMEOUT_MS =
             PropertyDefinition.define("decaton.group.rebalance.timeout.ms", Long.class, 1000L,
+                                      v -> v instanceof Long && (Long) v >= 0);
+
+    /**
+     * Timeout for processor close. Decaton waits up to this time for tasks currently pending or in-progress
+     * to finish. Any tasks that do not complete within this timeout will mean async task processing code may
+     * still be running even after {@link ProcessorSubscription#close()} returns, which might lead to errors
+     * from e.g. shutting down dependencies of this {@link ProcessorSubscription} that are still in use from
+     * async tasks.
+     * Generally, this should be set such that {@link #CONFIG_MAX_PENDING_RECORDS} can be comfortably processed
+     * within this timeout.
+     *
+     * Reloadable: yes
+     */
+    public static final PropertyDefinition<Long> CONFIG_SHUTDOWN_TIMEOUT_MS =
+            PropertyDefinition.define("decaton.processing.shutdown.timeout.ms", Long.class, 0L,
                                       v -> v instanceof Long && (Long) v >= 0);
 
     public static final List<PropertyDefinition<?>> PROPERTY_DEFINITIONS =
@@ -109,7 +130,8 @@ public class ProcessorProperties extends AbstractDecatonProperties {
                     CONFIG_PARTITION_CONCURRENCY,
                     CONFIG_MAX_PENDING_RECORDS,
                     CONFIG_COMMIT_INTERVAL_MS,
-                    CONFIG_GROUP_REBALANCE_TIMEOUT_MS));
+                    CONFIG_GROUP_REBALANCE_TIMEOUT_MS,
+                    CONFIG_SHUTDOWN_TIMEOUT_MS));
 
     /**
      * Find and return a {@link PropertyDefinition} from its name.

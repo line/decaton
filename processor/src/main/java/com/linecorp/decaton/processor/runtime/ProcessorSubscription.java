@@ -20,6 +20,8 @@ import java.time.Duration;
 import java.util.Collection;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -37,7 +39,6 @@ import com.linecorp.decaton.processor.tracing.TracingProvider.RecordTraceHandle;
 import com.linecorp.decaton.processor.metrics.Metrics;
 import com.linecorp.decaton.processor.metrics.Metrics.SubscriptionMetrics;
 import com.linecorp.decaton.processor.runtime.internal.AssignmentManager;
-import com.linecorp.decaton.processor.runtime.internal.AsyncShutdownable;
 import com.linecorp.decaton.processor.runtime.internal.BlacklistedKeysFilter;
 import com.linecorp.decaton.processor.runtime.internal.CommitManager;
 import com.linecorp.decaton.processor.runtime.internal.ConsumeManager;
@@ -58,7 +59,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
     private final SubscriptionScope scope;
     private final AtomicBoolean terminated;
     private final BlacklistedKeysFilter blacklistedKeysFilter;
-    private final PartitionContexts contexts;
+    final PartitionContexts contexts;
     private final Processors<?> processors;
     private final Property<Long> rebalanceTimeoutMillis;
     private final SubscriptionStateListener stateListener;
@@ -66,6 +67,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
     private final CommitManager commitManager;
     private final AssignmentManager assignManager;
     private final ConsumeManager consumeManager;
+    private final CompletableFuture<Void> shutdownFuture = new CompletableFuture<>();
 
     class Handler implements ConsumerHandler {
         @Override
@@ -77,38 +79,6 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
                 commitManager.commitSync();
             } catch (CommitFailedException | TimeoutException e) {
                 log.warn("Offset commit failed at group rebalance", e);
-            }
-        }
-
-        private void waitForRemainingTasksCompletion(long timeoutMillis) {
-            Timer timer = Utils.timer();
-
-            while (true) {
-                contexts.updateHighWatermarks();
-
-                final int pendingTasksCount = contexts.totalPendingTasks();
-                Duration elapsed = timer.duration();
-                if (pendingTasksCount == 0) {
-                    if (log.isDebugEnabled()) {
-                        log.debug("Waiting for task completion is successful {} ms",
-                                  Utils.formatNum(elapsed.toMillis()));
-                    }
-                    return;
-                }
-
-                long remainingMs = timeoutMillis - elapsed.toMillis();
-                if (remainingMs <= 0) {
-                    log.warn("Timed out waiting {} tasks to complete after {} ms",
-                             pendingTasksCount, Utils.formatNum(elapsed.toMillis()));
-                    break;
-                }
-
-                try {
-                    Thread.sleep(Math.min(200L, remainingMs));
-                } catch (InterruptedException ignore) {
-                    Thread.currentThread().interrupt();
-                    break;
-                }
             }
         }
 
@@ -192,7 +162,40 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
                                  Processors<?> processors,
                                  ProcessorProperties props,
                                  SubscriptionStateListener stateListener) {
-        this(scope, consumerSupplier, processors, props, stateListener, new PartitionContexts(scope, processors));
+        this(scope, consumerSupplier, processors, props, stateListener,
+             new PartitionContexts(scope, processors));
+    }
+
+    private void waitForRemainingTasksCompletion(long timeoutMillis) {
+        Timer timer = Utils.timer();
+
+        while (true) {
+            contexts.updateHighWatermarks();
+
+            final int pendingTasksCount = contexts.totalPendingTasks();
+            Duration elapsed = timer.duration();
+            if (pendingTasksCount == 0) {
+                if (log.isDebugEnabled()) {
+                    log.debug("Waiting for task completion is successful {} ms",
+                              Utils.formatNum(elapsed.toMillis()));
+                }
+                return;
+            }
+
+            long remainingMs = timeoutMillis - elapsed.toMillis();
+            if (remainingMs <= 0) {
+                log.warn("Timed out waiting {} tasks to complete after {} ms",
+                         pendingTasksCount, Utils.formatNum(elapsed.toMillis()));
+                break;
+            }
+
+            try {
+                Thread.sleep(Math.min(200L, remainingMs));
+            } catch (InterruptedException ignore) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
     }
 
     private void updateState(SubscriptionStateListener.State newState) {
@@ -231,14 +234,16 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
                 commitManager.maybeCommitAsync();
                 metrics.commitOffsetTime.record(timer.duration());
             }
+            updateState(SubscriptionStateListener.State.SHUTTING_DOWN);
+            final long timeoutMillis =
+                    scope.props().get(ProcessorProperties.CONFIG_SHUTDOWN_TIMEOUT_MS).value();
+            if (timeoutMillis > 0) { waitForRemainingTasksCompletion(timeoutMillis); }
         } catch (RuntimeException e) {
             log.error("Unknown exception thrown at subscription loop, thread will be terminated: {}", scope, e);
-        } finally {
             updateState(SubscriptionStateListener.State.SHUTTING_DOWN);
-
+        } finally {
             Timer timer = Utils.timer();
             contexts.destroyAllProcessors();
-
             // Since kafka-clients version 2.4.0 ConsumerRebalanceListener#onPartitionsRevoked gets triggered
             // at close so the same thing is supposed to happen, but its not true for older kafka-clients version
             // so we're manually handling this here instead of relying on rebalance listener for better compatibility
@@ -256,6 +261,8 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
                      timer.elapsedMillis());
 
             updateState(SubscriptionStateListener.State.TERMINATED);
+            metrics.close();
+            shutdownFuture.complete(null);
         }
     }
 
@@ -266,9 +273,8 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
     }
 
     @Override
-    public void awaitShutdown() throws InterruptedException {
-        join();
-        metrics.close();
-        log.info("Subscription thread terminated: {}", getName());
+    public CompletionStage<Void> shutdownFuture() {
+        return shutdownFuture;
     }
+
 }
