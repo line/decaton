@@ -87,6 +87,7 @@ public class ProcessorTestSuite {
     private final Set<ProcessingGuarantee> semantics;
     private final SubscriptionStatesListener statesListener;
     private final TracingProvider tracingProvider;
+    private final Function<String, Producer<String, DecatonTaskRequest>> producerSupplier;
 
     private static final int DEFAULT_NUM_TASKS = 10000;
     private static final int NUM_KEYS = 100;
@@ -137,6 +138,8 @@ public class ProcessorTestSuite {
 
         private TracingProvider tracingProvider;
 
+        private Function<String, Producer<String, DecatonTaskRequest>> producerSupplier = TestUtils::producer;
+
         /**
          * Exclude semantics from assertion.
          * Intended to be used when we test a feature which breaks subset of semantics
@@ -178,7 +181,8 @@ public class ProcessorTestSuite {
                                           propertySupplier,
                                           semantics,
                                           statesListener,
-                                          tracingProvider);
+                                          tracingProvider,
+                                          producerSupplier);
         }
     }
 
@@ -199,7 +203,7 @@ public class ProcessorTestSuite {
         ProcessorSubscription[] subscriptions = new ProcessorSubscription[NUM_SUBSCRIPTION_INSTANCES];
 
         try {
-            producer = TestUtils.producer(rule.bootstrapServers());
+            producer = producerSupplier.apply(rule.bootstrapServers());
             for (int i = 0; i < subscriptions.length; i++) {
                 subscriptions[i] = newSubscription(i, topic, Optional.of(rollingRestartLatch));
             }
