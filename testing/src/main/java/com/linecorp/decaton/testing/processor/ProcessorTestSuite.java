@@ -88,6 +88,7 @@ public class ProcessorTestSuite {
     private final SubscriptionStatesListener statesListener;
     private final TracingProvider tracingProvider;
     private final Function<String, Producer<String, DecatonTaskRequest>> producerSupplier;
+    private final Function<Integer, String> taskKeySupplier;
 
     private static final int DEFAULT_NUM_TASKS = 10000;
     private static final int NUM_KEYS = 100;
@@ -140,6 +141,8 @@ public class ProcessorTestSuite {
 
         private Function<String, Producer<String, DecatonTaskRequest>> producerSupplier = TestUtils::producer;
 
+        private Function<Integer, String> taskKeySupplier = taskId -> String.valueOf(taskId % NUM_KEYS);
+
         /**
          * Exclude semantics from assertion.
          * Intended to be used when we test a feature which breaks subset of semantics
@@ -182,7 +185,8 @@ public class ProcessorTestSuite {
                                           semantics,
                                           statesListener,
                                           tracingProvider,
-                                          producerSupplier);
+                                          producerSupplier,
+                                          taskKeySupplier);
         }
     }
 
@@ -321,7 +325,7 @@ public class ProcessorTestSuite {
         TestTaskSerializer serializer = new TestTaskSerializer();
         for (int i = 0; i < produceFutures.length; i++) {
             TestTask task = new TestTask(String.valueOf(i));
-            String key = String.valueOf(i % NUM_KEYS);
+            String key = taskKeySupplier.apply(i);
             TaskMetadataProto taskMetadata =
                     TaskMetadataProto.newBuilder()
                                      .setTimestampMillis(System.currentTimeMillis())
