@@ -35,6 +35,7 @@ import com.linecorp.decaton.client.DecatonClientBuilder.DefaultKafkaProducerSupp
 import com.linecorp.decaton.processor.runtime.RetryConfig;
 import com.linecorp.decaton.processor.tracing.TestTracingProvider;
 import com.linecorp.decaton.testing.KafkaClusterRule;
+import com.linecorp.decaton.testing.TestUtils;
 import com.linecorp.decaton.testing.processor.ProcessedRecord;
 import com.linecorp.decaton.testing.processor.ProcessingGuarantee;
 import com.linecorp.decaton.testing.processor.ProcessingGuarantee.GuaranteeType;
@@ -97,6 +98,7 @@ public class TracingTest {
                         ctx.retry();
                     }
                 }))
+                .producerSupplier(config -> new TestTracingProducer(TestUtils.producer(config)))
                 .retryConfig(RetryConfig.builder()
                                         .retryTopic(retryTopic)
                                         .backoff(Duration.ofMillis(10))

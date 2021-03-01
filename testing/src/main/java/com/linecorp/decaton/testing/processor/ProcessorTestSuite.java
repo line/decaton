@@ -337,12 +337,8 @@ public class ProcessorTestSuite {
                                       .setMetadata(taskMetadata)
                                       .setSerializedTask(ByteString.copyFrom(serializer.serialize(task)))
                                       .build();
-            String traceId = "trace-" + UUID.randomUUID();
-            final RecordHeader traceHeader = new RecordHeader(TestTracingProvider.TRACE_HEADER,
-                                                              traceId.getBytes(StandardCharsets.UTF_8));
             ProducerRecord<String, DecatonTaskRequest> record =
-                    new ProducerRecord<>(topic, null, taskMetadata.getTimestampMillis(), key, request,
-                                         Collections.singleton(traceHeader));
+                    new ProducerRecord<>(topic, null, taskMetadata.getTimestampMillis(), key, request);
             CompletableFuture<RecordMetadata> future = new CompletableFuture<>();
             produceFutures[i] = future;
 
