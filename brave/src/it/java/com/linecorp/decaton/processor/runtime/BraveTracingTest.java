@@ -51,7 +51,9 @@ public class BraveTracingTest {
         private final Map<String, String> consumedTraceIds = new ConcurrentHashMap<>();
         private final Tracing tracing;
 
-        public BraveTracePropagation(Tracing tracing) {this.tracing = tracing;}
+        public BraveTracePropagation(Tracing tracing) {
+            this.tracing = tracing;
+        }
 
         @Override
         public void onProduce(ProducedRecord record) {
@@ -101,38 +103,6 @@ public class BraveTracingTest {
                 }))
                 .producerSupplier(
                         bootstrapServers -> kafkaTracing.producer(TestUtils.producer(bootstrapServers)))
-                .retryConfig(RetryConfig.builder()
-                                        .retryTopic(retryTopic)
-                                        .backoff(Duration.ofMillis(10))
-                                        .producerSupplier(config -> kafkaTracing.producer(
-                                                producerSupplier.getProducer(config)))
-                                        .build())
-                .tracingProvider(new BraveTracingProvider(kafkaTracing))
-                // If we retry tasks, there's no guarantee about ordering nor serial processing
-                .excludeSemantics(
-                        GuaranteeType.PROCESS_ORDERING,
-                        GuaranteeType.SERIAL_PROCESSING)
-                .customSemantics(new BraveTracePropagation(tracing))
-                .build()
-                .run();
-    }
-
-    @Test(timeout = 30000)
-    public void testTracePropagationWithNullKey() throws Exception {
-        // scenario:
-        //   * half of arrived tasks are retried once
-        //   * after retried (i.e. retryCount() > 0), no more retry
-        final DefaultKafkaProducerSupplier producerSupplier = new DefaultKafkaProducerSupplier();
-        ProcessorTestSuite
-                .builder(rule)
-                .configureProcessorsBuilder(builder -> builder.thenProcess((ctx, task) -> {
-                    if (ctx.metadata().retryCount() == 0 && ThreadLocalRandom.current().nextBoolean()) {
-                        ctx.retry();
-                    }
-                }))
-                .producerSupplier(
-                        bootstrapServers -> kafkaTracing.producer(TestUtils.producer(bootstrapServers)))
-                .taskKeySupplier(i -> null)
                 .retryConfig(RetryConfig.builder()
                                         .retryTopic(retryTopic)
                                         .backoff(Duration.ofMillis(10))

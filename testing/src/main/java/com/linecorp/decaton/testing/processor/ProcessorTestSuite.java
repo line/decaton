@@ -354,7 +354,7 @@ public class ProcessorTestSuite {
                                                                            metadata.partition()),
                                                         metadata.offset(),
                                                         task,
-                                                        traceId));
+                                                        record.headers()));
                 } else {
                     future.completeExceptionally(exception);
                 }

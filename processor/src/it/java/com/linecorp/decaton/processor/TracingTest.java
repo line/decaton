@@ -20,6 +20,7 @@ import static org.hamcrest.CoreMatchers.startsWith;
 import static org.junit.Assert.assertEquals;
 import static org.hamcrest.MatcherAssert.assertThat;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -48,7 +49,10 @@ public class TracingTest {
 
         @Override
         public void onProduce(ProducedRecord record) {
-            producedTraceIds.put(record.task().getId(), record.traceId());
+            producedTraceIds.put(record.task().getId(),
+                                 new String(
+                                         record.headers().lastHeader(TestTracingProvider.TRACE_HEADER).value(),
+                                         StandardCharsets.UTF_8));
         }
 
         @Override
