@@ -93,11 +93,10 @@ public class ProcessPipeline<T> implements AutoCloseable {
     // visible for testing
     DecatonTask<T> extract(TaskRequest request) {
         final DecatonTask<T> extracted;
-        extracted = taskExtractor.extract(request.rawRequestBytes());
+        extracted = taskExtractor.extract(request.record());
         if (!validateTask(extracted)) {
             throw new RuntimeException("Invalid task");
         }
-        request.purgeRawRequestBytes();
 
         return extracted;
     }

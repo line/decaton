@@ -110,9 +110,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
             DeferredCompletion completion = wrapForTracing(offsetCompletion, trace);
 
             if (blacklistedKeysFilter.shouldTake(record)) {
-                TaskRequest taskRequest =
-                        new TaskRequest(tp, record.offset(), completion, record.key(),
-                                        record.headers(), trace, record.value());
+                TaskRequest taskRequest = new TaskRequest(record, completion, trace);
                 context.addRequest(taskRequest);
             } else {
                 completion.complete();

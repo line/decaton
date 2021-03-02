@@ -31,9 +31,12 @@ import com.linecorp.decaton.client.KafkaProducerSupplier;
 import com.linecorp.decaton.client.PutTaskResult;
 import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
 import com.linecorp.decaton.protocol.Decaton.TaskMetadataProto;
+import com.linecorp.decaton.protocol.TaskMetadataUtil;
+
+import lombok.NonNull;
 
 /**
- * A raw interface to put a built {@link DecatonTaskRequest} directly.
+ * A raw interface to put a decaton task directly.
  * This interface isn't expected to be used by applications unless it's really necessary.
  * Use {@link DecatonClient} to put task into a Decaton topic instead.
  */
@@ -46,7 +49,7 @@ public class DecatonTaskProducer implements AutoCloseable {
         presetProducerConfig.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "1");
     }
 
-    private final Producer<String, DecatonTaskRequest> producer;
+    private final Producer<String, byte[]> producer;
     private final String topic;
 
     private static Properties completeProducerConfig(Properties producerConfig) {
@@ -63,11 +66,24 @@ public class DecatonTaskProducer implements AutoCloseable {
         this.topic = topic;
     }
 
-    public CompletableFuture<PutTaskResult> sendRequest(String key, DecatonTaskRequest request) {
-        TaskMetadataProto taskMeta = Objects.requireNonNull(request.getMetadata(), "request.metadata");
-        ProducerRecord<String, DecatonTaskRequest> record =
-                new ProducerRecord<>(topic, null, taskMeta.getTimestampMillis(), key, request);
+    public CompletableFuture<PutTaskResult> sendRequest(String key,
+                                                        @NonNull TaskMetadataProto taskMetadata,
+                                                        byte[] task) {
+        ProducerRecord<String, byte[]> record =
+                new ProducerRecord<>(topic, null, taskMetadata.getTimestampMillis(), key, task);
+        TaskMetadataUtil.writeAsHeader(taskMetadata, record.headers());
+        return internalSend(record);
+    }
 
+    public CompletableFuture<PutTaskResult> sendRequestLegacy(String key, DecatonTaskRequest request) {
+        TaskMetadataProto taskMeta = Objects.requireNonNull(request.getMetadata(), "request.metadata");
+        ProducerRecord<String, byte[]> record =
+                new ProducerRecord<>(topic, null, taskMeta.getTimestampMillis(), key, request.toByteArray());
+
+        return internalSend(record);
+    }
+
+    private CompletableFuture<PutTaskResult> internalSend(ProducerRecord<String, byte[]> record) {
         CompletableFuture<PutTaskResult> result = new CompletableFuture<>();
         producer.send(record, (metadata, exception) -> {
             if (exception == null) {
