@@ -16,9 +16,7 @@
 
 package com.linecorp.decaton.testing.processor;
 
-import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -26,7 +24,6 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Set;
-import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.function.Consumer;
@@ -37,18 +34,16 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.header.internals.RecordHeader;
 
 import com.google.protobuf.ByteString;
 
 import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
+import com.linecorp.decaton.processor.runtime.ProcessorSubscription;
 import com.linecorp.decaton.processor.runtime.ProcessorsBuilder;
 import com.linecorp.decaton.processor.runtime.PropertySupplier;
-import com.linecorp.decaton.processor.runtime.SubscriptionStateListener;
-import com.linecorp.decaton.processor.tracing.TestTracingProvider;
-import com.linecorp.decaton.processor.runtime.ProcessorSubscription;
 import com.linecorp.decaton.processor.runtime.RetryConfig;
+import com.linecorp.decaton.processor.runtime.SubscriptionStateListener;
 import com.linecorp.decaton.processor.tracing.TracingProvider;
 import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
 import com.linecorp.decaton.protocol.Decaton.TaskMetadataProto;
@@ -88,7 +83,6 @@ public class ProcessorTestSuite {
     private final SubscriptionStatesListener statesListener;
     private final TracingProvider tracingProvider;
     private final Function<String, Producer<String, DecatonTaskRequest>> producerSupplier;
-    private final Function<Integer, String> taskKeySupplier;
 
     private static final int DEFAULT_NUM_TASKS = 10000;
     private static final int NUM_KEYS = 100;
@@ -141,8 +135,6 @@ public class ProcessorTestSuite {
 
         private Function<String, Producer<String, DecatonTaskRequest>> producerSupplier = TestUtils::producer;
 
-        private Function<Integer, String> taskKeySupplier = taskId -> String.valueOf(taskId % NUM_KEYS);
-
         /**
          * Exclude semantics from assertion.
          * Intended to be used when we test a feature which breaks subset of semantics
@@ -185,8 +177,7 @@ public class ProcessorTestSuite {
                                           semantics,
                                           statesListener,
                                           tracingProvider,
-                                          producerSupplier,
-                                          taskKeySupplier);
+                                          producerSupplier);
         }
     }
 
@@ -325,7 +316,7 @@ public class ProcessorTestSuite {
         TestTaskSerializer serializer = new TestTaskSerializer();
         for (int i = 0; i < produceFutures.length; i++) {
             TestTask task = new TestTask(String.valueOf(i));
-            String key = taskKeySupplier.apply(i);
+            String key = String.valueOf(i % NUM_KEYS);
             TaskMetadataProto taskMetadata =
                     TaskMetadataProto.newBuilder()
                                      .setTimestampMillis(System.currentTimeMillis())
