@@ -20,6 +20,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.Future;
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -69,12 +70,13 @@ public class TestTracingProducer implements Producer<String, DecatonTaskRequest>
     }
 
     private static void propagateCurrentTrace(ProducerRecord<String, DecatonTaskRequest> record) {
-        final String traceId = TestTracingProvider.getCurrentTraceId();
-        if (null != traceId) {
-            final RecordHeader tracingHeader = new RecordHeader(TestTracingProvider.TRACE_HEADER,
-                                                                traceId.getBytes(StandardCharsets.UTF_8));
-            record.headers().add(tracingHeader);
+        String traceId = TestTracingProvider.getCurrentTraceId();
+        if (null == traceId) {
+            traceId = "trace-" + UUID.randomUUID();
         }
+        final RecordHeader tracingHeader = new RecordHeader(TestTracingProvider.TRACE_HEADER,
+                                                            traceId.getBytes(StandardCharsets.UTF_8));
+        record.headers().add(tracingHeader);
     }
 
     @Override

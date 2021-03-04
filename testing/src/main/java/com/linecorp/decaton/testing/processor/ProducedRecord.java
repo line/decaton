@@ -17,6 +17,7 @@
 package com.linecorp.decaton.testing.processor;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.header.Headers;
 
 import lombok.Value;
 import lombok.experimental.Accessors;
@@ -44,7 +45,7 @@ public class ProducedRecord {
      */
     TestTask task;
     /**
-     * Trace ID
+     * Headers that were set on the produced task
      */
-    String traceId;
+    Headers headers;
 }

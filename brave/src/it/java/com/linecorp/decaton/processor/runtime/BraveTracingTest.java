@@ -14,13 +14,10 @@
  * under the License.
  */
 
-package com.linecorp.decaton.processor;
+package com.linecorp.decaton.processor.runtime;
 
-import static org.hamcrest.CoreMatchers.startsWith;
 import static org.junit.Assert.assertEquals;
-import static org.hamcrest.MatcherAssert.assertThat;
 
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -32,8 +29,7 @@ import org.junit.ClassRule;
 import org.junit.Test;
 
 import com.linecorp.decaton.client.DecatonClientBuilder.DefaultKafkaProducerSupplier;
-import com.linecorp.decaton.processor.runtime.RetryConfig;
-import com.linecorp.decaton.processor.tracing.TestTracingProvider;
+import com.linecorp.decaton.processor.TaskMetadata;
 import com.linecorp.decaton.testing.KafkaClusterRule;
 import com.linecorp.decaton.testing.TestUtils;
 import com.linecorp.decaton.testing.processor.ProcessedRecord;
@@ -41,35 +37,40 @@ import com.linecorp.decaton.testing.processor.ProcessingGuarantee;
 import com.linecorp.decaton.testing.processor.ProcessingGuarantee.GuaranteeType;
 import com.linecorp.decaton.testing.processor.ProcessorTestSuite;
 import com.linecorp.decaton.testing.processor.ProducedRecord;
-import com.linecorp.decaton.testing.processor.TestTracingProducer;
 
-public class TracingTest {
-    public static class TracePropagation implements ProcessingGuarantee {
+import brave.Tracing;
+import brave.kafka.clients.KafkaTracing;
+
+public class BraveTracingTest {
+
+    private KafkaTracing kafkaTracing;
+    private Tracing tracing;
+
+    public static class BraveTracePropagation implements ProcessingGuarantee {
         private final Map<String, String> producedTraceIds = new ConcurrentHashMap<>();
         private final Map<String, String> consumedTraceIds = new ConcurrentHashMap<>();
+        private final Tracing tracing;
+
+        public BraveTracePropagation(Tracing tracing) {
+            this.tracing = tracing;
+        }
 
         @Override
         public void onProduce(ProducedRecord record) {
-            producedTraceIds.put(record.task().getId(),
-                                 new String(
-                                         record.headers().lastHeader(TestTracingProvider.TRACE_HEADER).value(),
-                                         StandardCharsets.UTF_8));
+            producedTraceIds.put(record.task().getId(), tracing.currentTraceContext().get().traceIdString());
         }
 
         @Override
         public void onProcess(TaskMetadata metadata, ProcessedRecord record) {
-            consumedTraceIds.put(record.task().getId(), TestTracingProvider.getCurrentTraceId());
+            consumedTraceIds.put(record.task().getId(), tracing.currentTraceContext().get().traceIdString());
         }
 
         @Override
         public void doAssert() {
-            assertEquals(producedTraceIds.keySet(), consumedTraceIds.keySet());
-            for (Map.Entry<String, String> e: producedTraceIds.entrySet()) {
-                assertThat(consumedTraceIds.get(e.getKey()), startsWith(e.getValue()));
-            }
-            TestTracingProvider.assertAllTracesWereClosed();
+            assertEquals(producedTraceIds, consumedTraceIds);
         }
     }
+
     @ClassRule
     public static KafkaClusterRule rule = new KafkaClusterRule();
 
@@ -78,6 +79,8 @@ public class TracingTest {
     @Before
     public void setUp() {
         retryTopic = rule.admin().createRandomTopic(3, 3);
+        tracing = Tracing.newBuilder().build();
+        kafkaTracing = KafkaTracing.create(tracing);
     }
 
     @After
@@ -98,19 +101,20 @@ public class TracingTest {
                         ctx.retry();
                     }
                 }))
-                .producerSupplier(config -> new TestTracingProducer(TestUtils.producer(config)))
+                .producerSupplier(
+                        bootstrapServers -> kafkaTracing.producer(TestUtils.producer(bootstrapServers)))
                 .retryConfig(RetryConfig.builder()
                                         .retryTopic(retryTopic)
                                         .backoff(Duration.ofMillis(10))
-                                        .producerSupplier(config -> new TestTracingProducer(
+                                        .producerSupplier(config -> kafkaTracing.producer(
                                                 producerSupplier.getProducer(config)))
                                         .build())
-                .tracingProvider(new TestTracingProvider())
+                .tracingProvider(new BraveTracingProvider(kafkaTracing))
                 // If we retry tasks, there's no guarantee about ordering nor serial processing
                 .excludeSemantics(
                         GuaranteeType.PROCESS_ORDERING,
                         GuaranteeType.SERIAL_PROCESSING)
-                .customSemantics(new TracePropagation())
+                .customSemantics(new BraveTracePropagation(tracing))
                 .build()
                 .run();
     }
