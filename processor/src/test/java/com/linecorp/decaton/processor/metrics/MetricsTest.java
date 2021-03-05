@@ -24,6 +24,7 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 
+import org.junit.Before;
 import org.junit.Test;
 
 import com.linecorp.decaton.processor.metrics.Metrics.SchedulerMetrics;
@@ -38,6 +39,11 @@ public class MetricsTest {
 
     private static Set<Meter.Id> idSet(Meter.Id... ids) {
         return new HashSet<>(Arrays.asList(ids));
+    }
+
+    @Before
+    public void setUp() {
+        Metrics.registry().clear();
     }
 
     @Test
