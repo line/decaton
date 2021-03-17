@@ -21,13 +21,10 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-import com.google.protobuf.ByteString;
-
 import com.linecorp.decaton.client.DecatonClient;
 import com.linecorp.decaton.client.KafkaProducerSupplier;
 import com.linecorp.decaton.client.PutTaskResult;
 import com.linecorp.decaton.common.Serializer;
-import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
 import com.linecorp.decaton.protocol.Decaton.TaskMetadataProto;
 
 public class DecatonClientImpl<T> implements DecatonClient<T> {
@@ -93,15 +90,7 @@ public class DecatonClientImpl<T> implements DecatonClient<T> {
     }
 
     private CompletableFuture<PutTaskResult> put(String key, T task, TaskMetadataProto taskMetadataProto) {
-        byte[] serializedTask = serializer.serialize(task);
-
-        DecatonTaskRequest request =
-                DecatonTaskRequest.newBuilder()
-                                  .setMetadata(taskMetadataProto)
-                                  .setSerializedTask(ByteString.copyFrom(serializedTask))
-                                  .build();
-
-        return producer.sendRequest(key, request);
+        return producer.sendRequest(key, taskMetadataProto, serializer.serialize(task));
     }
 
     private TaskMetadataProto convertToTaskMetadataProto(TaskMetadata overrideTaskMetadata) {

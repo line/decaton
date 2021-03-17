@@ -36,6 +36,15 @@ import com.linecorp.decaton.processor.runtime.internal.RateLimiter;
  */
 public class ProcessorProperties extends AbstractDecatonProperties {
     /**
+     * Major version that the processor is upgraded from.
+     */
+    public enum UpgradeFrom {
+        V0,
+        V1,
+        COMPATIBLE_WITH_CURRENT,
+    }
+
+    /**
      * List of keys of task to skip processing.
      *
      * Reloadable: yes
@@ -123,6 +132,17 @@ public class ProcessorProperties extends AbstractDecatonProperties {
             PropertyDefinition.define("decaton.processing.shutdown.timeout.ms", Long.class, 0L,
                                       v -> v instanceof Long && (Long) v >= 0);
 
+    /**
+     * Version that the Decaton processor is upgraded from.
+     * This will be used to provide a graceful way to upgrade processor
+     * when Decaton introduces backward-incompatible change.
+     *
+     * Reloadable: no
+     */
+    public static final PropertyDefinition<UpgradeFrom> CONFIG_UPGRADE_FROM =
+            PropertyDefinition.define("decaton.upgrade.from", UpgradeFrom.class, UpgradeFrom.COMPATIBLE_WITH_CURRENT,
+                                      v -> v instanceof UpgradeFrom);
+
     public static final List<PropertyDefinition<?>> PROPERTY_DEFINITIONS =
             Collections.unmodifiableList(Arrays.asList(
                     CONFIG_IGNORE_KEYS,
@@ -131,7 +151,8 @@ public class ProcessorProperties extends AbstractDecatonProperties {
                     CONFIG_MAX_PENDING_RECORDS,
                     CONFIG_COMMIT_INTERVAL_MS,
                     CONFIG_GROUP_REBALANCE_TIMEOUT_MS,
-                    CONFIG_SHUTDOWN_TIMEOUT_MS));
+                    CONFIG_SHUTDOWN_TIMEOUT_MS,
+                    CONFIG_UPGRADE_FROM));
 
     /**
      * Find and return a {@link PropertyDefinition} from its name.

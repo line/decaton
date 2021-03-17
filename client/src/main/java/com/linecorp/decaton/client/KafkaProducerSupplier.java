@@ -39,5 +39,5 @@ public interface KafkaProducerSupplier {
      * @return an Kafka producer instance which implements {@link Producer}. The returned instance will be
      * closed along with {@link DecatonClient#close} being called.
      */
-    Producer<String, DecatonTaskRequest> getProducer(Properties config);
+    Producer<String, byte[]> getProducer(Properties config);
 }

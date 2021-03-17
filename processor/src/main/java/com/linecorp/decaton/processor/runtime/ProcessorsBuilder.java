@@ -20,6 +20,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Supplier;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+
 import com.linecorp.decaton.common.Deserializer;
 import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.runtime.internal.DecatonProcessorSupplierImpl;
@@ -43,7 +45,7 @@ public class ProcessorsBuilder<T> {
 
     private final List<DecatonProcessorSupplier<T>> suppliers;
 
-    public ProcessorsBuilder(String topic, TaskExtractor<T> taskExtractor, TaskExtractor<T> retryTaskExtractor) {
+    private ProcessorsBuilder(String topic, TaskExtractor<T> taskExtractor, TaskExtractor<T> retryTaskExtractor) {
         this.topic = topic;
         this.taskExtractor = taskExtractor;
         this.retryTaskExtractor = retryTaskExtractor;
@@ -51,8 +53,8 @@ public class ProcessorsBuilder<T> {
     }
 
     /**
-     * Create new {@link ProcessorsBuilder} that consumes message from topic expecting tasks of type
-     * which can be parsed by valueParser.
+     * Create new {@link ProcessorsBuilder} that consumes message from topic expecting tasks
+     * which can be parsed by deserializer.
      * @param topic the name of topic to consume.
      * @param deserializer the deserializer to instantiate task of type {@link T} from serialized bytes.
      * @param <T> the type of instantiated tasks.
@@ -65,7 +67,7 @@ public class ProcessorsBuilder<T> {
 
     /**
      * Create new {@link ProcessorsBuilder} that consumes message from topic expecting tasks of type
-     * which can be parsed by valueParser.
+     * which can be parsed by task extractor.
      * @param topic the name of topic to consume.
      * @param taskExtractor the extractor to extract task of type {@link T} from message bytes.
      * @param <T> the type of instantiated tasks.
@@ -73,14 +75,25 @@ public class ProcessorsBuilder<T> {
      */
     public static <T> ProcessorsBuilder<T> consuming(String topic, TaskExtractor<T> taskExtractor) {
         DefaultTaskExtractor<byte[]> innerExtractor = new DefaultTaskExtractor<>(bytes -> bytes);
-        TaskExtractor<T> retryTaskExtractor = bytes -> {
-            // Retry tasks are serialized as PB DecatonTaskRequest.
-            // First, deserialize PB from raw bytes.
-            DecatonTask<byte[]> retryTask = innerExtractor.extract(bytes);
+        TaskExtractor<T> retryTaskExtractor = record -> {
+            // Retry tasks are serialized in different format depending on decaton client implementation.
+            // First, extract retry task from raw bytes.
+            DecatonTask<byte[]> retryTask = innerExtractor.extract(record);
 
-            // Original raw task bytes is stored in DecatonTaskRequest#serializedTask.
-            // Extract DecatonTask from DecatonTaskRequest#serializedTask using given taskExtractor.
-            DecatonTask<T> task = taskExtractor.extract(retryTask.taskData());
+            // Restore ConsumerRecord which holds original task bytes as its value
+            ConsumerRecord<String, byte[]> restoredRecord =
+                    new ConsumerRecord<>(record.topic(),
+                                         record.partition(),
+                                         record.offset(),
+                                         record.timestamp(),
+                                         record.timestampType(),
+                                         null,
+                                         record.serializedKeySize(),
+                                         retryTask.taskData().length,
+                                         record.key(),
+                                         retryTask.taskData(),
+                                         record.headers());
+            DecatonTask<T> task = taskExtractor.extract(restoredRecord);
 
             // Instantiate DecatonTask.
             // Use retryTask#metadata because retry count is stored in retryTask#metada not task#metadata

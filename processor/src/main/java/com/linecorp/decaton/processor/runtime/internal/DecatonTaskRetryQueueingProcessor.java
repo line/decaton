@@ -28,6 +28,8 @@ import com.linecorp.decaton.processor.ProcessingContext;
 import com.linecorp.decaton.processor.TaskMetadata;
 import com.linecorp.decaton.processor.metrics.Metrics;
 import com.linecorp.decaton.processor.metrics.Metrics.RetryMetrics;
+import com.linecorp.decaton.processor.runtime.ProcessorProperties;
+import com.linecorp.decaton.processor.runtime.ProcessorProperties.UpgradeFrom;
 import com.linecorp.decaton.processor.runtime.RetryConfig;
 import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
 import com.linecorp.decaton.protocol.Decaton.TaskMetadataProto;
@@ -38,12 +40,14 @@ import lombok.extern.slf4j.Slf4j;
 public class DecatonTaskRetryQueueingProcessor implements DecatonProcessor<byte[]> {
     private final DecatonTaskProducer producer;
     private final Duration backoff;
+    private final UpgradeFrom upgradeFrom;
     private final RetryMetrics metrics;
 
     public DecatonTaskRetryQueueingProcessor(SubscriptionScope scope, DecatonTaskProducer producer) {
         RetryConfig retryConfig = scope.retryConfig().get(); // This won't be instantiated unless it present
         this.producer = producer;
         backoff = retryConfig.backoff();
+        upgradeFrom = scope.props().get(ProcessorProperties.CONFIG_UPGRADE_FROM).value();
 
         metrics = Metrics.withTags("subscription", scope.subscriptionId()).new RetryMetrics();
     }
@@ -58,13 +62,22 @@ public class DecatonTaskRetryQueueingProcessor implements DecatonProcessor<byte[
                                  .setRetryCount(originalMeta.retryCount() + 1)
                                  .setScheduledTimeMillis(nextTryTimeMillis)
                                  .build();
-        DecatonTaskRequest request =
-                DecatonTaskRequest.newBuilder()
-                                  .setMetadata(taskMetadata)
-                                  .setSerializedTask(ByteString.copyFrom(serializedTask))
-                                  .build();
 
-        CompletableFuture<PutTaskResult> future = producer.sendRequest(context.key(), request);
+        final CompletableFuture<PutTaskResult> future;
+        switch (upgradeFrom) {
+            case V0:
+            case V1:
+                DecatonTaskRequest request =
+                        DecatonTaskRequest.newBuilder()
+                                          .setMetadata(taskMetadata)
+                                          .setSerializedTask(ByteString.copyFrom(serializedTask))
+                                          .build();
+                future = producer.sendRequestLegacy(context.key(), request);
+                break;
+            default:
+                future = producer.sendRequest(context.key(), taskMetadata, serializedTask);
+                break;
+        }
         future.whenComplete((r, e) -> {
             if (e == null) {
                 metrics.retryQueuedTasks.increment();
