@@ -18,10 +18,11 @@ package com.linecorp.decaton.processor;
 
 import java.util.concurrent.CompletableFuture;
 
-@FunctionalInterface
+import com.linecorp.decaton.processor.runtime.internal.Completion;
+
 public interface DeferredCompletion {
     /**
-     * Complete this deferred processing to tell it's ready for committing corresponding offset.
+     * Complete this deferred processing to tell it's ready for committing the corresponding offset.
      */
     void complete();
 
@@ -35,4 +36,6 @@ public interface DeferredCompletion {
     default <T> CompletableFuture<T> completeWith(CompletableFuture<T> future) {
         return future.whenComplete((r, e) -> complete());
     }
+
+    void completeWith(Completion completion);
 }

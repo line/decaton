@@ -20,6 +20,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 
 import org.apache.kafka.common.header.Headers;
 
@@ -41,11 +42,11 @@ public class ProcessingContextImpl<T> implements ProcessingContext<T> {
     private final String subscriptionId;
     private final TaskRequest request;
     private final DecatonTask<T> task;
-    private final DeferredCompletion completion;
     private final List<DecatonProcessor<T>> downstreams;
     private final DecatonProcessor<byte[]> retryQueueingProcessor;
     private final ProcessorProperties props;
-    AtomicBoolean completionDeferred;
+    private final Completion completion;
+    private final AtomicBoolean completionDeferred;
 
     public ProcessingContextImpl(String subscriptionId,
                                  TaskRequest request,
@@ -53,14 +54,14 @@ public class ProcessingContextImpl<T> implements ProcessingContext<T> {
                                  List<DecatonProcessor<T>> downstreams,
                                  DecatonProcessor<byte[]> retryQueueingProcessor,
                                  ProcessorProperties props,
-                                 DeferredCompletion completion) {
+                                 Completion completion) {
         this.subscriptionId = subscriptionId;
         this.request = request;
         this.task = task;
-        this.completion = completion;
         this.downstreams = Collections.unmodifiableList(downstreams);
         this.retryQueueingProcessor = retryQueueingProcessor;
         this.props = props;
+        this.completion = completion;
         completionDeferred = new AtomicBoolean();
     }
 
@@ -98,16 +99,23 @@ public class ProcessingContextImpl<T> implements ProcessingContext<T> {
     }
 
     @Override
-    public DeferredCompletion deferCompletion() {
+    public DeferredCompletion deferCompletion(Consumer<ProcessingContext<T>> timeoutCallback) {
         completionDeferred.set(true);
+        long timeout = props.get(ProcessorProperties.CONFIG_DEFERRED_COMPLETE_TIMEOUT_MS).value();
+        if (timeout >= 0) {
+            long timeoutAt = System.currentTimeMillis() + timeout;
+            completion.setTimeout(timeoutAt, () -> timeoutCallback.accept(this));
+        }
         return completion;
     }
 
-    private <P> CompletableFuture<Void> pushDownStream(List<DecatonProcessor<P>> downstreams, P taskData)
+    private <P> Completion pushDownStream(List<DecatonProcessor<P>> downstreams, P taskData)
             throws InterruptedException {
         if (downstreams.isEmpty()) {
             // If there's no downstream associated with this processor, just drop the pushed task.
-            return CompletableFuture.completedFuture(null);
+            Completion comp = new Completion();
+            comp.complete();
+            return comp;
         }
 
         DecatonTask<P> task = new DecatonTask<>(
@@ -117,19 +125,17 @@ public class ProcessingContextImpl<T> implements ProcessingContext<T> {
         final ProcessorTraceHandle traceHandle = Utils.loggingExceptions(
                 () -> parentTrace.childFor(nextProcessor),
                 "Exception from tracing", NoopTrace.INSTANCE);
-        CompletableFuture<Void> future = new CompletableFuture<>();
-        DeferredCompletion nextCompletion = () -> {
-            future.complete(null);
+        Completion nextCompletion = new Completion();
+        nextCompletion.future().whenComplete((unused, throwable) -> {
             try {
                 traceHandle.processingCompletion();
             } catch (Exception e) {
                 log.error("Exception from tracing", e);
             }
-        };
+        });
         ProcessingContextImpl<P> nextContext = new ProcessingContextImpl<>(
                 subscriptionId, request, task, downstreams.subList(1, downstreams.size()),
-                retryQueueingProcessor, props, nextCompletion
-        );
+                retryQueueingProcessor, props, nextCompletion);
 
         try {
             try {
@@ -144,14 +150,14 @@ public class ProcessingContextImpl<T> implements ProcessingContext<T> {
                 log.error("Exception from tracing", e);
             }
         } finally {
-            if (!nextContext.completionDeferred.get()) {
+            if (!completionDeferred.get()) {
                 // If process didn't requested for deferred completion, we understand it as process
                 // completed synchronously.
                 nextCompletion.complete();
             }
         }
 
-        return future;
+        return nextCompletion;
     }
 
     /**
@@ -164,7 +170,9 @@ public class ProcessingContextImpl<T> implements ProcessingContext<T> {
      */
     @Override
     public synchronized CompletableFuture<Void> push(T task) throws InterruptedException {
-        return pushDownStream(downstreams, task);
+        Completion lowerCompletion = pushDownStream(downstreams, task);
+        completion.timeoutWith(lowerCompletion);
+        return lowerCompletion.future();
     }
 
     @Override
@@ -173,9 +181,10 @@ public class ProcessingContextImpl<T> implements ProcessingContext<T> {
             throw new IllegalStateException("task retry isn't configured for this processor");
         }
 
-        DeferredCompletion completion = deferCompletion();
-        CompletableFuture<Void> result = pushDownStream(
+        deferCompletion();
+        Completion lowerCompletion = pushDownStream(
                 Collections.singletonList(retryQueueingProcessor), task.taskDataBytes());
-        return completion.completeWith(result);
+        completion.completeWith(lowerCompletion);
+        return completion.future();
     }
 }

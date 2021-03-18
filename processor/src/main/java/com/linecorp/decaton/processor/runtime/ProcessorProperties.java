@@ -136,6 +136,13 @@ public class ProcessorProperties extends AbstractDecatonProperties {
     public static final PropertyDefinition<Boolean> CONFIG_LOGGING_MDC_ENABLED =
             PropertyDefinition.define("decaton.logging.mdc.enabled", Boolean.class, true,
                                       v -> v instanceof Boolean);
+    /**
+     *
+     * Reloadable: yes
+     */
+    public static final PropertyDefinition<Long> CONFIG_DEFERRED_COMPLETE_TIMEOUT_MS =
+            PropertyDefinition.define("decaton.deferred.complete.timeout.ms", Long.class, -1L,
+                                      v -> v instanceof Long);
 
     public static final List<PropertyDefinition<?>> PROPERTY_DEFINITIONS =
             Collections.unmodifiableList(Arrays.asList(
@@ -146,7 +153,8 @@ public class ProcessorProperties extends AbstractDecatonProperties {
                     CONFIG_COMMIT_INTERVAL_MS,
                     CONFIG_GROUP_REBALANCE_TIMEOUT_MS,
                     CONFIG_SHUTDOWN_TIMEOUT_MS,
-                    CONFIG_LOGGING_MDC_ENABLED));
+                    CONFIG_LOGGING_MDC_ENABLED,
+                    CONFIG_DEFERRED_COMPLETE_TIMEOUT_MS));
 
     /**
      * Find and return a {@link PropertyDefinition} from its name.

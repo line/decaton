@@ -23,7 +23,6 @@ import java.util.concurrent.CompletableFuture;
 
 import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.runtime.DecatonTask;
-import com.linecorp.decaton.processor.DeferredCompletion;
 import com.linecorp.decaton.processor.ProcessingContext;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.TaskExtractor;
@@ -63,7 +62,7 @@ public class ProcessPipeline<T> implements AutoCloseable {
     }
 
     public void scheduleThenProcess(TaskRequest request) throws InterruptedException {
-        DeferredCompletion completion = request.completion();
+        Completion completion = request.offsetState().completion();
         final DecatonTask<T> extracted;
         try {
             extracted = extract(request);

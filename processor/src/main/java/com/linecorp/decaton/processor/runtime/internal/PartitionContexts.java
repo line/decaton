@@ -98,7 +98,11 @@ public class PartitionContexts implements OffsetsStore, AssignmentStore, Partiti
     public void removePartition(Collection<TopicPartition> partitions) {
         destroyProcessors(partitions);
         for (TopicPartition tp : partitions) {
-            contexts.remove(tp).resume(); // Partition might have been paused to resume to cleanup some states.
+            try {
+                contexts.remove(tp).close();
+            } catch (Exception e) {
+                logger.warn("Failed to close partition context {}", tp, e);
+            }
         }
     }
 

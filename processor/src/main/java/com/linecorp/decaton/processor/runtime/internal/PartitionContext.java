@@ -21,14 +21,14 @@ import java.util.concurrent.TimeUnit;
 
 import org.apache.kafka.common.TopicPartition;
 
-import com.linecorp.decaton.processor.DeferredCompletion;
 import com.linecorp.decaton.processor.metrics.Metrics;
 import com.linecorp.decaton.processor.metrics.Metrics.PartitionStateMetrics;
+import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 
 /**
  * Represents all states of one partition assigned to this subscription instance.
  */
-public class PartitionContext {
+public class PartitionContext implements AutoCloseable {
     private final PartitionScope scope;
     private final PartitionProcessor partitionProcessor;
     private final OutOfOrderCommitControl commitControl;
@@ -46,7 +46,9 @@ public class PartitionContext {
         partitionProcessor = new PartitionProcessor(scope, processors);
 
         int capacity = maxPendingRecords + scope.maxPollRecords();
-        commitControl = new OutOfOrderCommitControl(scope.topicPartition(), capacity);
+        boolean enableCompletionTimeout =
+                scope.props().get(ProcessorProperties.CONFIG_DEFERRED_COMPLETE_TIMEOUT_MS).value() >= 0;
+        commitControl = new OutOfOrderCommitControl(scope.topicPartition(), capacity, enableCompletionTimeout);
 
         TopicPartition tp = scope.topicPartition();
         metrics = Metrics.withTags("subscription", scope.subscriptionId(),
@@ -114,7 +116,7 @@ public class PartitionContext {
         }
     }
 
-    public DeferredCompletion registerOffset(long offset) {
+    public OffsetState registerOffset(long offset) {
         return commitControl.reportFetchedOffset(offset);
     }
 
@@ -136,5 +138,11 @@ public class PartitionContext {
         long pausedNanos = System.nanoTime() - pausedTimeNanos;
         pausedTimeNanos = -1;
         metrics.partitionPausedTime.record(pausedNanos, TimeUnit.NANOSECONDS);
+    }
+
+    @Override
+    public void close() throws Exception {
+        resume();
+        commitControl.close();
     }
 }
