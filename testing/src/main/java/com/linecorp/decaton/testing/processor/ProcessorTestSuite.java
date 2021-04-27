@@ -44,6 +44,7 @@ import com.linecorp.decaton.processor.runtime.ProcessorsBuilder;
 import com.linecorp.decaton.processor.runtime.PropertySupplier;
 import com.linecorp.decaton.processor.runtime.RetryConfig;
 import com.linecorp.decaton.processor.runtime.SubscriptionStateListener;
+import com.linecorp.decaton.processor.runtime.TaskExtractor;
 import com.linecorp.decaton.processor.tracing.TracingProvider;
 import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
 import com.linecorp.decaton.protocol.Decaton.TaskMetadataProto;
@@ -83,6 +84,7 @@ public class ProcessorTestSuite {
     private final SubscriptionStatesListener statesListener;
     private final TracingProvider tracingProvider;
     private final Function<String, Producer<String, DecatonTaskRequest>> producerSupplier;
+    private final TaskExtractor<TestTask> customTaskExtractor;
 
     private static final int DEFAULT_NUM_TASKS = 10000;
     private static final int NUM_KEYS = 100;
@@ -130,10 +132,20 @@ public class ProcessorTestSuite {
          * Listen every subscription's state changes
          */
         private SubscriptionStatesListener statesListener;
-
+        /**
+         * Supply {@link TracingProvider} to enable tracing for the subscription
+         */
         private TracingProvider tracingProvider;
-
+        /**
+         * Specify custom supplier to instantiate {@link Producer}.
+         * Expected use case:
+         *   supply a producer which adds tracing id to each message to test tracing-functionality in e2e
+         */
         private Function<String, Producer<String, DecatonTaskRequest>> producerSupplier = TestUtils::producer;
+        /**
+         * Supply custom {@link TaskExtractor} to be used to extract a task.
+         */
+        private TaskExtractor<TestTask> customTaskExtractor;
 
         /**
          * Exclude semantics from assertion.
@@ -177,7 +189,8 @@ public class ProcessorTestSuite {
                                           semantics,
                                           statesListener,
                                           tracingProvider,
-                                          producerSupplier);
+                                          producerSupplier,
+                                          customTaskExtractor);
         }
     }
 
@@ -236,10 +249,14 @@ public class ProcessorTestSuite {
             }
         };
 
+        final ProcessorsBuilder<TestTask> sourceBuilder;
+        if (customTaskExtractor == null) {
+            sourceBuilder = ProcessorsBuilder.consuming(topic, new TestTaskDeserializer());
+        } else {
+            sourceBuilder = ProcessorsBuilder.consuming(topic, customTaskExtractor);
+        }
         ProcessorsBuilder<TestTask> processorsBuilder =
-                configureProcessorsBuilder.apply(
-                        ProcessorsBuilder.consuming(topic, new TestTaskDeserializer())
-                                         .thenProcess(preprocessor));
+                configureProcessorsBuilder.apply(sourceBuilder.thenProcess(preprocessor));
 
         return TestUtils.subscription("subscription-" + id,
                                       rule.bootstrapServers(),
