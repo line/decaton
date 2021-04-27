@@ -41,7 +41,6 @@ import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
 
 import com.linecorp.decaton.client.DecatonClient.TaskMetadata;
-import com.linecorp.decaton.client.internal.DecatonClientImpl;
 import com.linecorp.decaton.protobuf.ProtocolBuffersSerializer;
 import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
 import com.linecorp.decaton.protocol.Sample.HelloTask;

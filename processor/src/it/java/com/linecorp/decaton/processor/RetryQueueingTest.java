@@ -23,6 +23,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.junit.After;
 import org.junit.Before;
@@ -51,13 +52,15 @@ public class RetryQueueingTest {
 
     private String retryTopic;
 
+    // We found that retry record's timestamp could be set to 0 unintentionally,
+    // which causes messages to be deleted by retention immediately.
+    // To reproduce it in integration test easily, we set shorter retention check interval.
+    // See https://github.com/line/decaton/issues/101 for the details.
+    private static final long RETENTION_CHECK_INTERVAL_MS = 500L;
+
     private static Properties brokerProperties() {
         Properties props = new Properties();
-        // We found that retry record's timestamp could be set to 0 unintentionally,
-        // which causes messages to be deleted by retention immediately.
-        // To reproduce it in integration test easily, we set shorter retention check interval.
-        // See https://github.com/line/decaton/issues/101 for the details.
-        props.setProperty("log.retention.check.interval.ms", "500");
+        props.setProperty("log.retention.check.interval.ms", String.valueOf(RETENTION_CHECK_INTERVAL_MS));
         return props;
     }
 
@@ -149,6 +152,7 @@ public class RetryQueueingTest {
         // https://github.com/apache/kafka/blob/2.4.0/core/src/main/scala/kafka/log/LogManager.scala#L70
         Thread.sleep(30000L);
 
+        AtomicBoolean firstRetryTask = new AtomicBoolean(false);
         ProcessorTestSuite
                 .builder(rule)
                 .numTasks(10)
@@ -160,8 +164,10 @@ public class RetryQueueingTest {
                 .configureProcessorsBuilder(builder -> builder.thenProcess((ctx, task) -> {
                     if (ctx.metadata().retryCount() == 0) {
                         ctx.retry();
-                    } else {
-                        Thread.sleep(1000L);
+                    } else if (firstRetryTask.compareAndSet(false, true)) {
+                        // Waiting certain time for first retry task so that
+                        // subsequent retry tasks are processed after log-retention-check executed.
+                        Thread.sleep(RETENTION_CHECK_INTERVAL_MS * 2);
                     }
                 }))
                 .retryConfig(RetryConfig.builder()

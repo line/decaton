@@ -18,7 +18,6 @@ package com.linecorp.decaton.client.internal;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
 
@@ -30,7 +29,6 @@ import com.linecorp.decaton.client.DecatonClient;
 import com.linecorp.decaton.client.KafkaProducerSupplier;
 import com.linecorp.decaton.client.PutTaskResult;
 import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
-import com.linecorp.decaton.protocol.Decaton.TaskMetadataProto;
 
 /**
  * A raw interface to put a built {@link DecatonTaskRequest} directly.
@@ -64,9 +62,7 @@ public class DecatonTaskProducer implements AutoCloseable {
     }
 
     public CompletableFuture<PutTaskResult> sendRequest(String key, DecatonTaskRequest request) {
-        TaskMetadataProto taskMeta = Objects.requireNonNull(request.getMetadata(), "request.metadata");
-        ProducerRecord<String, DecatonTaskRequest> record =
-                new ProducerRecord<>(topic, null, null, key, request);
+        ProducerRecord<String, DecatonTaskRequest> record = new ProducerRecord<>(topic, key, request);
 
         CompletableFuture<PutTaskResult> result = new CompletableFuture<>();
         producer.send(record, (metadata, exception) -> {
