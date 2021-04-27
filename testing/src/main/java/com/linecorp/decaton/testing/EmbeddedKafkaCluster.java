@@ -48,11 +48,18 @@ public class EmbeddedKafkaCluster implements AutoCloseable {
     private final String bootstrapServers;
 
     public EmbeddedKafkaCluster(int numBrokers, String zkConnect) {
+        this(numBrokers, zkConnect, new Properties());
+    }
+
+    public EmbeddedKafkaCluster(int numBrokers,
+                                String zkConnect,
+                                Properties brokerProperties) {
         servers = new ArrayList<>(numBrokers);
         List<String> listeners = new ArrayList<>(numBrokers);
 
         for (int i = 0; i < numBrokers; i++) {
             Properties prop = createBrokerConfig(i, zkConnect);
+            prop.putAll(brokerProperties);
             KafkaServer server = TestUtils.createServer(KafkaConfig.fromProps(prop), Time.SYSTEM);
             int port = TestUtils.boundPort(server, SecurityProtocol.PLAINTEXT);
             String listener = "127.0.0.1:" + port;

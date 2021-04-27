@@ -16,10 +16,13 @@
 
 package com.linecorp.decaton.testing;
 
+import java.util.Properties;
+
 import org.junit.Rule;
 import org.junit.rules.ExternalResource;
 
 import lombok.Getter;
+import lombok.RequiredArgsConstructor;
 import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
 
@@ -27,6 +30,7 @@ import lombok.extern.slf4j.Slf4j;
  * JUnit {@link Rule} that starts an embedded Kafka cluster.
  */
 @Slf4j
+@RequiredArgsConstructor
 public class KafkaClusterRule extends ExternalResource {
     private static final int KAFKA_CLUSTER_SIZE = 3;
 
@@ -35,6 +39,11 @@ public class KafkaClusterRule extends ExternalResource {
     @Getter
     @Accessors(fluent = true)
     private KafkaAdmin admin;
+    private final Properties brokerProperties;
+
+    public KafkaClusterRule() {
+        this(new Properties());
+    }
 
     public String bootstrapServers() {
         return kafkaCluster.bootstrapServers();
@@ -46,7 +55,8 @@ public class KafkaClusterRule extends ExternalResource {
 
         zooKeeper = new EmbeddedZooKeeper();
         kafkaCluster = new EmbeddedKafkaCluster(KAFKA_CLUSTER_SIZE,
-                                                zooKeeper.zkConnectAsString());
+                                                zooKeeper.zkConnectAsString(),
+                                                brokerProperties);
         admin = new KafkaAdmin(kafkaCluster.bootstrapServers());
     }
 
