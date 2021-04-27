@@ -18,6 +18,7 @@ package com.linecorp.decaton.client.internal;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doReturn;
@@ -79,7 +80,7 @@ public class DecatonClientImplTest {
 
         verify(producer, times(1)).send(captor.capture(), any(Callback.class));
         ProducerRecord<String, DecatonTaskRequest> record = captor.getValue();
-        assertEquals(1234, record.timestamp().longValue());
+        assertNull(record.timestamp());
         assertEquals(1234, record.value().getMetadata().getTimestampMillis());
     }
 
@@ -91,7 +92,7 @@ public class DecatonClientImplTest {
 
         verify(producer, times(1)).send(captor.capture(), any(Callback.class));
         ProducerRecord<String, DecatonTaskRequest> record = captor.getValue();
-        assertEquals(1234, record.timestamp().longValue());
+        assertNull(record.timestamp());
         assertEquals(1234, record.value().getMetadata().getTimestampMillis());
     }
 
@@ -103,7 +104,7 @@ public class DecatonClientImplTest {
 
         verify(producer, times(1)).send(captor.capture(), any(Callback.class));
         ProducerRecord<String, DecatonTaskRequest> record = captor.getValue();
-        assertEquals(5678, record.timestamp().longValue());
+        assertNull(record.timestamp());
         assertEquals(5678, record.value().getMetadata().getTimestampMillis());
     }
 
@@ -115,7 +116,7 @@ public class DecatonClientImplTest {
 
         verify(producer, times(1)).send(captor.capture(), any(Callback.class));
         ProducerRecord<String, DecatonTaskRequest> record = captor.getValue();
-        assertEquals(5678, record.timestamp().longValue());
+        assertNull(record.timestamp());
         assertEquals(5678, record.value().getMetadata().getTimestampMillis());
     }
 
@@ -158,7 +159,7 @@ public class DecatonClientImplTest {
     private void verifyAndAssertTaskMetadata(long timestamp, long scheduledTime) {
         verify(producer, times(1)).send(captor.capture(), any(Callback.class));
         ProducerRecord<String, DecatonTaskRequest> record = captor.getValue();
-        assertEquals(timestamp, record.timestamp().longValue());
+        assertNull(record.timestamp());
         assertEquals(timestamp, record.value().getMetadata().getTimestampMillis());
         assertEquals(scheduledTime, record.value().getMetadata().getScheduledTimeMillis());
         assertNotNull(record.value().getMetadata().getSourceApplicationId());

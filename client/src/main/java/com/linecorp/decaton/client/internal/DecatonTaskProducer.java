@@ -66,7 +66,7 @@ public class DecatonTaskProducer implements AutoCloseable {
     public CompletableFuture<PutTaskResult> sendRequest(String key, DecatonTaskRequest request) {
         TaskMetadataProto taskMeta = Objects.requireNonNull(request.getMetadata(), "request.metadata");
         ProducerRecord<String, DecatonTaskRequest> record =
-                new ProducerRecord<>(topic, null, taskMeta.getTimestampMillis(), key, request);
+                new ProducerRecord<>(topic, null, null, key, request);
 
         CompletableFuture<PutTaskResult> result = new CompletableFuture<>();
         producer.send(record, (metadata, exception) -> {
