@@ -34,7 +34,6 @@ public class TaskRequest {
     private final long recordOffset;
     private final DeferredCompletion completion;
     private final String key;
-    private final String id;
     @ToString.Exclude
     private final Headers headers;
     @ToString.Exclude
@@ -56,12 +55,15 @@ public class TaskRequest {
         this.headers = headers;
         this.trace = trace;
         this.rawRequestBytes = rawRequestBytes;
+    }
 
-        StringBuilder idBuilder = new StringBuilder();
-        idBuilder.append("topic=").append(topicPartition.topic());
-        idBuilder.append(" partition=").append(topicPartition.partition());
-        idBuilder.append(" offset=").append(recordOffset);
-        id = idBuilder.toString();
+    public String id() {
+        // TaskRequest object is held alive through associated ProcessingContext's lifetime, hence holding
+        // any value as its field makes memory occupation worse. Since this ID field is rarely used (typically
+        // when trace level logging is enabled), it is better to take short lived object allocation and cpu cost
+        // rather than building it once and cache as an object field.
+        return "topic=" + topicPartition.topic() + " partition=" + topicPartition.partition() +
+               " offset=" + recordOffset;
     }
 
     /**
