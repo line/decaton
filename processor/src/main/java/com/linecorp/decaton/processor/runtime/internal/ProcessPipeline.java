@@ -25,6 +25,7 @@ import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.runtime.DecatonTask;
 import com.linecorp.decaton.processor.DeferredCompletion;
 import com.linecorp.decaton.processor.ProcessingContext;
+import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.TaskExtractor;
 import com.linecorp.decaton.processor.metrics.Metrics;
 import com.linecorp.decaton.processor.metrics.Metrics.ProcessMetrics;
@@ -105,7 +106,8 @@ public class ProcessPipeline<T> implements AutoCloseable {
     // visible for testing
     CompletableFuture<Void> process(TaskRequest request, DecatonTask<T> task) throws InterruptedException {
         ProcessingContext<T> context =
-                new ProcessingContextImpl<>(scope.subscriptionId(), request, task, processors, retryProcessor);
+                new ProcessingContextImpl<>(scope.subscriptionId(), request, task, processors, retryProcessor,
+                                            scope.props());
 
         Timer timer = Utils.timer();
         CompletableFuture<Void> processResult;

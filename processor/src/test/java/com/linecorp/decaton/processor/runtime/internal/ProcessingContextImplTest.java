@@ -53,6 +53,7 @@ import com.linecorp.decaton.processor.runtime.DecatonTask;
 import com.linecorp.decaton.processor.DeferredCompletion;
 import com.linecorp.decaton.processor.ProcessingContext;
 import com.linecorp.decaton.processor.TaskMetadata;
+import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.tracing.TestTraceHandle;
 import com.linecorp.decaton.processor.tracing.TestTracingProvider;
 import com.linecorp.decaton.processor.tracing.TracingProvider.RecordTraceHandle;
@@ -117,7 +118,8 @@ public class ProcessingContextImplTest {
                 null, traceHandle, REQUEST.toByteArray());
         DecatonTask<HelloTask> task = new DecatonTask<>(
                 TaskMetadata.fromProto(REQUEST.getMetadata()), TASK, TASK.toByteArray());
-        return new ProcessingContextImpl<>("subscription", request, task, Arrays.asList(processors), null);
+        return new ProcessingContextImpl<>("subscription", request, task, Arrays.asList(processors),
+                                           null, ProcessorProperties.builder().build());
     }
 
     private static void safeAwait(CountDownLatch latch) {
@@ -345,8 +347,10 @@ public class ProcessingContextImplTest {
                 TaskMetadata.fromProto(REQUEST.getMetadata()), TASK.toByteArray(), TASK.toByteArray());
 
         ProcessingContextImpl<byte[]> context =
-                spy(new ProcessingContextImpl<>("subscription", request, task, completion,
-                                                Collections.emptyList(), retryProcessor));
+                spy(new ProcessingContextImpl<>("subscription", request, task,
+                                                Collections.emptyList(), retryProcessor,
+                                                ProcessorProperties.builder().build(),
+                                                completion));
 
         CompletableFuture<Void> produceFuture = context.retry();
 

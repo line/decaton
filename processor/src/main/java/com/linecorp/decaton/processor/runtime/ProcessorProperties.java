@@ -21,6 +21,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+import org.slf4j.MDC;
+
 import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.runtime.internal.AbstractDecatonProperties;
 import com.linecorp.decaton.processor.runtime.internal.OutOfOrderCommitControl;
@@ -123,6 +125,18 @@ public class ProcessorProperties extends AbstractDecatonProperties {
             PropertyDefinition.define("decaton.processing.shutdown.timeout.ms", Long.class, 0L,
                                       v -> v instanceof Long && (Long) v >= 0);
 
+    /**
+     * Control whether to enable or disable decaton specific information store in slf4j's {@link MDC}.
+     * This option is enabled by default, but it is known to cause some object allocations which could become
+     * a problem in massive scale traffic. This option intend to provide an option for users to disable MDC
+     * properties where not necessary to reduce GC pressure.
+     *
+     * Reloadable: yes
+     */
+    public static final PropertyDefinition<Boolean> CONFIG_LOGGING_MDC_ENABLED =
+            PropertyDefinition.define("decaton.logging.mdc.enabled", Boolean.class, true,
+                                      v -> v instanceof Boolean);
+
     public static final List<PropertyDefinition<?>> PROPERTY_DEFINITIONS =
             Collections.unmodifiableList(Arrays.asList(
                     CONFIG_IGNORE_KEYS,
@@ -131,7 +145,8 @@ public class ProcessorProperties extends AbstractDecatonProperties {
                     CONFIG_MAX_PENDING_RECORDS,
                     CONFIG_COMMIT_INTERVAL_MS,
                     CONFIG_GROUP_REBALANCE_TIMEOUT_MS,
-                    CONFIG_SHUTDOWN_TIMEOUT_MS));
+                    CONFIG_SHUTDOWN_TIMEOUT_MS,
+                    CONFIG_LOGGING_MDC_ENABLED));
 
     /**
      * Find and return a {@link PropertyDefinition} from its name.
