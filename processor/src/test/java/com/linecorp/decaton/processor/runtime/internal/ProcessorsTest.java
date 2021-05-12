@@ -52,7 +52,8 @@ public class ProcessorsTest {
             new PartitionScope(
                     new SubscriptionScope(SUBSC_ID, topicPartition.topic(),
                                           Optional.empty(), ProcessorProperties.builder().build(),
-                                          NoopTracingProvider.INSTANCE),
+                                          NoopTracingProvider.INSTANCE,
+                                          ConsumerSupplier.DEFAULT_MAX_POLL_RECORDS),
                     topicPartition),
             0);
 

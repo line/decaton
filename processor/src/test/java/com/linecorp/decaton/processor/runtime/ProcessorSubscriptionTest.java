@@ -62,6 +62,7 @@ import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.DeferredCompletion;
 import com.linecorp.decaton.processor.TaskMetadata;
 import com.linecorp.decaton.processor.runtime.SubscriptionStateListener.State;
+import com.linecorp.decaton.processor.runtime.internal.ConsumerSupplier;
 import com.linecorp.decaton.processor.runtime.internal.SubscriptionScope;
 import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider;
 
@@ -102,7 +103,8 @@ public class ProcessorSubscriptionTest {
                 Optional.empty(),
                 ProcessorProperties.builder().set(Property.ofStatic(
                         ProcessorProperties.CONFIG_SHUTDOWN_TIMEOUT_MS, waitForProcessingOnClose)).build(),
-                NoopTracingProvider.INSTANCE);
+                NoopTracingProvider.INSTANCE,
+                ConsumerSupplier.DEFAULT_MAX_POLL_RECORDS);
     }
 
     private static ProcessorSubscription subscription(Consumer<String, byte[]> consumer,

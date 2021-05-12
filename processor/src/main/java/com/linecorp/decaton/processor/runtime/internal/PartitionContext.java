@@ -45,7 +45,7 @@ public class PartitionContext {
         this.processors = processors;
         partitionProcessor = new PartitionProcessor(scope, processors);
 
-        int capacity = maxPendingRecords + ConsumerSupplier.MAX_MAX_POLL_RECORDS;
+        int capacity = maxPendingRecords + scope.maxPollRecords();
         commitControl = new OutOfOrderCommitControl(scope.topicPartition(), capacity);
 
         TopicPartition tp = scope.topicPartition();

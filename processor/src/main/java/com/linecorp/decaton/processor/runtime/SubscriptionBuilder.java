@@ -143,6 +143,14 @@ public class SubscriptionBuilder {
         return this;
     }
 
+    private int consumerMaxPollRecords() {
+        if (consumerConfig.getProperty(ConsumerConfig.MAX_POLL_RECORDS_CONFIG) != null) {
+            return Integer.parseInt(consumerConfig.getProperty(ConsumerConfig.MAX_POLL_RECORDS_CONFIG));
+        } else {
+            return ConsumerSupplier.DEFAULT_MAX_POLL_RECORDS;
+        }
+    }
+
     public ProcessorSubscription build() {
         ProcessorProperties props = propertiesBuilder.build();
         String topic = processorsBuilder.topic();
@@ -150,7 +158,8 @@ public class SubscriptionBuilder {
                                                         topic,
                                                         Optional.ofNullable(retryConfig),
                                                         props,
-                                                        tracingProvider);
+                                                        tracingProvider,
+                                                        consumerMaxPollRecords());
 
         Properties consumerConfig = Objects.requireNonNull(this.consumerConfig, "consumerConfig");
         ConsumerSupplier consumerSupplier = new ConsumerSupplier(consumerConfig);

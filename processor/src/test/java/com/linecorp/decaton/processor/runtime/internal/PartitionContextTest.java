@@ -41,7 +41,8 @@ public class PartitionContextTest {
     private final PartitionScope scope = new PartitionScope(
             new SubscriptionScope("subscription", "topic",
                                   Optional.empty(), ProcessorProperties.builder().build(),
-                                  NoopTracingProvider.INSTANCE),
+                                  NoopTracingProvider.INSTANCE,
+                                  ConsumerSupplier.DEFAULT_MAX_POLL_RECORDS),
             new TopicPartition("topic", 0));
 
     @Mock
