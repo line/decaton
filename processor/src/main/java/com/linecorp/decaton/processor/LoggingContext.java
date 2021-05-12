@@ -52,6 +52,10 @@ public class LoggingContext implements AutoCloseable {
         }
     }
 
+    public LoggingContext(String subscriptionId, TaskRequest request, TaskMetadata metadata) {
+        this(true, subscriptionId, request, metadata);
+    }
+
     @Override
     public void close() {
         if (enabled) {
