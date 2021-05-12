@@ -24,13 +24,14 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.kafka.common.header.Headers;
 
 import com.linecorp.decaton.processor.DecatonProcessor;
-import com.linecorp.decaton.processor.runtime.DecatonTask;
 import com.linecorp.decaton.processor.DeferredCompletion;
+import com.linecorp.decaton.processor.LoggingContext;
 import com.linecorp.decaton.processor.ProcessingContext;
 import com.linecorp.decaton.processor.TaskMetadata;
+import com.linecorp.decaton.processor.runtime.DecatonTask;
+import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.tracing.TracingProvider.ProcessorTraceHandle;
 import com.linecorp.decaton.processor.tracing.TracingProvider.RecordTraceHandle;
-import com.linecorp.decaton.processor.LoggingContext;
 import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider.NoopTrace;
 
 import lombok.extern.slf4j.Slf4j;
@@ -43,27 +44,31 @@ public class ProcessingContextImpl<T> implements ProcessingContext<T> {
     private final DeferredCompletion completion;
     private final List<DecatonProcessor<T>> downstreams;
     private final DecatonProcessor<byte[]> retryQueueingProcessor;
+    private final ProcessorProperties props;
     AtomicBoolean completionDeferred;
 
     public ProcessingContextImpl(String subscriptionId,
                                  TaskRequest request,
                                  DecatonTask<T> task,
-                                 DeferredCompletion completion,
                                  List<DecatonProcessor<T>> downstreams,
-                                 DecatonProcessor<byte[]> retryQueueingProcessor) {
+                                 DecatonProcessor<byte[]> retryQueueingProcessor,
+                                 ProcessorProperties props,
+                                 DeferredCompletion completion) {
         this.subscriptionId = subscriptionId;
         this.request = request;
         this.task = task;
         this.completion = completion;
         this.downstreams = Collections.unmodifiableList(downstreams);
         this.retryQueueingProcessor = retryQueueingProcessor;
+        this.props = props;
         completionDeferred = new AtomicBoolean();
     }
 
     public ProcessingContextImpl(String subscriptionId, TaskRequest request, DecatonTask<T> task,
                                  List<DecatonProcessor<T>> downstreams,
-                                 DecatonProcessor<byte[]> retryQueueingProcessor) {
-        this(subscriptionId, request, task, null, downstreams, retryQueueingProcessor);
+                                 DecatonProcessor<byte[]> retryQueueingProcessor,
+                                 ProcessorProperties props) {
+        this(subscriptionId, request, task, downstreams, retryQueueingProcessor, props, null);
     }
 
     @Override
@@ -83,7 +88,8 @@ public class ProcessingContextImpl<T> implements ProcessingContext<T> {
 
     @Override
     public LoggingContext loggingContext() {
-        return new LoggingContext(subscriptionId, request, task.metadata());
+        boolean enabled = props.get(ProcessorProperties.CONFIG_LOGGING_MDC_ENABLED).value();
+        return new LoggingContext(enabled, subscriptionId, request, task.metadata());
     }
 
     @Override
@@ -121,8 +127,9 @@ public class ProcessingContextImpl<T> implements ProcessingContext<T> {
             }
         };
         ProcessingContextImpl<P> nextContext = new ProcessingContextImpl<>(
-                subscriptionId, request, task, nextCompletion,
-                downstreams.subList(1, downstreams.size()), retryQueueingProcessor);
+                subscriptionId, request, task, downstreams.subList(1, downstreams.size()),
+                retryQueueingProcessor, props, nextCompletion
+        );
 
         try {
             try {

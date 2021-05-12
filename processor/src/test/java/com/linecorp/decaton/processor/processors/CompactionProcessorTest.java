@@ -38,18 +38,18 @@ import org.apache.kafka.common.TopicPartition;
 import org.junit.Rule;
 import org.junit.Test;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 import org.mockito.Spy;
 import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
 
 import com.linecorp.decaton.processor.DecatonProcessor;
-import com.linecorp.decaton.processor.runtime.DecatonTask;
 import com.linecorp.decaton.processor.DeferredCompletion;
 import com.linecorp.decaton.processor.ProcessingContext;
 import com.linecorp.decaton.processor.TaskMetadata;
 import com.linecorp.decaton.processor.processors.CompactionProcessor.CompactChoice;
 import com.linecorp.decaton.processor.processors.CompactionProcessor.CompactingTask;
+import com.linecorp.decaton.processor.runtime.DecatonTask;
+import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.internal.ProcessingContextImpl;
 import com.linecorp.decaton.processor.runtime.internal.TaskRequest;
 import com.linecorp.decaton.protocol.Sample.HelloTask;
@@ -109,9 +109,9 @@ public class CompactionProcessorTest {
         TaskRequest request = new TaskRequest(
                 new TopicPartition("topic", 1), 1, null, name, null, null, null);
         ProcessingContext<HelloTask> context =
-                Mockito.spy(new ProcessingContextImpl<>("subscription", request, task, completion,
-                                                        Collections.singletonList(downstream),
-                                                        null));
+                spy(new ProcessingContextImpl<>("subscription", request, task,
+                                                Collections.singletonList(downstream), null,
+                                                ProcessorProperties.builder().build(), completion));
 
         TaskInput input = new TaskInput(taskData, completion, context);
         if (beforeProcess != null) {

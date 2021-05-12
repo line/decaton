@@ -38,22 +38,33 @@ public class LoggingContext implements AutoCloseable {
     public static final String SUBSCRIPTION_ID_KEY = "dt_subscription_id";
     public static final String TASK_KEY = "dt_task_key";
 
+    private final boolean enabled;
+
+    public LoggingContext(boolean enabled, String subscriptionId, TaskRequest request, TaskMetadata metadata) {
+        this.enabled = enabled;
+        if (enabled) {
+            MDC.put(METADATA_KEY, metadata.toString());
+            MDC.put(TASK_KEY, String.valueOf(request.key()));
+            MDC.put(SUBSCRIPTION_ID_KEY, subscriptionId);
+            MDC.put(OFFSET_KEY, String.valueOf(request.recordOffset()));
+            MDC.put(TOPIC_KEY, request.topicPartition().topic());
+            MDC.put(PARTITION_KEY, String.valueOf(request.topicPartition().partition()));
+        }
+    }
+
     public LoggingContext(String subscriptionId, TaskRequest request, TaskMetadata metadata) {
-        MDC.put(METADATA_KEY, metadata.toString());
-        MDC.put(TASK_KEY, String.valueOf(request.key()));
-        MDC.put(SUBSCRIPTION_ID_KEY, subscriptionId);
-        MDC.put(OFFSET_KEY, String.valueOf(request.recordOffset()));
-        MDC.put(TOPIC_KEY, request.topicPartition().topic());
-        MDC.put(PARTITION_KEY, String.valueOf(request.topicPartition().partition()));
+        this(true, subscriptionId, request, metadata);
     }
 
     @Override
     public void close() {
-        MDC.remove(OFFSET_KEY);
-        MDC.remove(TOPIC_KEY);
-        MDC.remove(TASK_KEY);
-        MDC.remove(PARTITION_KEY);
-        MDC.remove(METADATA_KEY);
-        MDC.remove(SUBSCRIPTION_ID_KEY);
+        if (enabled) {
+            MDC.remove(OFFSET_KEY);
+            MDC.remove(TOPIC_KEY);
+            MDC.remove(TASK_KEY);
+            MDC.remove(PARTITION_KEY);
+            MDC.remove(METADATA_KEY);
+            MDC.remove(SUBSCRIPTION_ID_KEY);
+        }
     }
 }
