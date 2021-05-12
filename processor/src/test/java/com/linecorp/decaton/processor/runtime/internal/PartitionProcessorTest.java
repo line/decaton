@@ -50,7 +50,8 @@ public class PartitionProcessorTest {
                                   Optional.empty(),
                                   ProcessorProperties.builder().set(Property.ofStatic(
                                           ProcessorProperties.CONFIG_PARTITION_CONCURRENCY, 4)).build(),
-                                  NoopTracingProvider.INSTANCE),
+                                  NoopTracingProvider.INSTANCE,
+                                  ConsumerSupplier.DEFAULT_MAX_POLL_RECORDS),
             new TopicPartition("topic", 0));
 
     @Mock

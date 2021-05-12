@@ -30,7 +30,7 @@ public class PartitionScope extends SubscriptionScope {
 
     PartitionScope(SubscriptionScope parent, TopicPartition topicPartition) {
         super(parent.subscriptionId(), parent.topic(), parent.retryConfig(), parent.props(),
-              parent.tracingProvider());
+              parent.tracingProvider(), parent.maxPollRecords());
         this.topicPartition = topicPartition;
     }
 

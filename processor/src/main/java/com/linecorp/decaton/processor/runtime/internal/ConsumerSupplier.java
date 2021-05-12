@@ -19,7 +19,6 @@ package com.linecorp.decaton.processor.runtime.internal;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Optional;
 import java.util.Properties;
 import java.util.function.Supplier;
 
@@ -30,7 +29,7 @@ import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 
 public class ConsumerSupplier implements Supplier<Consumer<String, byte[]>> {
-    public static final int MAX_MAX_POLL_RECORDS = 100;
+    public static final int DEFAULT_MAX_POLL_RECORDS = 100;
 
     private static final Map<String, String> configOverwrites = new HashMap<String, String>() {{
         put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
@@ -57,10 +56,9 @@ public class ConsumerSupplier implements Supplier<Consumer<String, byte[]>> {
         }
 
         // max.poll.records handling to avoid memory overused
-        int maxPollRecords = Optional.ofNullable(props.getProperty(ConsumerConfig.MAX_POLL_RECORDS_CONFIG))
-                                     .map(Integer::parseInt).orElse(Integer.MAX_VALUE);
-        if (maxPollRecords > MAX_MAX_POLL_RECORDS) {
-            props.setProperty(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, String.valueOf(MAX_MAX_POLL_RECORDS));
+        if (props.getProperty(ConsumerConfig.MAX_POLL_RECORDS_CONFIG) == null) {
+            props.setProperty(ConsumerConfig.MAX_POLL_RECORDS_CONFIG,
+                              String.valueOf(DEFAULT_MAX_POLL_RECORDS));
         }
 
         return props;
