@@ -61,7 +61,7 @@ import com.linecorp.centraldogma.common.Entry;
 import com.linecorp.centraldogma.common.Query;
 import com.linecorp.centraldogma.common.Revision;
 import com.linecorp.centraldogma.internal.Jackson;
-import com.linecorp.centraldogma.testing.CentralDogmaRule;
+import com.linecorp.centraldogma.testing.junit4.CentralDogmaRule;
 import com.linecorp.decaton.processor.runtime.DynamicProperty;
 import com.linecorp.decaton.processor.runtime.Property;
 import com.linecorp.decaton.processor.runtime.PropertyDefinition;
@@ -195,7 +195,7 @@ public class CentralDogmaPropertySupplierTest {
         client.createProject(PROJECT_NAME).join();
         client.createRepository(PROJECT_NAME, REPOSITORY_NAME).join();
         client.push(PROJECT_NAME, REPOSITORY_NAME, Revision.HEAD, "summary",
-                    Change.ofTextUpsert(FILENAME, ORIGINAL)).join();
+                    Change.ofJsonUpsert(FILENAME, ORIGINAL)).join();
 
         CentralDogmaPropertySupplier supplier = new CentralDogmaPropertySupplier(
                 client, PROJECT_NAME, REPOSITORY_NAME, FILENAME);
@@ -218,7 +218,7 @@ public class CentralDogmaPropertySupplierTest {
         prop.listen((o, n) -> latch.countDown());
 
         client.push(PROJECT_NAME, REPOSITORY_NAME, Revision.HEAD, "summary",
-                    Change.ofTextPatch(FILENAME, ORIGINAL, UPDATED)).join();
+                    Change.ofJsonPatch(FILENAME, ORIGINAL, UPDATED)).join();
 
         latch.await();
         assertEquals(20L, prop.value().longValue());
