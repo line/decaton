@@ -88,6 +88,12 @@ public class ProcessPipeline<T> implements AutoCloseable {
             }
             completion.complete(null);
         });
+        if (!result.isDone()) { // Completion deferred
+            OffsetState offsetState = request.offsetState();
+            long expireAt = System.currentTimeMillis() +
+                            scope.props().get(ProcessorProperties.CONFIG_DEFERRED_COMPLETE_TIMEOUT_MS).value();
+            offsetState.setTimeout(expireAt);
+        }
     }
 
     // visible for testing
