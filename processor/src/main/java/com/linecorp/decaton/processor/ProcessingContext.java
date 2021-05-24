@@ -17,13 +17,9 @@
 package com.linecorp.decaton.processor;
 
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Consumer;
-import java.util.function.Function;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.header.Headers;
-
-import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 
 public interface ProcessingContext<T> {
     /**
@@ -66,48 +62,7 @@ public interface ProcessingContext<T> {
      * Otherwise consumption will stuck in short future and no new task will be given to the processor.
      * @return a {@link DeferredCompletion} which can be used to tell the result of processing asynchronously.
      */
-    default DeferredCompletion deferCompletion() {
-        return deferCompletion(ignored -> {});
-    }
-
-    /**
-     * Tells the completion of this processing should be postponed and processor can accept next task.
-     * Once this method called within {@link DecatonProcessor#process} method, caller *MUST* call
-     * {@link DeferredCompletion#complete()} or {@link ProcessingContext#retry()} method in any cases.
-     * Otherwise consumption will stuck in short future and no new task will be given to the processor.
-     *
-     * This method is different from {@link #deferCompletion()} in that it accepts callback on completion
-     * timeout. Completion timeout intends to prevent indefinite consumption stuck caused by leaking a
-     * {@link DeferredCompletion}, and is enabled only if you set positive value to
-     * {@link ProcessorProperties#CONFIG_DEFERRED_COMPLETE_TIMEOUT_MS}.
-     * When you enabled completion timeout, after
-     * {@link ProcessorProperties#CONFIG_DEFERRED_COMPLETE_TIMEOUT_MS} milliseconds since the last call of
-     * {@link #deferCompletion()} (no matter which), the corresponding {@link DeferredCompletion} is completed
-     * forcefully.
-     * You can selectively send the task to retry or extend the timeout period by calling {@link #retry()} or
-     * {@link #deferCompletion()} in {@code timeoutCallback}.
-     *
-     * Example usage:
-     * {@code
-     * // Let the task to be sent to the retry queue
-     * context.deferCompletion(ctx -> {
-     *     ctx.retry();
-     * });
-     *
-     * // Extend the timeout with another CONFIG_DEFERRED_COMPLETE_TIMEOUT_MS milliseconds.
-     * private void handleCompleteTimeout(ProcessingContext<byte[]> ctx) {
-     *     if (/* Check if some work is still in-flight *\/) {
-     *         ctx.deferCompletion(this::handleCompleteTimeout);
-     *     }
-     *}
-     * context.deferCompletion(this::handleCompleteTimeout);
-     * }
-     *
-     * @param timeoutCallback a callback triggered when a completion timed out but before it forcefully
-     *                      completed.
-     * @return a {@link DeferredCompletion} which can be used to tell the result of processing asynchronously.
-     */
-    DeferredCompletion deferCompletion(Consumer<ProcessingContext<T>> timeoutCallback);
+    DeferredCompletion deferCompletion();
 
     /**
      * Sends given task to downstream processors if exists.

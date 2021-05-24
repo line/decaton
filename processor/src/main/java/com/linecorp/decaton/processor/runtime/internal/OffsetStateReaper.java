@@ -20,8 +20,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
-import com.linecorp.decaton.processor.runtime.internal.Completion.CompletionExpire;
-
 public class OffsetStateReaper implements AutoCloseable {
     private final ExecutorService executor;
 
@@ -33,11 +31,10 @@ public class OffsetStateReaper implements AutoCloseable {
         if (state.completed()) {
             return;
         }
-        Completion comp = state.completion();
-        CompletionExpire expire = comp.expire();
+        long expireAt = state.expireAt();
         long now = System.currentTimeMillis();
-        if (expire != null && expire.expireAt() <= now) {
-            executor.execute(comp::tryExpire);
+        if (expireAt >= 0 && expireAt <= now) {
+            state.future().complete(null);
         }
     }
 

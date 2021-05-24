@@ -16,23 +16,32 @@
 
 package com.linecorp.decaton.processor.runtime.internal;
 
+import java.util.concurrent.CompletableFuture;
+
 import lombok.Getter;
 import lombok.experimental.Accessors;
 
 @Accessors(fluent = true)
 public class OffsetState {
     @Getter
+    private final CompletableFuture<Void> future;
+    @Getter
     private final long offset;
     @Getter
-    private final Completion completion;
+    private long expireAt;
 
     OffsetState(long offset) {
         this.offset = offset;
-        completion = new Completion();
+        future = new CompletableFuture<>();
+        expireAt = -1;
     }
 
     public boolean completed() {
-        return completion.completed();
+        return future.isDone();
+    }
+
+    public void setTimeout(long expireAt) {
+        this.expireAt = expireAt;
     }
 
     @Override

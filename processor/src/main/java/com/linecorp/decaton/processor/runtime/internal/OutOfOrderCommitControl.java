@@ -77,7 +77,7 @@ public class OutOfOrderCommitControl implements AutoCloseable {
         states.addLast(state);
         latest = state.offset();
 
-        state.completion().future().whenComplete((unused, throwable) -> onComplete(offset)); // TODO okay in this order?
+        state.future().whenComplete((unused, throwable) -> onComplete(offset)); // TODO okay in this order?
         return state;
     }
 

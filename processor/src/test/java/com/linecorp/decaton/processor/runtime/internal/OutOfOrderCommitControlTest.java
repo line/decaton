@@ -22,8 +22,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.junit.Test;
 
 import com.linecorp.decaton.processor.DeferredCompletion;
-import com.linecorp.decaton.processor.runtime.internal.OutOfOrderCommitControl;
-import com.linecorp.decaton.processor.runtime.internal.OutOfOrderCommitControl.OffsetState;
 
 public class OutOfOrderCommitControlTest {
     private static final int STATES_CAPACITY = 1000;
