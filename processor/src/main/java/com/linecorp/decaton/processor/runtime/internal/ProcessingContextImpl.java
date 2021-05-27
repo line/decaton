@@ -18,6 +18,7 @@ package com.linecorp.decaton.processor.runtime.internal;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
 import org.apache.kafka.common.header.Headers;
@@ -43,8 +44,7 @@ public class ProcessingContextImpl<T> implements ProcessingContext<T> {
     private final List<DecatonProcessor<T>> downstreams;
     private final DecatonProcessor<byte[]> retryQueueingProcessor;
     private final ProcessorProperties props;
-    private CompletionImpl deferredCompletion;
-    private boolean forceComplete;
+    private final AtomicReference<CompletionImpl> deferredCompletion;
 
     public ProcessingContextImpl(String subscriptionId,
                                  TaskRequest request,
@@ -58,6 +58,7 @@ public class ProcessingContextImpl<T> implements ProcessingContext<T> {
         this.downstreams = Collections.unmodifiableList(downstreams);
         this.retryQueueingProcessor = retryQueueingProcessor;
         this.props = props;
+        deferredCompletion = new AtomicReference<>();
     }
 
     @Override
@@ -88,11 +89,12 @@ public class ProcessingContextImpl<T> implements ProcessingContext<T> {
 
     @Override
     public Completion deferCompletion(Supplier<Boolean> callback) {
-        if (deferredCompletion == null) {
-            deferredCompletion = new CompletionImpl();
-            deferredCompletion.expireCallback(callback);
+        if (deferredCompletion.get() == null) {
+            CompletionImpl completion = new CompletionImpl();
+            completion.expireCallback(callback);
+            deferredCompletion.compareAndSet(null, completion);
         }
-        return deferredCompletion;
+        return deferredCompletion.get();
     }
 
     private <P> Completion pushDownStream(List<DecatonProcessor<P>> downstreams, P taskData)
@@ -127,8 +129,8 @@ public class ProcessingContextImpl<T> implements ProcessingContext<T> {
                 log.error("Exception from tracing", e);
             }
         } finally {
-            if (nextContext.deferredCompletion != null) {
-                completion = nextContext.deferredCompletion;
+            if (nextContext.deferredCompletion.get() != null) {
+                completion = nextContext.deferredCompletion.getAndSet(null);
             } else {
                 // If process didn't requested for deferred completion, we understand it as process
                 // completed synchronously.

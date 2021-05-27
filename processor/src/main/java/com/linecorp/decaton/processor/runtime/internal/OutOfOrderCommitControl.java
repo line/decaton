@@ -23,8 +23,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.linecorp.decaton.processor.runtime.Property;
-
 /**
  * Represents consumption processing progress of records consumed from a single partition.
  * This class manages sequence of offsets and a flag which represents if each of them was completed or not.
@@ -51,12 +49,11 @@ public class OutOfOrderCommitControl implements AutoCloseable {
     private volatile long highWatermark;
 
     public OutOfOrderCommitControl(TopicPartition topicPartition, int capacity,
-                                   boolean enableCompletionTimeout,
-                                   Property<Long> completionTimeout) {
+                                   long completionTimeoutMs) {
         this.topicPartition = topicPartition;
         states = new ArrayDeque<>(capacity);
         this.capacity = capacity;
-        offsetStateReaper = enableCompletionTimeout ? new OffsetStateReaper(completionTimeout) : null;
+        offsetStateReaper = completionTimeoutMs >= 0 ? new OffsetStateReaper(completionTimeoutMs) : null;
         earliest = latest = 0;
         highWatermark = -1;
     }
@@ -101,7 +98,7 @@ public class OutOfOrderCommitControl implements AutoCloseable {
                 } else {
                     sb.append(", ");
                 }
-                sb.append(String.valueOf(st.offset()) + ':' + (st.completed() ? 'c' : 'n'));
+                sb.append(String.valueOf(st.offset()) + ':' + (st.completion().hasComplete() ? 'c' : 'n'));
             }
             sb.append(']');
             logger.trace("Begin updateHighWatermark earliest={} latest={} hw={} states={}",
@@ -113,7 +110,7 @@ public class OutOfOrderCommitControl implements AutoCloseable {
         OffsetState state;
         while ((state = states.peekFirst()) != null) {
             earliest = state.offset();
-            if (state.completed()) {
+            if (state.completion().hasComplete()) {
                 highWatermark = state.offset();
                 states.pollFirst();
             } else {

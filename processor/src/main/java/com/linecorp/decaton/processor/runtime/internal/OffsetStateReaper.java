@@ -20,19 +20,17 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
-import com.linecorp.decaton.processor.runtime.Property;
-
 public class OffsetStateReaper implements AutoCloseable {
     private final ExecutorService executor;
-    private final Property<Long> completionTimeout;
+    private final long completionTimeoutMs;
 
-    public OffsetStateReaper(Property<Long> completionTimeout) {
-        this.completionTimeout = completionTimeout;
+    public OffsetStateReaper(long completionTimeoutMs) {
+        this.completionTimeoutMs = completionTimeoutMs;
         executor = Executors.newSingleThreadExecutor(Utils.namedThreadFactory("OffsetStateReaper"));
     }
 
     public void maybeReapOffset(OffsetState state) {
-        if (state.completed()) {
+        if (state.completion().hasComplete()) {
             return;
         }
         long expireAt = state.expireAt();
@@ -40,7 +38,7 @@ public class OffsetStateReaper implements AutoCloseable {
         if (expireAt >= 0 && expireAt <= now) {
             if (state.completion().tryExpire()) {
                 executor.execute(() -> {
-                    long nextExpireAt = now + completionTimeout.value();
+                    long nextExpireAt = now + completionTimeoutMs;
                     state.setTimeout(nextExpireAt);
                 });
             }

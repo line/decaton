@@ -34,10 +34,6 @@ public class OffsetState {
         completion = new CompletionImpl();
     }
 
-    public boolean completed() {
-        return completion.future().isDone();
-    }
-
     public void setTimeout(long expireAt) {
         this.expireAt = expireAt;
     }
@@ -46,7 +42,7 @@ public class OffsetState {
     public String toString() {
         return "OffsetState{" +
                "offset=" + offset +
-               ", committed=" + completed() +
+               ", committed=" + completion.hasComplete() +
                '}';
     }
 }
