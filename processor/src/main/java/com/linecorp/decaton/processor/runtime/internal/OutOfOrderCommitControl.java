@@ -23,6 +23,8 @@ import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.linecorp.decaton.processor.runtime.Property;
+
 /**
  * Represents consumption processing progress of records consumed from a single partition.
  * This class manages sequence of offsets and a flag which represents if each of them was completed or not.
@@ -49,11 +51,12 @@ public class OutOfOrderCommitControl implements AutoCloseable {
     private volatile long highWatermark;
 
     public OutOfOrderCommitControl(TopicPartition topicPartition, int capacity,
-                                   boolean enableCompletionTimeout) {
+                                   boolean enableCompletionTimeout,
+                                   Property<Long> completionTimeout) {
         this.topicPartition = topicPartition;
         states = new ArrayDeque<>(capacity);
         this.capacity = capacity;
-        offsetStateReaper = enableCompletionTimeout ? new OffsetStateReaper() : null;
+        offsetStateReaper = enableCompletionTimeout ? new OffsetStateReaper(completionTimeout) : null;
         earliest = latest = 0;
         highWatermark = -1;
     }
@@ -77,19 +80,13 @@ public class OutOfOrderCommitControl implements AutoCloseable {
         states.addLast(state);
         latest = state.offset();
 
-        state.future().whenComplete((unused, throwable) -> onComplete(offset)); // TODO okay in this order?
+        state.completion().future().whenComplete((unused, throwable) -> onComplete(offset)); // TODO okay in this order?
         return state;
     }
 
-    void onComplete(long offset) {
-        if (offset > latest) {
-            throw new IllegalArgumentException(String.format(
-                    "complete attempt on %d which is larger than current latest %d", offset, latest));
-        }
-
+    static void onComplete(long offset) {
         if (logger.isDebugEnabled()) {
-            logger.debug("Offset complete({}) earliest={} latest={} hw={}",
-                         offset, earliest, latest, highWatermark);
+            logger.debug("Offset complete: {}", offset);
         }
     }
 

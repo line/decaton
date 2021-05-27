@@ -107,7 +107,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
 
             TracingProvider provider = scope.tracingProvider();
             RecordTraceHandle trace = provider.traceFor(record, scope.subscriptionId());
-            offsetState.future().whenComplete((unused, throwable) -> {
+            offsetState.completion().asFuture().whenComplete((unused, throwable) -> {
                 try {
                     trace.processingCompletion();
                 } catch (Exception e) {
@@ -121,7 +121,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
                                         record.headers(), trace, record.value());
                 context.addRequest(taskRequest);
             } else {
-                offsetState.future().complete(null);
+                offsetState.completion().complete();
             }
         }
     }

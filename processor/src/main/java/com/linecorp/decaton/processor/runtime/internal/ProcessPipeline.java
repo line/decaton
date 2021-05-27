@@ -19,9 +19,9 @@ package com.linecorp.decaton.processor.runtime.internal;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 
 import com.linecorp.decaton.processor.DecatonProcessor;
+import com.linecorp.decaton.processor.runtime.Completion;
 import com.linecorp.decaton.processor.runtime.DecatonTask;
 import com.linecorp.decaton.processor.ProcessingContext;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
@@ -62,13 +62,13 @@ public class ProcessPipeline<T> implements AutoCloseable {
     }
 
     public void scheduleThenProcess(TaskRequest request) throws InterruptedException {
-        CompletableFuture<Void> completion = request.offsetState().future();
+        OffsetState offsetState = request.offsetState();
         final DecatonTask<T> extracted;
         try {
             extracted = extract(request);
         } catch (RuntimeException e) {
             // Complete the offset to forward offsets
-            completion.complete(null);
+            offsetState.completion().complete();
 
             log.error("Dropping not-deserializable task [{}]", request.id(), e);
             taskMetrics.tasksDiscarded.increment();
@@ -81,15 +81,14 @@ public class ProcessPipeline<T> implements AutoCloseable {
             return;
         }
 
-        CompletableFuture<Void> result = process(request, extracted);
-        result.whenComplete((r, e) -> {
+        Completion result = process(request, extracted);
+        result.asFuture().whenComplete((r, e) -> {
             if (e != null) {
                 taskMetrics.tasksError.increment();
             }
-            completion.complete(null);
         });
-        if (!result.isDone()) { // Completion deferred
-            OffsetState offsetState = request.offsetState();
+        offsetState.completion().completeWith(result);
+        if (!result.hasComplete()) { // Completion deferred
             long expireAt = System.currentTimeMillis() +
                             scope.props().get(ProcessorProperties.CONFIG_DEFERRED_COMPLETE_TIMEOUT_MS).value();
             offsetState.setTimeout(expireAt);
@@ -109,21 +108,20 @@ public class ProcessPipeline<T> implements AutoCloseable {
     }
 
     // visible for testing
-    CompletableFuture<Void> process(TaskRequest request, DecatonTask<T> task) throws InterruptedException {
+    Completion process(TaskRequest request, DecatonTask<T> task) throws InterruptedException {
         ProcessingContext<T> context =
                 new ProcessingContextImpl<>(scope.subscriptionId(), request, task, processors, retryProcessor,
                                             scope.props());
 
         Timer timer = Utils.timer();
-        CompletableFuture<Void> processResult;
+        Completion processResult;
         try (LoggingContext ignored = context.loggingContext()) {
             processResult = context.push(task.taskData());
         } catch (Exception e) {
             if (e instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
             }
-            processResult = new CompletableFuture<>();
-            processResult.completeExceptionally(e);
+            processResult = CompletionImpl.completedCompletion();
 
             log.error("Uncaught exception thrown by processor {} for task {}",
                       scope, request, e);
@@ -136,7 +134,7 @@ public class ProcessPipeline<T> implements AutoCloseable {
             processMetrics.tasksProcessDuration.record(elapsed);
         }
 
-        processResult.whenComplete((r, e) -> {
+        processResult.asFuture().whenComplete((r, e) -> {
             // Performance logging and metrics update
             Duration completeDuration = timer.duration();
             if (log.isTraceEnabled()) {

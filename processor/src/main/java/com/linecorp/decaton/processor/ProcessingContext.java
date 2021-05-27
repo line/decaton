@@ -17,9 +17,12 @@
 package com.linecorp.decaton.processor;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Supplier;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.header.Headers;
+
+import com.linecorp.decaton.processor.runtime.Completion;
 
 public interface ProcessingContext<T> {
     /**
@@ -62,7 +65,11 @@ public interface ProcessingContext<T> {
      * Otherwise consumption will stuck in short future and no new task will be given to the processor.
      * @return a {@link DeferredCompletion} which can be used to tell the result of processing asynchronously.
      */
-    DeferredCompletion deferCompletion();
+    default Completion deferCompletion() {
+        return deferCompletion(() -> false);
+    }
+
+    Completion deferCompletion(Supplier<Boolean> callback);
 
     /**
      * Sends given task to downstream processors if exists.
@@ -81,7 +88,7 @@ public interface ProcessingContext<T> {
      * @return a {@link CompletableFuture} that completes when downstream processor completes processing.
      * @throws InterruptedException when processing gets interrupted.
      */
-    CompletableFuture<Void> push(T task) throws InterruptedException;
+    Completion push(T task) throws InterruptedException;
 
     /**
      * Schedule the currently processing task for retrying.
@@ -93,5 +100,5 @@ public interface ProcessingContext<T> {
      * retry task.
      * @throws InterruptedException when processing gets interrupted.
      */
-    CompletableFuture<Void> retry() throws InterruptedException;
+    Completion retry() throws InterruptedException;
 }

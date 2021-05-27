@@ -48,7 +48,8 @@ public class PartitionContext implements AutoCloseable {
         int capacity = maxPendingRecords + scope.maxPollRecords();
         boolean enableCompletionTimeout =
                 scope.props().get(ProcessorProperties.CONFIG_DEFERRED_COMPLETE_TIMEOUT_MS).value() >= 0;
-        commitControl = new OutOfOrderCommitControl(scope.topicPartition(), capacity, enableCompletionTimeout);
+        commitControl = new OutOfOrderCommitControl(scope.topicPartition(), capacity, enableCompletionTimeout,
+                                                    scope.props().get(ProcessorProperties.CONFIG_DEFERRED_COMPLETE_TIMEOUT_MS));
 
         TopicPartition tp = scope.topicPartition();
         metrics = Metrics.withTags("subscription", scope.subscriptionId(),
