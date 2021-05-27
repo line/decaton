@@ -49,10 +49,11 @@ import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
 
 import com.linecorp.decaton.processor.DecatonProcessor;
-import com.linecorp.decaton.processor.runtime.DecatonTask;
 import com.linecorp.decaton.processor.DeferredCompletion;
 import com.linecorp.decaton.processor.ProcessingContext;
 import com.linecorp.decaton.processor.TaskMetadata;
+import com.linecorp.decaton.processor.runtime.Completion;
+import com.linecorp.decaton.processor.runtime.DecatonTask;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.tracing.TestTraceHandle;
 import com.linecorp.decaton.processor.tracing.TestTracingProvider;
@@ -150,8 +151,8 @@ public class ProcessingContextImplTest {
     public void testPush_Level1_Sync() throws InterruptedException {
         ProcessingContextImpl<HelloTask> context = context(NoopTrace.INSTANCE, (ctx, task) -> { /* noop */ });
 
-        CompletableFuture<Void> future = context.push(TASK);
-        assertTrue(future.isDone());
+        Completion comp = context.push(TASK);
+        assertTrue(comp.hasComplete());
     }
 
     @Test(timeout = 5000)
@@ -167,12 +168,12 @@ public class ProcessingContextImplTest {
             });
         });
 
-        CompletableFuture<Void> future = context.push(TASK);
-        assertFalse(future.isDone());
+        Completion comp = context.push(TASK);
+        assertFalse(comp.hasComplete());
 
         latch.countDown();
         terminateExecutor(executor);
-        assertTrue(future.isDone());
+        assertTrue(comp.hasComplete());
     }
 
     /**
@@ -184,12 +185,13 @@ public class ProcessingContextImplTest {
     public void testPush_Level1_MultiPush_BothSync() throws InterruptedException {
         ProcessingContextImpl<HelloTask> context = context(NoopTrace.INSTANCE, (ctx, task) -> { /* noop */ });
 
-        CompletableFuture<Void> f1 = context.push(TASK);
-        CompletableFuture<Void> f2 = context.push(TASK);
-        CompletableFuture<Void> fAll = CompletableFuture.allOf(f1, f2);
+        Completion comp1 = context.push(TASK);
+        Completion comp2 = context.push(TASK);
+        CompletableFuture<Void> fAll = CompletableFuture.allOf(comp1.asFuture().toCompletableFuture(),
+                                                               comp2.asFuture().toCompletableFuture());
 
-        assertTrue(f1.isDone());
-        assertTrue(f2.isDone());
+        assertTrue(comp1.hasComplete());
+        assertTrue(comp2.hasComplete());
         assertTrue(fAll.isDone());
     }
 
@@ -213,18 +215,19 @@ public class ProcessingContextImplTest {
             });
         });
 
-        CompletableFuture<Void> f1 = context.push(TASK);
-        CompletableFuture<Void> f2 = context.push(TASK);
-        CompletableFuture<Void> fAll = CompletableFuture.allOf(f1, f2);
+        Completion comp1 = context.push(TASK);
+        Completion comp2 = context.push(TASK);
+        CompletableFuture<Void> fAll = CompletableFuture.allOf(comp1.asFuture().toCompletableFuture(),
+                                                               comp2.asFuture().toCompletableFuture());
 
         assertFalse(fAll.isDone());
         latches[0].countDown();
         terminateExecutor(executors[0]);
-        assertTrue(f1.isDone());
+        assertTrue(comp1.hasComplete());
         assertFalse(fAll.isDone());
         latches[1].countDown();
         terminateExecutor(executors[1]);
-        assertTrue(f2.isDone());
+        assertTrue(comp2.hasComplete());
         assertTrue(fAll.isDone());
     }
 
@@ -233,8 +236,8 @@ public class ProcessingContextImplTest {
         ProcessingContextImpl<HelloTask> context = context(NoopTrace.INSTANCE, ProcessingContext::push,
                                                            processorMock);
 
-        CompletableFuture<Void> future = context.push(TASK);
-        assertTrue(future.isDone());
+        Completion comp = context.push(TASK);
+        assertTrue(comp.hasComplete());
         verify(processorMock, times(1)).process(any(), eq(TASK));
     }
 
@@ -255,8 +258,8 @@ public class ProcessingContextImplTest {
         ProcessingContextImpl<HelloTask> context = context(NoopTrace.INSTANCE, ProcessingContext::push,
                                                            processorMock);
 
-        CompletableFuture<Void> future = context.push(TASK);
-        assertTrue(future.isDone());
+        Completion comp = context.push(TASK);
+        assertTrue(comp.hasComplete());
         verify(processorMock, times(1)).process(any(), eq(TASK));
     }
 
@@ -279,13 +282,13 @@ public class ProcessingContextImplTest {
                                                                              .completeWith(ctx.push(task)),
                                                            processorMock);
 
-        CompletableFuture<Void> future = context.push(TASK);
-        assertFalse(future.isDone());
+        Completion comp = context.push(TASK);
+        assertFalse(comp.hasComplete());
         verify(processorMock, times(1)).process(any(), eq(TASK));
 
         latch.countDown();
         terminateExecutor(executor);
-        assertTrue(future.isDone());
+        assertTrue(comp.hasComplete());
     }
 
     /**
@@ -320,18 +323,19 @@ public class ProcessingContextImplTest {
                                                                              .completeWith(ctx.push(TASK)),
                                                            processorMock);
 
-        CompletableFuture<Void> f1 = context.push(TASK);
-        CompletableFuture<Void> f2 = context.push(TASK);
-        CompletableFuture<Void> fAll = CompletableFuture.allOf(f1, f2);
+        Completion comp1 = context.push(TASK);
+        Completion comp2 = context.push(TASK);
+        CompletableFuture<Void> fAll = CompletableFuture.allOf(comp1.asFuture().toCompletableFuture(),
+                                                               comp2.asFuture().toCompletableFuture());
 
-        assertTrue(f1.isDone());
-        assertFalse(f2.isDone());
+        assertTrue(comp1.hasComplete());
+        assertFalse(comp2.hasComplete());
         assertFalse(fAll.isDone());
 
         latch.countDown();
         terminateExecutor(executor);
-        assertTrue(f1.isDone());
-        assertTrue(f2.isDone());
+        assertTrue(comp1.hasComplete());
+        assertTrue(comp2.hasComplete());
         assertTrue(fAll.isDone());
     }
 
@@ -339,7 +343,6 @@ public class ProcessingContextImplTest {
     public void testRetry() throws InterruptedException {
         @SuppressWarnings("unchecked")
         DecatonProcessor<byte[]> retryProcessor = mock(DecatonProcessor.class);
-        DeferredCompletion completion = spy(new MockCompletion());
 
         TaskRequest request = new TaskRequest(
                 new TopicPartition("topic", 1), 1, null, "TEST", null, null, REQUEST.toByteArray());
@@ -349,15 +352,13 @@ public class ProcessingContextImplTest {
         ProcessingContextImpl<byte[]> context =
                 spy(new ProcessingContextImpl<>("subscription", request, task,
                                                 Collections.emptyList(), retryProcessor,
-                                                ProcessorProperties.builder().build(),
-                                                completion));
+                                                ProcessorProperties.builder().build()));
 
-        CompletableFuture<Void> produceFuture = context.retry();
+        Completion retryComp = context.retry();
 
         verify(context, times(1)).deferCompletion();
         verify(retryProcessor, times(1)).process(any(), eq(TASK.toByteArray()));
-        verify(completion, times(1)).complete();
-        assertTrue(produceFuture.isDone());
+        assertTrue(retryComp.hasComplete());
     }
 
     @Test(expected = IllegalStateException.class)
@@ -376,8 +377,8 @@ public class ProcessingContextImplTest {
                                                                                .set(TestTracingProvider
                                                                                             .getCurrentTraceId())
                                                                ));
-            CompletableFuture<Void> future = context.push(TASK);
-            assertTrue(future.isDone());
+            Completion comp = context.push(TASK);
+            assertTrue(comp.hasComplete());
             assertNull(TestTracingProvider.getCurrentTraceId());
             assertEquals("testTrace_Sync-Noop", traceDuringProcessing.get());
         } finally {
@@ -405,8 +406,8 @@ public class ProcessingContextImplTest {
                         });
                     }));
 
-            CompletableFuture<Void> future = context.push(TASK);
-            assertFalse(future.isDone());
+            Completion comp = context.push(TASK);
+            assertFalse(comp.hasComplete());
             // The trace for this processor should no longer be "current"
             // (because sync execution has finished)
             // but it is should still be "open"
@@ -415,7 +416,7 @@ public class ProcessingContextImplTest {
 
             latch.countDown();
             terminateExecutor(executor);
-            assertTrue(future.isDone());
+            assertTrue(comp.hasComplete());
             assertThat(TestTracingProvider.getOpenTraces(), not(hasItem("testTrace_Async-Async")));
 
             assertEquals("testTrace_Async-Async", traceDuringSyncProcessing.get());

@@ -17,6 +17,7 @@
 package com.linecorp.decaton.processor.runtime.internal;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
@@ -44,6 +45,7 @@ import org.mockito.junit.MockitoRule;
 import com.linecorp.decaton.client.internal.DecatonTaskProducer;
 import com.linecorp.decaton.processor.DeferredCompletion;
 import com.linecorp.decaton.processor.ProcessingContext;
+import com.linecorp.decaton.processor.runtime.Completion;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.TaskMetadata;
 import com.linecorp.decaton.processor.runtime.RetryConfig;
@@ -75,7 +77,7 @@ public class DecatonTaskRetryQueueingProcessorTest {
     public void setUp() {
         processor = new DecatonTaskRetryQueueingProcessor(scope, producer);
         doReturn(CompletableFuture.completedFuture(null)).when(producer).sendRequest(any(), any());
-        doReturn(mock(DeferredCompletion.class)).when(context).deferCompletion();
+        doReturn(new CompletionImpl()).when(context).deferCompletion();
         doReturn("key").when(context).key();
         doReturn(TaskMetadata.builder().build()).when(context).metadata();
     }
@@ -115,16 +117,19 @@ public class DecatonTaskRetryQueueingProcessorTest {
 
     @Test
     public void testDeferCompletion() throws InterruptedException {
-        CompletableFuture<HelloTask> future = CompletableFuture.completedFuture(null);
-        DeferredCompletion completion = mock(DeferredCompletion.class);
+        CompletableFuture<HelloTask> future = new CompletableFuture<>();
+        CompletionImpl comp = new CompletionImpl();
 
-        doReturn(completion).when(context).deferCompletion();
+        doReturn(comp).when(context).deferCompletion();
         doReturn(future).when(producer).sendRequest(any(), any());
 
         processor.process(context, HelloTask.getDefaultInstance().toByteArray());
 
         verify(context, times(1)).deferCompletion();
-        verify(completion, times(1)).completeWith(future);
+        // Check if the returned completion is associated with the producer's send completion
+        assertFalse(comp.hasComplete());
+        future.complete(null);
+        assertTrue(comp.hasComplete());
     }
 
     @Test
