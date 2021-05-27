@@ -26,7 +26,7 @@ public class OutOfOrderCommitControlTest {
 
     private final TopicPartition topicPartition = new TopicPartition("topic", 0);
     private final OutOfOrderCommitControl partitionState =
-            new OutOfOrderCommitControl(topicPartition, STATES_CAPACITY, -1);
+            new OutOfOrderCommitControl(topicPartition, STATES_CAPACITY, null);
 
     @Test
     public void testInOrderOffsetCompletion() {

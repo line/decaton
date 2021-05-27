@@ -42,7 +42,7 @@ public class OffsetState {
     public String toString() {
         return "OffsetState{" +
                "offset=" + offset +
-               ", committed=" + completion.hasComplete() +
+               ", committed=" + completion.isComplete() +
                '}';
     }
 }

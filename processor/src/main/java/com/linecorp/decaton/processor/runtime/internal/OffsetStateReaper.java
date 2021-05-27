@@ -30,7 +30,7 @@ public class OffsetStateReaper implements AutoCloseable {
     }
 
     public void maybeReapOffset(OffsetState state) {
-        if (state.completion().hasComplete()) {
+        if (state.completion().isComplete()) {
             return;
         }
         long expireAt = state.expireAt();

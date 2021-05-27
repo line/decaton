@@ -16,6 +16,7 @@
 
 package com.linecorp.decaton.processor.runtime.internal;
 
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.function.Supplier;
@@ -30,7 +31,7 @@ import lombok.experimental.Accessors;
 public class CompletionImpl implements Completion {
     private final CompletableFuture<Void> future;
     private Supplier<Boolean> expireCallback;
-    private Completion dependency;
+    private volatile Completion dependency;
 
     public static CompletionImpl completedCompletion() {
         CompletionImpl comp = new CompletionImpl();
@@ -43,7 +44,7 @@ public class CompletionImpl implements Completion {
     }
 
     @Override
-    public boolean hasComplete() {
+    public boolean isComplete() {
         return future.isDone();
     }
 
@@ -56,7 +57,7 @@ public class CompletionImpl implements Completion {
     public boolean tryExpire() {
         if (dependency != null) {
             dependency.tryExpire();
-            if (!dependency.hasComplete()) {
+            if (!dependency.isComplete()) {
                 return true;
             }
         }
@@ -65,7 +66,7 @@ public class CompletionImpl implements Completion {
 
     @Override
     public void completeWith(Completion dep) {
-        dependency = dep;
+        dependency = Objects.requireNonNull(dep, "dep");
         dep.asFuture().whenComplete((unused, throwable) -> future.complete(null));
     }
 

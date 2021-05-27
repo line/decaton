@@ -18,6 +18,8 @@ package com.linecorp.decaton.processor;
 
 import java.util.concurrent.CompletableFuture;
 
+import com.linecorp.decaton.processor.runtime.Completion;
+
 public interface DeferredCompletion {
     /**
      * Complete this deferred processing to tell it's ready for committing the corresponding offset.
@@ -34,4 +36,16 @@ public interface DeferredCompletion {
     default <T> CompletableFuture<T> completeWith(CompletableFuture<T> future) {
         return future.whenComplete((r, e) -> complete());
     }
+
+    /**
+     * Associate completion of this completion to the given {@link Completion}.
+     * By calling this method for the completion X with the argument of A,
+     * * when A completes, X completes
+     * * when X times out, A times out
+     *
+     * Always prefer to use this method instead of {@link #completeWith(CompletableFuture)} when possible.
+     *
+     * @param dep a {@link Completion} to associate the completion.
+     */
+    void completeWith(Completion dep);
 }

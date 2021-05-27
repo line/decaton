@@ -85,13 +85,6 @@ public class ProcessingContextImplTest {
         }
     }
 
-    private static class MockCompletion implements DeferredCompletion {
-        @Override
-        public void complete() {
-            // noop
-        }
-    }
-
     private static final HelloTask TASK = HelloTask.getDefaultInstance();
 
     private static final DecatonTaskRequest REQUEST =
@@ -152,7 +145,7 @@ public class ProcessingContextImplTest {
         ProcessingContextImpl<HelloTask> context = context(NoopTrace.INSTANCE, (ctx, task) -> { /* noop */ });
 
         Completion comp = context.push(TASK);
-        assertTrue(comp.hasComplete());
+        assertTrue(comp.isComplete());
     }
 
     @Test(timeout = 5000)
@@ -169,11 +162,11 @@ public class ProcessingContextImplTest {
         });
 
         Completion comp = context.push(TASK);
-        assertFalse(comp.hasComplete());
+        assertFalse(comp.isComplete());
 
         latch.countDown();
         terminateExecutor(executor);
-        assertTrue(comp.hasComplete());
+        assertTrue(comp.isComplete());
     }
 
     /**
@@ -190,8 +183,8 @@ public class ProcessingContextImplTest {
         CompletableFuture<Void> fAll = CompletableFuture.allOf(comp1.asFuture().toCompletableFuture(),
                                                                comp2.asFuture().toCompletableFuture());
 
-        assertTrue(comp1.hasComplete());
-        assertTrue(comp2.hasComplete());
+        assertTrue(comp1.isComplete());
+        assertTrue(comp2.isComplete());
         assertTrue(fAll.isDone());
     }
 
@@ -223,11 +216,11 @@ public class ProcessingContextImplTest {
         assertFalse(fAll.isDone());
         latches[0].countDown();
         terminateExecutor(executors[0]);
-        assertTrue(comp1.hasComplete());
+        assertTrue(comp1.isComplete());
         assertFalse(fAll.isDone());
         latches[1].countDown();
         terminateExecutor(executors[1]);
-        assertTrue(comp2.hasComplete());
+        assertTrue(comp2.isComplete());
         assertTrue(fAll.isDone());
     }
 
@@ -237,7 +230,7 @@ public class ProcessingContextImplTest {
                                                            processorMock);
 
         Completion comp = context.push(TASK);
-        assertTrue(comp.hasComplete());
+        assertTrue(comp.isComplete());
         verify(processorMock, times(1)).process(any(), eq(TASK));
     }
 
@@ -259,7 +252,7 @@ public class ProcessingContextImplTest {
                                                            processorMock);
 
         Completion comp = context.push(TASK);
-        assertTrue(comp.hasComplete());
+        assertTrue(comp.isComplete());
         verify(processorMock, times(1)).process(any(), eq(TASK));
     }
 
@@ -283,12 +276,12 @@ public class ProcessingContextImplTest {
                                                            processorMock);
 
         Completion comp = context.push(TASK);
-        assertFalse(comp.hasComplete());
+        assertFalse(comp.isComplete());
         verify(processorMock, times(1)).process(any(), eq(TASK));
 
         latch.countDown();
         terminateExecutor(executor);
-        assertTrue(comp.hasComplete());
+        assertTrue(comp.isComplete());
     }
 
     /**
@@ -328,14 +321,14 @@ public class ProcessingContextImplTest {
         CompletableFuture<Void> fAll = CompletableFuture.allOf(comp1.asFuture().toCompletableFuture(),
                                                                comp2.asFuture().toCompletableFuture());
 
-        assertTrue(comp1.hasComplete());
-        assertFalse(comp2.hasComplete());
+        assertTrue(comp1.isComplete());
+        assertFalse(comp2.isComplete());
         assertFalse(fAll.isDone());
 
         latch.countDown();
         terminateExecutor(executor);
-        assertTrue(comp1.hasComplete());
-        assertTrue(comp2.hasComplete());
+        assertTrue(comp1.isComplete());
+        assertTrue(comp2.isComplete());
         assertTrue(fAll.isDone());
     }
 
@@ -358,7 +351,7 @@ public class ProcessingContextImplTest {
 
         verify(context, times(1)).deferCompletion();
         verify(retryProcessor, times(1)).process(any(), eq(TASK.toByteArray()));
-        assertTrue(retryComp.hasComplete());
+        assertTrue(retryComp.isComplete());
     }
 
     @Test(expected = IllegalStateException.class)
@@ -378,7 +371,7 @@ public class ProcessingContextImplTest {
                                                                                             .getCurrentTraceId())
                                                                ));
             Completion comp = context.push(TASK);
-            assertTrue(comp.hasComplete());
+            assertTrue(comp.isComplete());
             assertNull(TestTracingProvider.getCurrentTraceId());
             assertEquals("testTrace_Sync-Noop", traceDuringProcessing.get());
         } finally {
@@ -407,7 +400,7 @@ public class ProcessingContextImplTest {
                     }));
 
             Completion comp = context.push(TASK);
-            assertFalse(comp.hasComplete());
+            assertFalse(comp.isComplete());
             // The trace for this processor should no longer be "current"
             // (because sync execution has finished)
             // but it is should still be "open"
@@ -416,7 +409,7 @@ public class ProcessingContextImplTest {
 
             latch.countDown();
             terminateExecutor(executor);
-            assertTrue(comp.hasComplete());
+            assertTrue(comp.isComplete());
             assertThat(TestTracingProvider.getOpenTraces(), not(hasItem("testTrace_Async-Async")));
 
             assertEquals("testTrace_Async-Async", traceDuringSyncProcessing.get());

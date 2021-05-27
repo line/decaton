@@ -20,12 +20,25 @@ import java.util.concurrent.CompletionStage;
 
 import com.linecorp.decaton.processor.DeferredCompletion;
 
+/**
+ * An interface for completion status management of tasks.
+ */
 public interface Completion extends DeferredCompletion {
-    boolean hasComplete();
+    /**
+     * Returns whether this completion is complete.
+     * @return true if completed, false otherwise.
+     */
+    boolean isComplete();
 
-    CompletionStage<Void> asFuture();
-
+    /**
+     * Try to expire this completion. This method is intended for the use of decaton's internal implementation.
+     * @return true if successfully expired, false otherwise.
+     */
     boolean tryExpire();
 
-    void completeWith(Completion dep);
+    /**
+     * Returns a {@link CompletionStage} that reflects completion state of this completion.
+     * @return a {@link CompletionStage} linked with this completion.
+     */
+    CompletionStage<Void> asFuture();
 }

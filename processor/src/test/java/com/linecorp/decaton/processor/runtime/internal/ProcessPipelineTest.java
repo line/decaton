@@ -118,7 +118,7 @@ public class ProcessPipelineTest {
         pipeline.scheduleThenProcess(request);
         verify(schedulerMock, times(1)).schedule(eq(TaskMetadata.fromProto(REQUEST.getMetadata())));
         verify(processorMock, times(1)).process(any(), eq(TASK));
-        assertTrue(request.offsetState().completion().hasComplete());
+        assertTrue(request.offsetState().completion().isComplete());
     }
 
     @Test
@@ -149,10 +149,10 @@ public class ProcessPipelineTest {
         verify(processorMock, times(1)).process(any(), eq(TASK));
 
         // Should complete only after processor completes it
-        assertFalse(request.offsetState().completion().hasComplete());
+        assertFalse(request.offsetState().completion().isComplete());
         beforeComplete.countDown();
         afterComplete.await();
-        assertTrue(request.offsetState().completion().hasComplete());
+        assertTrue(request.offsetState().completion().isComplete());
     }
 
     @Test
@@ -165,7 +165,7 @@ public class ProcessPipelineTest {
         pipeline.scheduleThenProcess(request);
         verify(schedulerMock, never()).schedule(any());
         verify(processorMock, never()).process(any(), any());
-        assertTrue(request.offsetState().completion().hasComplete());
+        assertTrue(request.offsetState().completion().isComplete());
     }
 
     @Test
@@ -177,7 +177,7 @@ public class ProcessPipelineTest {
         pipeline.scheduleThenProcess(request);
         verify(schedulerMock, never()).schedule(any());
         verify(processorMock, never()).process(any(), any());
-        assertTrue(request.offsetState().completion().hasComplete());
+        assertTrue(request.offsetState().completion().isComplete());
     }
 
     @Test
@@ -201,7 +201,7 @@ public class ProcessPipelineTest {
         TaskRequest request = taskRequest();
         // Checking exception doesn't bubble up
         pipeline.scheduleThenProcess(request);
-        assertTrue(request.offsetState().completion().hasComplete());
+        assertTrue(request.offsetState().completion().isComplete());
     }
 
     @Test(timeout = 5000)
@@ -234,7 +234,7 @@ public class ProcessPipelineTest {
         // Checking it actually returns
         executor.awaitTermination(Long.MAX_VALUE, TimeUnit.SECONDS);
         verify(pipeline, never()).process(any(), any());
-        assertFalse(request.offsetState().completion().hasComplete());
+        assertFalse(request.offsetState().completion().isComplete());
     }
 }
 

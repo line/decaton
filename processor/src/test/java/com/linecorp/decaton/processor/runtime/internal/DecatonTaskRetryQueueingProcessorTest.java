@@ -43,9 +43,7 @@ import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
 
 import com.linecorp.decaton.client.internal.DecatonTaskProducer;
-import com.linecorp.decaton.processor.DeferredCompletion;
 import com.linecorp.decaton.processor.ProcessingContext;
-import com.linecorp.decaton.processor.runtime.Completion;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.TaskMetadata;
 import com.linecorp.decaton.processor.runtime.RetryConfig;
@@ -127,9 +125,9 @@ public class DecatonTaskRetryQueueingProcessorTest {
 
         verify(context, times(1)).deferCompletion();
         // Check if the returned completion is associated with the producer's send completion
-        assertFalse(comp.hasComplete());
+        assertFalse(comp.isComplete());
         future.complete(null);
-        assertTrue(comp.hasComplete());
+        assertTrue(comp.isComplete());
     }
 
     @Test

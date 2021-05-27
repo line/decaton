@@ -239,22 +239,22 @@ public class CompactionProcessorTest {
         }).when(processor).flushTask(any());
 
         TaskInput youngYuto = put("yuto", 10);
-        assertFalse(youngYuto.completion.hasComplete());
+        assertFalse(youngYuto.completion.isComplete());
 
         TaskInput dyingYuto = put("yuto", 90);
-        assertTrue(youngYuto.completion.hasComplete());
-        assertFalse(dyingYuto.completion.hasComplete());
+        assertTrue(youngYuto.completion.isComplete());
+        assertFalse(dyingYuto.completion.isComplete());
 
         TaskInput oldYuto = put("yuto", 20);
-        assertFalse(dyingYuto.completion.hasComplete());
-        assertTrue(oldYuto.completion.hasComplete());
+        assertFalse(dyingYuto.completion.isComplete());
+        assertTrue(oldYuto.completion.isComplete());
 
         waitFlush.countDown();
         completeFlush.await();
 
         // CompactionProcessor should never complete a task pushed to downstream processor.
         // It's completion should be handled by the downstream processor either synchronously or asynchronously.
-        assertFalse(dyingYuto.completion.hasComplete());
+        assertFalse(dyingYuto.completion.isComplete());
         verify(dyingYuto.context, times(1)).push(dyingYuto.task);
     }
 
@@ -302,9 +302,9 @@ public class CompactionProcessorTest {
         TaskInput task2 = put(processor, "key", 2, null);
 
         firstFlushComplete.await();
-        assertTrue(task1.completion.hasComplete());
+        assertTrue(task1.completion.isComplete());
         secondFlushComplete.await();
-        assertTrue(task2.completion.hasComplete());
+        assertTrue(task2.completion.isComplete());
 
         // There must have been two separate tasks scheduled for each task.
         // We have to terminate the executor before getting task count since getTaskCount returns approximate
