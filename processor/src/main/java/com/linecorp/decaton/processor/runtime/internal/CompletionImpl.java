@@ -67,7 +67,11 @@ public class CompletionImpl implements Completion {
     @Override
     public void completeWith(Completion dep) {
         dependency = Objects.requireNonNull(dep, "dep");
-        dep.asFuture().whenComplete((unused, throwable) -> future.complete(null));
+        // Assigning to local variable once in order to let the following closure capture reference for CF
+        // itself rather than for this CompletionImpl object.
+        // https://github.com/kawamuray/notes/blob/master/java.adoc#field-reference-from-closure-and-gc
+        CompletableFuture<Void> futLocal = future;
+        dep.asFuture().whenComplete((unused, throwable) -> futLocal.complete(null));
     }
 
     @Override
