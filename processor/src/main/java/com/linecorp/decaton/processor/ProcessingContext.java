@@ -23,6 +23,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.header.Headers;
 
 import com.linecorp.decaton.processor.runtime.Completion;
+import com.linecorp.decaton.processor.runtime.Completion.TimeoutChoice;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.RetryConfig;
 import com.linecorp.decaton.processor.runtime.SubscriptionBuilder;
@@ -66,10 +67,12 @@ public interface ProcessingContext<T> {
      * Once this method called within {@link DecatonProcessor#process} method, caller *MUST* call
      * {@link DeferredCompletion#complete()} or {@link ProcessingContext#retry()} method in any cases.
      * Otherwise consumption will stuck in short future and no new task will be given to the processor.
+     * To avoid that with some risks, consider setting
+     * {@link ProcessorProperties#CONFIG_DEFERRED_COMPLETE_TIMEOUT_MS}.
      * @return a {@link Completion} which can be used to tell the completion of processing asynchronously.
      */
     default Completion deferCompletion() {
-        return deferCompletion(() -> false);
+        return deferCompletion(() -> TimeoutChoice.GIVE_UP);
     }
 
     /**
@@ -77,6 +80,8 @@ public interface ProcessingContext<T> {
      * Once this method called within {@link DecatonProcessor#process} method, caller *MUST* call
      * {@link DeferredCompletion#complete()} or {@link ProcessingContext#retry()} method in any cases.
      * Otherwise consumption will stuck in short future and no new task will be given to the processor.
+     * To avoid that with some risks, consider setting
+     * {@link ProcessorProperties#CONFIG_DEFERRED_COMPLETE_TIMEOUT_MS}.
      *
      * This method takes a callback that is called when the returned completion "timed out".
      * For the detail of deferred completion timeout, see
@@ -112,7 +117,7 @@ public interface ProcessingContext<T> {
      * @param callback callback which is called when the returned completion times out.
      * @return a {@link Completion} which can be used to tell the completion of processing asynchronously.
      */
-    Completion deferCompletion(Supplier<Boolean> callback);
+    Completion deferCompletion(Supplier<TimeoutChoice> callback);
 
     /**
      * Sends given task to downstream processors if exists.

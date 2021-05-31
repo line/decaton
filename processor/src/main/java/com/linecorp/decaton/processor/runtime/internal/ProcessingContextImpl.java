@@ -28,6 +28,7 @@ import com.linecorp.decaton.processor.LoggingContext;
 import com.linecorp.decaton.processor.ProcessingContext;
 import com.linecorp.decaton.processor.TaskMetadata;
 import com.linecorp.decaton.processor.runtime.Completion;
+import com.linecorp.decaton.processor.runtime.Completion.TimeoutChoice;
 import com.linecorp.decaton.processor.runtime.DecatonTask;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.tracing.TracingProvider.ProcessorTraceHandle;
@@ -88,7 +89,7 @@ public class ProcessingContextImpl<T> implements ProcessingContext<T> {
     }
 
     @Override
-    public Completion deferCompletion(Supplier<Boolean> callback) {
+    public Completion deferCompletion(Supplier<TimeoutChoice> callback) {
         if (deferredCompletion.get() == null) {
             CompletionImpl completion = new CompletionImpl();
             completion.expireCallback(callback);

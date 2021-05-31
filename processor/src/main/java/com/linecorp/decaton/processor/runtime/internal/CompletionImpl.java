@@ -30,7 +30,7 @@ import lombok.experimental.Accessors;
 @Data
 public class CompletionImpl implements Completion {
     private final CompletableFuture<Void> future;
-    private Supplier<Boolean> expireCallback;
+    private Supplier<TimeoutChoice> expireCallback;
     private volatile Completion dependency;
 
     public static CompletionImpl completedCompletion() {
@@ -55,13 +55,21 @@ public class CompletionImpl implements Completion {
 
     @Override
     public boolean tryExpire() {
-        if (dependency != null) {
-            dependency.tryExpire();
-            if (!dependency.isComplete()) {
-                return true;
-            }
+        if (isComplete()) {
+            return true;
         }
-        return expireCallback.get();
+        if (dependency != null) {
+            if (!dependency.tryExpire()) {
+                return false;
+            }
+            dependency = null;
+        }
+        if (expireCallback.get() == TimeoutChoice.GIVE_UP) {
+            complete();
+            return true;
+        } else {
+            return false;
+        }
     }
 
     @Override

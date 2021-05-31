@@ -25,6 +25,20 @@ import com.linecorp.decaton.processor.DeferredCompletion;
  */
 public interface Completion extends DeferredCompletion {
     /**
+     * Choices on completion timeout.
+     */
+    enum TimeoutChoice {
+        /**
+         * Give up to complete this completion normally and forcefully complete it.
+         */
+        GIVE_UP,
+        /**
+         * Extend associated timeout and get back later.
+         */
+        EXTEND,
+    }
+
+    /**
      * Returns whether this completion is complete.
      * @return true if completed, false otherwise.
      */

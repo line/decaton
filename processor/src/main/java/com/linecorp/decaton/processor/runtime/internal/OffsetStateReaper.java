@@ -36,12 +36,12 @@ public class OffsetStateReaper implements AutoCloseable {
         long expireAt = state.expireAt();
         long now = System.currentTimeMillis();
         if (expireAt >= 0 && expireAt <= now) {
-            if (state.completion().tryExpire()) {
-                executor.execute(() -> {
-                    long nextExpireAt = now + completionTimeoutMs;
+            long nextExpireAt = now + completionTimeoutMs;
+            executor.execute(() -> {
+                if (!state.completion().tryExpire()) {
                     state.setTimeout(nextExpireAt);
-                });
-            }
+                }
+            });
         }
     }
 
