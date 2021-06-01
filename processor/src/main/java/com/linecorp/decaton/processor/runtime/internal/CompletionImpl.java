@@ -23,13 +23,13 @@ import java.util.function.Supplier;
 
 import com.linecorp.decaton.processor.runtime.Completion;
 
-import lombok.Data;
+import lombok.Setter;
 import lombok.experimental.Accessors;
 
 @Accessors(fluent = true)
-@Data
 public class CompletionImpl implements Completion {
     private final CompletableFuture<Void> future;
+    @Setter
     private Supplier<TimeoutChoice> expireCallback;
     private volatile Completion dependency;
 
@@ -64,7 +64,7 @@ public class CompletionImpl implements Completion {
             }
             dependency = null;
         }
-        if (expireCallback.get() == TimeoutChoice.GIVE_UP) {
+        if (expireCallback == null || expireCallback.get() == TimeoutChoice.GIVE_UP) {
             complete();
             return true;
         } else {

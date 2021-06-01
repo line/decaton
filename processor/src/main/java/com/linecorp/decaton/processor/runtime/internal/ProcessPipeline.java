@@ -16,6 +16,7 @@
 
 package com.linecorp.decaton.processor.runtime.internal;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
@@ -43,7 +44,26 @@ public class ProcessPipeline<T> implements AutoCloseable {
     private final ExecutionScheduler scheduler;
     private final TaskMetrics taskMetrics;
     private final ProcessMetrics processMetrics;
+    private final Clock clock;
     private volatile boolean terminated;
+
+    ProcessPipeline(ThreadScope scope,
+                    List<DecatonProcessor<T>> processors,
+                    DecatonProcessor<byte[]> retryProcessor,
+                    TaskExtractor<T> taskExtractor,
+                    ExecutionScheduler scheduler,
+                    Metrics metrics,
+                    Clock clock) {
+        this.scope = scope;
+        this.processors = Collections.unmodifiableList(processors);
+        this.retryProcessor = retryProcessor;
+        this.taskExtractor = taskExtractor;
+        this.scheduler = scheduler;
+        this.clock = clock;
+
+        taskMetrics = metrics.new TaskMetrics();
+        processMetrics = metrics.new ProcessMetrics();
+    }
 
     public ProcessPipeline(ThreadScope scope,
                            List<DecatonProcessor<T>> processors,
@@ -51,14 +71,7 @@ public class ProcessPipeline<T> implements AutoCloseable {
                            TaskExtractor<T> taskExtractor,
                            ExecutionScheduler scheduler,
                            Metrics metrics) {
-        this.scope = scope;
-        this.processors = Collections.unmodifiableList(processors);
-        this.retryProcessor = retryProcessor;
-        this.taskExtractor = taskExtractor;
-        this.scheduler = scheduler;
-
-        taskMetrics = metrics.new TaskMetrics();
-        processMetrics = metrics.new ProcessMetrics();
+        this(scope, processors, retryProcessor, taskExtractor, scheduler, metrics, Clock.systemDefaultZone());
     }
 
     public void scheduleThenProcess(TaskRequest request) throws InterruptedException {
@@ -82,15 +95,10 @@ public class ProcessPipeline<T> implements AutoCloseable {
         }
 
         Completion result = process(request, extracted);
-        result.asFuture().whenComplete((r, e) -> {
-            if (e != null) {
-                taskMetrics.tasksError.increment();
-            }
-        });
         offsetState.completion().completeWith(result);
-        if (!result.isComplete()) { // Completion deferred
-            long expireAt = System.currentTimeMillis() +
-                            scope.props().get(ProcessorProperties.CONFIG_DEFERRED_COMPLETE_TIMEOUT_MS).value();
+        long timeoutMs = scope.props().get(ProcessorProperties.CONFIG_DEFERRED_COMPLETE_TIMEOUT_MS).value();
+        if (timeoutMs >= 0) {
+            long expireAt = clock.millis() + timeoutMs;
             offsetState.setTimeout(expireAt);
         }
     }
@@ -142,6 +150,10 @@ public class ProcessPipeline<T> implements AutoCloseable {
                           request.id(), Utils.formatNanos(completeDuration));
             }
             processMetrics.tasksCompleteDuration.record(completeDuration);
+
+            if (e != null) {
+                taskMetrics.tasksError.increment();
+            }
         });
         return processResult;
     }

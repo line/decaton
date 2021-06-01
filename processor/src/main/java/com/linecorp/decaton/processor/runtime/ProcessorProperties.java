@@ -158,7 +158,7 @@ public class ProcessorProperties extends AbstractDecatonProperties {
      *
      * This timeout can be disabled by setting -1, and it is the default.
      *
-     * Reloadable: no
+     * Reloadable: yes
      */
     public static final PropertyDefinition<Long> CONFIG_DEFERRED_COMPLETE_TIMEOUT_MS =
             PropertyDefinition.define("decaton.deferred.complete.timeout.ms", Long.class, -1L,

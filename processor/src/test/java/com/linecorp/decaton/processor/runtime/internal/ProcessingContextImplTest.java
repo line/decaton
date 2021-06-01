@@ -26,7 +26,6 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -38,8 +37,10 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 
 import org.apache.kafka.common.TopicPartition;
 import org.junit.Rule;
@@ -53,6 +54,7 @@ import com.linecorp.decaton.processor.DeferredCompletion;
 import com.linecorp.decaton.processor.ProcessingContext;
 import com.linecorp.decaton.processor.TaskMetadata;
 import com.linecorp.decaton.processor.runtime.Completion;
+import com.linecorp.decaton.processor.runtime.Completion.TimeoutChoice;
 import com.linecorp.decaton.processor.runtime.DecatonTask;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.tracing.TestTraceHandle;
@@ -153,8 +155,13 @@ public class ProcessingContextImplTest {
         CountDownLatch latch = new CountDownLatch(1);
         ExecutorService executor = Executors.newSingleThreadExecutor();
 
+        AtomicBoolean timeoutCbCalled = new AtomicBoolean();
+        Supplier<TimeoutChoice> timeoutCb = () -> {
+            timeoutCbCalled.set(true);;
+            return TimeoutChoice.GIVE_UP;
+        };
         ProcessingContextImpl<HelloTask> context = context(NoopTrace.INSTANCE, (ctx, task) -> {
-            DeferredCompletion comp = ctx.deferCompletion();
+            DeferredCompletion comp = ctx.deferCompletion(timeoutCb);
             executor.execute(() -> {
                 safeAwait(latch);
                 comp.complete();
@@ -162,7 +169,10 @@ public class ProcessingContextImplTest {
         });
 
         Completion comp = context.push(TASK);
+
         assertFalse(comp.isComplete());
+        comp.tryExpire();
+        assertTrue(timeoutCbCalled.get());
 
         latch.countDown();
         terminateExecutor(executor);
@@ -334,9 +344,24 @@ public class ProcessingContextImplTest {
 
     @Test
     public void testRetry() throws InterruptedException {
-        @SuppressWarnings("unchecked")
-        DecatonProcessor<byte[]> retryProcessor = mock(DecatonProcessor.class);
-
+        CountDownLatch retryLatch = new CountDownLatch(1);
+        CountDownLatch retryCompleteLatch = new CountDownLatch(1);
+        DecatonProcessor<byte[]> retryProcessor = spy(
+                // This can't be a lambda for mockito
+                new DecatonProcessor<byte[]>() {
+                    @Override
+                    public void process(ProcessingContext<byte[]> context, byte[] task)
+                            throws InterruptedException {
+                        Completion comp = context.deferCompletion();
+                        new Thread(() -> {
+                            try {
+                                retryLatch.await();
+                            } catch (InterruptedException ignored) {}
+                            comp.complete();
+                            retryCompleteLatch.countDown();
+                        }).start();
+                    }
+                });
         TaskRequest request = new TaskRequest(
                 new TopicPartition("topic", 1), 1, null, "TEST", null, null, REQUEST.toByteArray());
         DecatonTask<byte[]> task = new DecatonTask<>(
@@ -349,8 +374,12 @@ public class ProcessingContextImplTest {
 
         Completion retryComp = context.retry();
 
-        verify(context, times(1)).deferCompletion();
-        verify(retryProcessor, times(1)).process(any(), eq(TASK.toByteArray()));
+        // Check that the returned completion is associated with retry's completion
+        verify(retryProcessor).process(any(), eq(TASK.toByteArray()));
+        assertFalse(retryComp.isComplete());
+
+        retryLatch.countDown();
+        retryCompleteLatch.await();
         assertTrue(retryComp.isComplete());
     }
 

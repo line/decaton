@@ -16,6 +16,7 @@
 
 package com.linecorp.decaton.processor.runtime.internal;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -23,14 +24,15 @@ import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Clock;
 import java.util.Collections;
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
@@ -47,13 +49,14 @@ import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
 
 import com.linecorp.decaton.processor.DecatonProcessor;
-import com.linecorp.decaton.processor.runtime.DecatonTask;
 import com.linecorp.decaton.processor.DeferredCompletion;
 import com.linecorp.decaton.processor.ProcessingContext;
-import com.linecorp.decaton.processor.runtime.ProcessorProperties;
-import com.linecorp.decaton.processor.runtime.TaskExtractor;
 import com.linecorp.decaton.processor.TaskMetadata;
 import com.linecorp.decaton.processor.metrics.Metrics;
+import com.linecorp.decaton.processor.runtime.DecatonTask;
+import com.linecorp.decaton.processor.runtime.DynamicProperty;
+import com.linecorp.decaton.processor.runtime.ProcessorProperties;
+import com.linecorp.decaton.processor.runtime.TaskExtractor;
 import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider;
 import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider.NoopTrace;
 import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
@@ -69,11 +72,14 @@ public class ProcessPipelineTest {
                               .setSerializedTask(TASK.toByteString())
                               .build();
 
-    private static final ThreadScope scope = new ThreadScope(
+    private final DynamicProperty<Long> completionTimeoutMsProp =
+            new DynamicProperty<>(ProcessorProperties.CONFIG_DEFERRED_COMPLETE_TIMEOUT_MS);
+
+    private final ThreadScope scope = new ThreadScope(
             new PartitionScope(
                     new SubscriptionScope("subscription", "topic",
                                           Optional.empty(),
-                                          ProcessorProperties.builder().build(),
+                                          ProcessorProperties.builder().set(completionTimeoutMsProp).build(),
                                           NoopTracingProvider.INSTANCE,
                                           ConsumerSupplier.DEFAULT_MAX_POLL_RECORDS),
                     new TopicPartition("topic", 0)),
@@ -103,10 +109,15 @@ public class ProcessPipelineTest {
 
     private ProcessPipeline<HelloTask> pipeline;
 
+    @Mock
+    private Clock clock;
+
     @Before
     public void setUp() {
+        completionTimeoutMsProp.set(100L);
+        doReturn(10L).when(clock).millis();
         pipeline = spy(new ProcessPipeline<>(
-                scope, Collections.singletonList(processorMock), null, extractorMock, schedulerMock, METRICS));
+                scope, Collections.singletonList(processorMock), null, extractorMock, schedulerMock, METRICS, clock));
     }
 
     @Test
@@ -119,6 +130,8 @@ public class ProcessPipelineTest {
         verify(schedulerMock, times(1)).schedule(eq(TaskMetadata.fromProto(REQUEST.getMetadata())));
         verify(processorMock, times(1)).process(any(), eq(TASK));
         assertTrue(request.offsetState().completion().isComplete());
+        assertEquals(completionTimeoutMsProp.value() + clock.millis(),
+                     request.offsetState().timeoutAt());
     }
 
     @Test
@@ -153,6 +166,8 @@ public class ProcessPipelineTest {
         beforeComplete.countDown();
         afterComplete.await();
         assertTrue(request.offsetState().completion().isComplete());
+        assertEquals(completionTimeoutMsProp.value() + clock.millis(),
+                     request.offsetState().timeoutAt());
     }
 
     @Test

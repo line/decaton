@@ -17,16 +17,23 @@
 package com.linecorp.decaton.processor.runtime.internal;
 
 import static org.junit.Assert.assertEquals;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.mock;
+
+import java.time.Clock;
 
 import org.apache.kafka.common.TopicPartition;
 import org.junit.Test;
+
+import com.linecorp.decaton.processor.runtime.ProcessorProperties;
+import com.linecorp.decaton.processor.runtime.Property;
 
 public class OutOfOrderCommitControlTest {
     private static final int STATES_CAPACITY = 1000;
 
     private final TopicPartition topicPartition = new TopicPartition("topic", 0);
     private final OutOfOrderCommitControl partitionState =
-            new OutOfOrderCommitControl(topicPartition, STATES_CAPACITY, null);
+            new OutOfOrderCommitControl(topicPartition, STATES_CAPACITY, mock(OffsetStateReaper.class));
 
     @Test
     public void testInOrderOffsetCompletion() {
@@ -140,5 +147,32 @@ public class OutOfOrderCommitControlTest {
         partitionState.updateHighWatermark();
         assertEquals(largeGapOffset, partitionState.commitReadyOffset());
         assertEquals(0, partitionState.pendingOffsetsCount());
+    }
+
+    @Test(timeout = 5000)
+    public void testTimeoutOffsetReaping() {
+        Clock clock = mock(Clock.class);
+        doReturn(10L).when(clock).millis();
+        OffsetStateReaper reaper = new OffsetStateReaper(
+                Property.ofStatic(ProcessorProperties.CONFIG_DEFERRED_COMPLETE_TIMEOUT_MS, 10L), clock);
+        OutOfOrderCommitControl ooocc = new OutOfOrderCommitControl(topicPartition, 10, reaper);
+
+        OffsetState state1 = ooocc.reportFetchedOffset(1);
+        state1.setTimeout(20);
+        OffsetState state2 = ooocc.reportFetchedOffset(2);
+
+        // 1 is blocking watermark to progress
+        state2.completion().complete();
+        ooocc.updateHighWatermark();
+        assertEquals(-1, ooocc.commitReadyOffset());
+
+        doReturn(20L).when(clock).millis();
+        // offset reaping performed but does not proceed watermark yet
+        ooocc.updateHighWatermark();
+        state1.completion().asFuture().toCompletableFuture().join();
+        assertEquals(-1, ooocc.commitReadyOffset());
+        // offset should progress as offset 1 has reaped in previous call
+        ooocc.updateHighWatermark();
+        assertEquals(2, ooocc.commitReadyOffset());
     }
 }

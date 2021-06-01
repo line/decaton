@@ -16,27 +16,39 @@
 
 package com.linecorp.decaton.processor.runtime.internal;
 
+import java.time.Clock;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
+import com.linecorp.decaton.processor.runtime.Property;
+
 public class OffsetStateReaper implements AutoCloseable {
     private final ExecutorService executor;
-    private final long completionTimeoutMs;
+    private final Property<Long> completionTimeoutMs;
+    private final Clock clock;
 
-    public OffsetStateReaper(long completionTimeoutMs) {
+    OffsetStateReaper(Property<Long> completionTimeoutMs, Clock clock) {
         this.completionTimeoutMs = completionTimeoutMs;
         executor = Executors.newSingleThreadExecutor(Utils.namedThreadFactory("OffsetStateReaper"));
+        this.clock = clock;
+    }
+
+    public OffsetStateReaper(Property<Long> completionTimeoutMs) {
+        this(completionTimeoutMs, Clock.systemDefaultZone());
     }
 
     public void maybeReapOffset(OffsetState state) {
         if (state.completion().isComplete()) {
             return;
         }
-        long expireAt = state.expireAt();
-        long now = System.currentTimeMillis();
-        if (expireAt >= 0 && expireAt <= now) {
-            long nextExpireAt = now + completionTimeoutMs;
+        long timeoutAt = state.timeoutAt();
+        if (timeoutAt < 0) {
+            return;
+        }
+        long now = clock.millis();
+        if (timeoutAt <= now) {
+            long nextExpireAt = now + completionTimeoutMs.value();
             executor.execute(() -> {
                 if (!state.completion().tryExpire()) {
                     state.setTimeout(nextExpireAt);

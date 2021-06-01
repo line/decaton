@@ -24,24 +24,25 @@ public class OffsetState {
     @Getter
     private final long offset;
     @Getter
-    private long expireAt;
+    private long timeoutAt;
     @Getter
     private final CompletionImpl completion;
 
     OffsetState(long offset) {
         this.offset = offset;
-        expireAt = -1;
+        timeoutAt = -1;
         completion = new CompletionImpl();
     }
 
-    public void setTimeout(long expireAt) {
-        this.expireAt = expireAt;
+    public void setTimeout(long timeoutAt) {
+        this.timeoutAt = timeoutAt;
     }
 
     @Override
     public String toString() {
         return "OffsetState{" +
                "offset=" + offset +
+               ", timeoutAt = " + timeoutAt +
                ", committed=" + completion.isComplete() +
                '}';
     }
