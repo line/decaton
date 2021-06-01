@@ -23,6 +23,9 @@ import java.util.concurrent.TimeUnit;
 
 import com.linecorp.decaton.processor.runtime.Property;
 
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
 public class OffsetStateReaper implements AutoCloseable {
     private final ExecutorService executor;
     private final Property<Long> completionTimeoutMs;
@@ -50,7 +53,10 @@ public class OffsetStateReaper implements AutoCloseable {
         if (timeoutAt <= now) {
             long nextExpireAt = now + completionTimeoutMs.value();
             executor.execute(() -> {
-                if (!state.completion().tryExpire()) {
+                if (state.completion().tryExpire()) {
+                    log.debug("Expired completion of offset: {}", state.offset());
+                } else {
+                    log.trace("Extending timeout of {} till {}", state.offset(), nextExpireAt);
                     state.setTimeout(nextExpireAt);
                 }
             });
