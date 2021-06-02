@@ -19,18 +19,20 @@ package com.linecorp.decaton.processor.runtime.internal;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
-import java.util.function.Supplier;
+import java.util.function.Function;
 
 import com.linecorp.decaton.processor.runtime.Completion;
 
 import lombok.Setter;
 import lombok.experimental.Accessors;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @Accessors(fluent = true)
 public class CompletionImpl implements Completion {
     private final CompletableFuture<Void> future;
     @Setter
-    private Supplier<TimeoutChoice> expireCallback;
+    private Function<Completion, TimeoutChoice> expireCallback;
     private volatile Completion dependency;
 
     public static CompletionImpl completedCompletion() {
@@ -64,10 +66,13 @@ public class CompletionImpl implements Completion {
             }
             dependency = null;
         }
-        if (expireCallback == null || expireCallback.get() == TimeoutChoice.GIVE_UP) {
-            complete();
+        if (expireCallback == null) {
             return true;
-        } else {
+        }
+        try {
+            return expireCallback.apply(this) == TimeoutChoice.GIVE_UP;
+        } catch (RuntimeException e) {
+            log.warn("Completion timeout callback threw an exception", e);
             return false;
         }
     }

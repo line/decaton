@@ -24,12 +24,9 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.spy;
 
 import java.time.Clock;
-import java.time.Instant;
-import java.time.ZoneId;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Supplier;
 
 import org.junit.Before;
 import org.junit.Rule;
@@ -66,7 +63,7 @@ public class OffsetStateReaperTest {
     public void maybeReapOffset() throws InterruptedException {
         OffsetState state = spy(new OffsetState(100));
         AtomicInteger cbCount = new AtomicInteger();
-        state.completion().expireCallback(() -> {
+        state.completion().expireCallback(comp -> {
             if (cbCount.getAndIncrement() == 0) {
                 return TimeoutChoice.EXTEND;
             } else {

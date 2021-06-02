@@ -19,7 +19,7 @@ package com.linecorp.decaton.processor.runtime.internal;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Supplier;
+import java.util.function.Function;
 
 import org.apache.kafka.common.header.Headers;
 
@@ -89,7 +89,7 @@ public class ProcessingContextImpl<T> implements ProcessingContext<T> {
     }
 
     @Override
-    public Completion deferCompletion(Supplier<TimeoutChoice> callback) {
+    public Completion deferCompletion(Function<Completion, TimeoutChoice> callback) {
         if (deferredCompletion.get() == null) {
             CompletionImpl completion = new CompletionImpl();
             completion.expireCallback(callback);

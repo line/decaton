@@ -40,7 +40,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Supplier;
+import java.util.function.Function;
 
 import org.apache.kafka.common.TopicPartition;
 import org.junit.Rule;
@@ -156,7 +156,7 @@ public class ProcessingContextImplTest {
         ExecutorService executor = Executors.newSingleThreadExecutor();
 
         AtomicBoolean timeoutCbCalled = new AtomicBoolean();
-        Supplier<TimeoutChoice> timeoutCb = () -> {
+        Function<Completion, TimeoutChoice> timeoutCb = comp -> {
             timeoutCbCalled.set(true);;
             return TimeoutChoice.GIVE_UP;
         };
@@ -342,10 +342,9 @@ public class ProcessingContextImplTest {
         assertTrue(fAll.isDone());
     }
 
-    @Test
+    @Test(timeout = 5000)
     public void testRetry() throws InterruptedException {
         CountDownLatch retryLatch = new CountDownLatch(1);
-        CountDownLatch retryCompleteLatch = new CountDownLatch(1);
         DecatonProcessor<byte[]> retryProcessor = spy(
                 // This can't be a lambda for mockito
                 new DecatonProcessor<byte[]>() {
@@ -358,7 +357,6 @@ public class ProcessingContextImplTest {
                                 retryLatch.await();
                             } catch (InterruptedException ignored) {}
                             comp.complete();
-                            retryCompleteLatch.countDown();
                         }).start();
                     }
                 });
@@ -379,13 +377,62 @@ public class ProcessingContextImplTest {
         assertFalse(retryComp.isComplete());
 
         retryLatch.countDown();
-        retryCompleteLatch.await();
+        retryComp.asFuture().toCompletableFuture().join();
         assertTrue(retryComp.isComplete());
     }
 
     @Test(expected = IllegalStateException.class)
     public void testRetry_NOT_CONFIGURED() throws InterruptedException {
         context(NoopTrace.INSTANCE).retry();
+    }
+
+    @Test(timeout = 5000)
+    public void testRetryAtCompletionTimeout() throws InterruptedException {
+        CountDownLatch retryLatch = new CountDownLatch(1);
+        DecatonProcessor<byte[]> retryProcessor = spy(
+                // This can't be a lambda for mockito
+                new DecatonProcessor<byte[]>() {
+                    @Override
+                    public void process(ProcessingContext<byte[]> context, byte[] task)
+                            throws InterruptedException {
+                        Completion comp = context.deferCompletion();
+                        new Thread(() -> {
+                            try {
+                                retryLatch.await();
+                            } catch (InterruptedException ignored) {}
+                            comp.complete();
+                        }).start();
+                    }
+                });
+        TaskRequest request = new TaskRequest(
+                new TopicPartition("topic", 1), 1, null, "TEST", null, null, REQUEST.toByteArray());
+        DecatonTask<byte[]> task = new DecatonTask<>(
+                TaskMetadata.fromProto(REQUEST.getMetadata()), TASK.toByteArray(), TASK.toByteArray());
+
+        DecatonProcessor<byte[]> processor = (context, ignored) -> context.deferCompletion(comp -> {
+            try {
+                 comp.completeWith(context.retry());
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+            return TimeoutChoice.EXTEND;
+        });
+
+        ProcessingContextImpl<byte[]> context =
+                spy(new ProcessingContextImpl<>("subscription", request, task,
+                                                Arrays.asList(processor), retryProcessor,
+                                                ProcessorProperties.builder().build()));
+
+        Completion comp = context.push(new byte[0]);
+        comp.tryExpire();
+        // Check that the returned completion is associated with retry's completion
+        verify(retryProcessor).process(any(), eq(TASK.toByteArray()));
+        assertFalse(comp.isComplete());
+
+        retryLatch.countDown();
+        comp.asFuture().toCompletableFuture().join();
+
+        assertTrue(comp.isComplete());
     }
 
     @Test(timeout = 5000)

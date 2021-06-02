@@ -46,12 +46,12 @@ public class CompletionImplTest {
         parent.completeWith(child);
 
         AtomicInteger parentCbCount = new AtomicInteger();
-        parent.expireCallback(() -> {
+        parent.expireCallback(comp -> {
             parentCbCount.getAndIncrement();
             return TimeoutChoice.GIVE_UP;
         });
         AtomicInteger childCbCount = new AtomicInteger();
-        child.expireCallback(() -> {
+        child.expireCallback(comp -> {
             if (childCbCount.getAndIncrement() == 0) {
                 return TimeoutChoice.EXTEND;
             } else {

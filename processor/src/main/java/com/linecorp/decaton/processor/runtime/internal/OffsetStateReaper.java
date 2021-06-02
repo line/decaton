@@ -55,6 +55,7 @@ public class OffsetStateReaper implements AutoCloseable {
             executor.execute(() -> {
                 if (state.completion().tryExpire()) {
                     log.debug("Expired completion of offset: {}", state.offset());
+                    state.completion().complete();
                 } else {
                     log.trace("Extending timeout of {} till {}", state.offset(), nextExpireAt);
                     state.setTimeout(nextExpireAt);
