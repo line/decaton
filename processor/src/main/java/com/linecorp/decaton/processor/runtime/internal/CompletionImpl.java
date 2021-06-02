@@ -32,7 +32,7 @@ import lombok.extern.slf4j.Slf4j;
 public class CompletionImpl implements Completion {
     private final CompletableFuture<Void> future;
     @Setter
-    private Function<Completion, TimeoutChoice> expireCallback;
+    private volatile Function<Completion, TimeoutChoice> expireCallback;
     private volatile Completion dependency;
 
     public static CompletionImpl completedCompletion() {
@@ -66,11 +66,12 @@ public class CompletionImpl implements Completion {
             }
             dependency = null;
         }
-        if (expireCallback == null) {
+        Function<Completion, TimeoutChoice> cb = expireCallback;
+        if (cb == null) {
             return true;
         }
         try {
-            return expireCallback.apply(this) == TimeoutChoice.GIVE_UP;
+            return cb.apply(this) == TimeoutChoice.GIVE_UP;
         } catch (RuntimeException e) {
             log.warn("Completion timeout callback threw an exception", e);
             return false;
