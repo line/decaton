@@ -68,6 +68,7 @@ public class CompletionImplTest {
         assertEquals(2, childCbCount.get());
 
         // Make sure over-calling tryExpire won't cause extra callback invocations.
+        parent.complete();
         assertTrue(parent.tryExpire());
         assertEquals(1, parentCbCount.get());
         assertEquals(2, childCbCount.get());

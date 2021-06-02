@@ -50,6 +50,7 @@ public class OffsetStateReaper implements AutoCloseable {
             return;
         }
         long now = clock.millis();
+        System.err.printf("timeoutAt = %d, now = %d\n", timeoutAt, now);
         if (timeoutAt <= now) {
             long nextExpireAt = now + completionTimeoutMs.value();
             executor.execute(() -> {

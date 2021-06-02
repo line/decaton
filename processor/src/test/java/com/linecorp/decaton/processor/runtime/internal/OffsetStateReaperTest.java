@@ -79,8 +79,9 @@ public class OffsetStateReaperTest {
 
         CountDownLatch setToLatch = new CountDownLatch(1);
         doAnswer(invocation -> {
+            Object ret = invocation.callRealMethod();
             setToLatch.countDown();
-            return invocation.callRealMethod();
+            return ret;
         }).when(state).setTimeout(anyLong());
         timeMillis.set(10);
         reaper.maybeReapOffset(state); // First callback call
