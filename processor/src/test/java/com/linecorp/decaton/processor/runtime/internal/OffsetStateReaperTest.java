@@ -35,6 +35,7 @@ import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
 
+import com.linecorp.decaton.processor.metrics.Metrics;
 import com.linecorp.decaton.processor.runtime.Completion.TimeoutChoice;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.Property;
@@ -56,6 +57,10 @@ public class OffsetStateReaperTest {
         reaper = new OffsetStateReaper(
                 Property.ofStatic(ProcessorProperties.CONFIG_DEFERRED_COMPLETE_TIMEOUT_MS,
                                   COMPLETION_TIMEOUT_MS),
+                Metrics.withTags("subscription", "subsc",
+                                 "topic", "topic",
+                                 "partition", "1")
+                        .new CommitControlMetrics(),
                 clock);
     }
 

@@ -17,6 +17,7 @@
 package com.linecorp.decaton.processor;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Function;
 
 import com.linecorp.decaton.processor.runtime.Completion;
 
@@ -43,7 +44,10 @@ public interface DeferredCompletion {
      * * when A completes, X completes
      * * when X times out, A times out
      *
-     * Always prefer to use this method instead of {@link #completeWith(CompletableFuture)} when possible.
+     * Always prefer to use this method instead of {@link #completeWith(CompletableFuture)} when possible,
+     * because associating a {@link Completion} to another {@link Completion} means not only to link their
+     * completion but also their expiration with timeout. See
+     * {@link ProcessingContext#deferCompletion(Function)} for the detail.
      *
      * @param dep a {@link Completion} to associate the completion.
      */

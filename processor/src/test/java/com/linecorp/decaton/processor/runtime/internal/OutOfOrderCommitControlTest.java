@@ -25,6 +25,7 @@ import java.time.Clock;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.Test;
 
+import com.linecorp.decaton.processor.metrics.Metrics;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.Property;
 
@@ -154,7 +155,12 @@ public class OutOfOrderCommitControlTest {
         Clock clock = mock(Clock.class);
         doReturn(10L).when(clock).millis();
         OffsetStateReaper reaper = new OffsetStateReaper(
-                Property.ofStatic(ProcessorProperties.CONFIG_DEFERRED_COMPLETE_TIMEOUT_MS, 10L), clock);
+                Property.ofStatic(ProcessorProperties.CONFIG_DEFERRED_COMPLETE_TIMEOUT_MS, 10L),
+                Metrics.withTags("subscription", "subsc",
+                                 "topic", "topic",
+                                 "partition", "1")
+                        .new CommitControlMetrics(),
+                clock);
         OutOfOrderCommitControl ooocc = new OutOfOrderCommitControl(topicPartition, 10, reaper);
 
         OffsetState state1 = ooocc.reportFetchedOffset(1);

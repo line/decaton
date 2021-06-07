@@ -21,6 +21,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
+import com.linecorp.decaton.processor.metrics.Metrics.CommitControlMetrics;
 import com.linecorp.decaton.processor.runtime.Property;
 
 import lombok.extern.slf4j.Slf4j;
@@ -29,16 +30,21 @@ import lombok.extern.slf4j.Slf4j;
 public class OffsetStateReaper implements AutoCloseable {
     private final ExecutorService executor;
     private final Property<Long> completionTimeoutMs;
+    private final CommitControlMetrics metrics;
     private final Clock clock;
 
-    OffsetStateReaper(Property<Long> completionTimeoutMs, Clock clock) {
+    OffsetStateReaper(Property<Long> completionTimeoutMs,
+                      CommitControlMetrics metrics,
+                      Clock clock) {
         this.completionTimeoutMs = completionTimeoutMs;
+        this.metrics = metrics;
         executor = Executors.newSingleThreadExecutor(Utils.namedThreadFactory("OffsetStateReaper"));
         this.clock = clock;
     }
 
-    public OffsetStateReaper(Property<Long> completionTimeoutMs) {
-        this(completionTimeoutMs, Clock.systemDefaultZone());
+    public OffsetStateReaper(Property<Long> completionTimeoutMs,
+                             CommitControlMetrics metrics) {
+        this(completionTimeoutMs, metrics, Clock.systemDefaultZone());
     }
 
     public void maybeReapOffset(OffsetState state) {
@@ -50,13 +56,13 @@ public class OffsetStateReaper implements AutoCloseable {
             return;
         }
         long now = clock.millis();
-        System.err.printf("timeoutAt = %d, now = %d\n", timeoutAt, now);
         if (timeoutAt <= now) {
             long nextExpireAt = now + completionTimeoutMs.value();
             executor.execute(() -> {
                 if (state.completion().tryExpire()) {
                     log.debug("Expired completion of offset: {}", state.offset());
                     state.completion().complete();
+                    metrics.tasksTimeout.increment();
                 } else {
                     log.trace("Extending timeout of {} till {}", state.offset(), nextExpireAt);
                     state.setTimeout(nextExpireAt);

@@ -158,6 +158,14 @@ public class Metrics {
                                  .register(registry));
     }
 
+    public class CommitControlMetrics extends AbstractMetrics {
+        public final Counter tasksTimeout =
+                meter(() -> Counter.builder("tasks.timeout")
+                                   .description("The number of tasks timed out and forcefully completed by deferred completion timeout")
+                                   .tags(availableTags.partitionScope())
+                                   .register(registry));
+    }
+
     public class ResourceUtilizationMetrics extends AbstractMetrics {
         public final Timer processorProcessedTime =
                 meter(() -> Timer.builder("processor.processed.time")

@@ -46,16 +46,17 @@ public class PartitionContext implements AutoCloseable {
         partitionProcessor = new PartitionProcessor(scope, processors);
 
         int capacity = maxPendingRecords + scope.maxPollRecords();
+        TopicPartition tp = scope.topicPartition();
+        Metrics metricsCtor = Metrics.withTags("subscription", scope.subscriptionId(),
+                                               "topic", tp.topic(),
+                                               "partition", String.valueOf(tp.partition()));
         OffsetStateReaper offsetStateReaper = new OffsetStateReaper(
-                scope.props().get(ProcessorProperties.CONFIG_DEFERRED_COMPLETE_TIMEOUT_MS));
+                scope.props().get(ProcessorProperties.CONFIG_DEFERRED_COMPLETE_TIMEOUT_MS),
+                metricsCtor.new CommitControlMetrics());
         commitControl = new OutOfOrderCommitControl(scope.topicPartition(), capacity, offsetStateReaper);
 
-        TopicPartition tp = scope.topicPartition();
-        metrics = Metrics.withTags("subscription", scope.subscriptionId(),
-                                   "topic", tp.topic(),
-                                   "partition", String.valueOf(tp.partition()))
-                .new PartitionStateMetrics(commitControl::pendingOffsetsCount, () -> paused() ? 1 : 0);
-
+        metrics = metricsCtor.new PartitionStateMetrics(
+                commitControl::pendingOffsetsCount, () -> paused() ? 1 : 0);
         lastCommittedOffset = -1;
         pausedTimeNanos = -1;
         lastQueueStarvedTime = -1;
