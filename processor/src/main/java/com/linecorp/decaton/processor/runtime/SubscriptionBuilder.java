@@ -16,6 +16,8 @@
 
 package com.linecorp.decaton.processor.runtime;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
@@ -46,6 +48,17 @@ import lombok.experimental.Accessors;
 @Setter
 @Accessors(fluent = true)
 public class SubscriptionBuilder {
+    private static final Map<String, String> presetRetryProducerConfig;
+
+    static {
+        presetRetryProducerConfig = new HashMap<>();
+        // In Decaton processor which handles massive traffic, retry tasks could cause
+        // production burst when processes start to fail. (e.g. due to downstream service down)
+        // Since default producer's linger.ms is 0, this could harm Kafka cluster despite we
+        // don't much care about retry task's delivery latency typically. So we set reasonable default here.
+        presetRetryProducerConfig.put(ProducerConfig.LINGER_MS_CONFIG, "100");
+    }
+
     @Setter(AccessLevel.NONE)
     private ProcessorProperties.Builder<ProcessorProperties> propertiesBuilder;
 
@@ -166,8 +179,11 @@ public class SubscriptionBuilder {
 
         DecatonProcessorSupplier<byte[]> retryProcessorSupplier = null;
         if (retryConfig != null) {
-            Properties producerConfig = Optional.ofNullable(retryConfig.producerConfig())
-                                                .orElseGet(producerConfigSupplier(consumerConfig));
+            Properties producerConfig = new Properties();
+
+            producerConfig.putAll(presetRetryProducerConfig);
+            producerConfig.putAll(Optional.ofNullable(retryConfig.producerConfig())
+                                          .orElseGet(producerConfigSupplier(consumerConfig)));
             KafkaProducerSupplier producerSupplier = Optional.ofNullable(retryConfig.producerSupplier())
                                                              .orElseGet(DefaultKafkaProducerSupplier::new);
             retryProcessorSupplier = new DecatonProcessorSupplierImpl<>(() -> {
