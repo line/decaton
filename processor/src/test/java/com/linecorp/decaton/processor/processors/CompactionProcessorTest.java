@@ -17,22 +17,24 @@
 package com.linecorp.decaton.processor.processors;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
-import java.util.Collections;
+import java.util.Arrays;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
-import java.util.function.Consumer;
 
 import org.apache.kafka.common.TopicPartition;
 import org.junit.Rule;
@@ -43,15 +45,16 @@ import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
 
 import com.linecorp.decaton.processor.DecatonProcessor;
-import com.linecorp.decaton.processor.DeferredCompletion;
 import com.linecorp.decaton.processor.ProcessingContext;
 import com.linecorp.decaton.processor.TaskMetadata;
 import com.linecorp.decaton.processor.processors.CompactionProcessor.CompactChoice;
 import com.linecorp.decaton.processor.processors.CompactionProcessor.CompactingTask;
+import com.linecorp.decaton.processor.runtime.Completion;
 import com.linecorp.decaton.processor.runtime.DecatonTask;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.internal.ProcessingContextImpl;
 import com.linecorp.decaton.processor.runtime.internal.TaskRequest;
+import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider.NoopTrace;
 import com.linecorp.decaton.protocol.Sample.HelloTask;
 
 public class CompactionProcessorTest {
@@ -62,10 +65,10 @@ public class CompactionProcessorTest {
 
     private static class TaskInput {
         final HelloTask task;
-        final DeferredCompletion completion;
+        final Completion completion;
         final ProcessingContext<HelloTask> context;
 
-        private TaskInput(HelloTask task, DeferredCompletion completion,
+        private TaskInput(HelloTask task, Completion completion,
                           ProcessingContext<HelloTask> context) {
             this.task = task;
             this.completion = completion;
@@ -88,40 +91,31 @@ public class CompactionProcessorTest {
     @Mock
     private DecatonProcessor<HelloTask> downstream;
 
-    private static class NoopDeferredCompletion implements DeferredCompletion {
-        @Override
-        public void complete() {
-            // noop
-        }
-    }
-
     private TaskInput put(DecatonProcessor<HelloTask> processor,
                           String name, int age,
-                          Consumer<TaskInput> beforeProcess) throws InterruptedException {
-        // Can't use mock() for this to keep completeWith default method functioning
-        DeferredCompletion completion = spy(new NoopDeferredCompletion());
-
+                          BiConsumer<HelloTask, ProcessingContext<HelloTask>> beforeProcess)
+            throws InterruptedException {
         HelloTask taskData = HelloTask.newBuilder().setName(name).setAge(age).build();
         DecatonTask<HelloTask> task = new DecatonTask<>(
                 TaskMetadata.builder().build(),
                 taskData,
                 taskData.toByteArray());
         TaskRequest request = new TaskRequest(
-                new TopicPartition("topic", 1), 1, null, name, null, null, null);
+                new TopicPartition("topic", 1), 1, null, name, null, NoopTrace.INSTANCE, null);
         ProcessingContext<HelloTask> context =
                 spy(new ProcessingContextImpl<>("subscription", request, task,
-                                                Collections.singletonList(downstream), null,
-                                                ProcessorProperties.builder().build(), completion));
+                                                Arrays.asList(processor, downstream), null,
+                                                ProcessorProperties.builder().build()));
 
-        TaskInput input = new TaskInput(taskData, completion, context);
         if (beforeProcess != null) {
-            beforeProcess.accept(input);
+            beforeProcess.accept(taskData, context);
         }
-        processor.process(context, taskData);
-        return input;
+        Completion comp = context.push(taskData);
+        return new TaskInput(taskData, comp, context);
     }
 
-    private TaskInput put(String name, int age, Consumer<TaskInput> beforeProcess) throws InterruptedException {
+    private TaskInput put(String name, int age, BiConsumer<HelloTask, ProcessingContext<HelloTask>> beforeProcess)
+            throws InterruptedException {
         return put(processor, name, age, beforeProcess);
     }
 
@@ -160,15 +154,15 @@ public class CompactionProcessorTest {
         completeFlush.await();
 
         // Those tasks are compacted into dyingYuto
-        verify(youngYuto.context, never()).push(any());
-        verify(oldYuto.context, never()).push(any());
+        verify(downstream, never()).process(any(), eq(youngYuto.task));
+        verify(downstream, never()).process(any(), eq(oldYuto.task));
 
         // Those tasks are the compaction results
-        verify(dyingYuto.context, times(1)).push(dyingYuto.task);
-        verify(wonpill.context, times(1)).push(wonpill.task);
+        verify(downstream).process(any(), eq(dyingYuto.task));
+        verify(downstream).process(any(), eq(wonpill.task));
 
         // This task should be processed independently as it had produced after compaction window
-        verify(babyYuto.context, times(1)).push(babyYuto.task);
+        verify(downstream).process(any(), eq(babyYuto.task));
     }
 
     @Test(timeout = 5000)
@@ -190,23 +184,23 @@ public class CompactionProcessorTest {
 
         long secondPutTime = System.nanoTime();
         AtomicLong yutoFlushedTime = new AtomicLong();
-        put("yuto", 20, input -> {
+        put("yuto", 20, (task, context) -> {
             try {
                 doAnswer(invocation -> {
                     yutoFlushedTime.set(System.nanoTime());
                     return invocation.callRealMethod();
-                }).when(input.context).push(input.task);
+                }).when(downstream).process(any(), eq(task));
             } catch (InterruptedException ignored) {
                 // impossible
             }
         });
         AtomicLong wonpillFlushedTime = new AtomicLong();
-        put("wonpill", 400, input -> {
+        put("wonpill", 400, (task, context) -> {
             try {
                 doAnswer(invocation -> {
                     wonpillFlushedTime.set(System.nanoTime());
                     return invocation.callRealMethod();
-                }).when(input.context).push(input.task);
+                }).when(downstream).process(any(), eq(task));
             } catch (InterruptedException ignored) {
                 // impossible
             }
@@ -245,22 +239,22 @@ public class CompactionProcessorTest {
         }).when(processor).flushTask(any());
 
         TaskInput youngYuto = put("yuto", 10);
-        verify(youngYuto.completion, never()).complete();
+        assertFalse(youngYuto.completion.isComplete());
 
         TaskInput dyingYuto = put("yuto", 90);
-        verify(youngYuto.completion, times(1)).complete();
-        verify(dyingYuto.completion, never()).complete();
+        assertTrue(youngYuto.completion.isComplete());
+        assertFalse(dyingYuto.completion.isComplete());
 
         TaskInput oldYuto = put("yuto", 20);
-        verify(dyingYuto.completion, never()).complete();
-        verify(oldYuto.completion, times(1)).complete();
+        assertFalse(dyingYuto.completion.isComplete());
+        assertTrue(oldYuto.completion.isComplete());
 
         waitFlush.countDown();
         completeFlush.await();
 
         // CompactionProcessor should never complete a task pushed to downstream processor.
         // It's completion should be handled by the downstream processor either synchronously or asynchronously.
-        verify(dyingYuto.completion, never()).complete();
+        assertFalse(dyingYuto.completion.isComplete());
         verify(dyingYuto.context, times(1)).push(dyingYuto.task);
     }
 
@@ -308,9 +302,9 @@ public class CompactionProcessorTest {
         TaskInput task2 = put(processor, "key", 2, null);
 
         firstFlushComplete.await();
-        verify(task1.completion, times(1)).complete();
+        assertTrue(task1.completion.isComplete());
         secondFlushComplete.await();
-        verify(task2.completion, times(1)).complete();
+        assertTrue(task2.completion.isComplete());
 
         // There must have been two separate tasks scheduled for each task.
         // We have to terminate the executor before getting task count since getTaskCount returns approximate

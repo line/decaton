@@ -17,9 +17,16 @@
 package com.linecorp.decaton.processor;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Function;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.header.Headers;
+
+import com.linecorp.decaton.processor.runtime.Completion;
+import com.linecorp.decaton.processor.runtime.Completion.TimeoutChoice;
+import com.linecorp.decaton.processor.runtime.ProcessorProperties;
+import com.linecorp.decaton.processor.runtime.RetryConfig;
+import com.linecorp.decaton.processor.runtime.SubscriptionBuilder;
 
 public interface ProcessingContext<T> {
     /**
@@ -60,9 +67,57 @@ public interface ProcessingContext<T> {
      * Once this method called within {@link DecatonProcessor#process} method, caller *MUST* call
      * {@link DeferredCompletion#complete()} or {@link ProcessingContext#retry()} method in any cases.
      * Otherwise consumption will stuck in short future and no new task will be given to the processor.
-     * @return a {@link DeferredCompletion} which can be used to tell the result of processing asynchronously.
+     * To avoid that with some risks, consider setting
+     * {@link ProcessorProperties#CONFIG_DEFERRED_COMPLETE_TIMEOUT_MS}.
+     * @return a {@link Completion} which can be used to tell the completion of processing asynchronously.
      */
-    DeferredCompletion deferCompletion();
+    default Completion deferCompletion() {
+        return deferCompletion(comp -> TimeoutChoice.GIVE_UP);
+    }
+
+    /**
+     * Tells the completion of this processing should be postponed and processor can accept next task.
+     * Once this method called within {@link DecatonProcessor#process} method, caller *MUST* call
+     * {@link DeferredCompletion#complete()} or {@link ProcessingContext#retry()} method in any cases.
+     * Otherwise consumption will stuck in short future and no new task will be given to the processor.
+     * To avoid that with some risks, consider setting
+     * {@link ProcessorProperties#CONFIG_DEFERRED_COMPLETE_TIMEOUT_MS}.
+     *
+     * This method takes a callback that is called when the returned completion "timed out".
+     * For the detail of deferred completion timeout, see
+     * {@link ProcessorProperties#CONFIG_DEFERRED_COMPLETE_TIMEOUT_MS}.
+     * You can do several things with the callback.
+     *
+     * If you know that the asynchronous processing is taking longer than expected but still running normally,
+     * thus want to tell decaton to extend timeout and let the processing complete, you can simply return
+     * {@link TimeoutChoice#EXTEND} from the callback.
+     * {@code
+     * context.deferCompletion(comp -> {
+     *     if (checkEverythingOk()) {
+     *         return TimeoutChoice.EXTEND;
+     *     }
+     *     return TimeoutChoice.GIVE_UP;
+     * });
+     * }
+
+     * If you've configured "retry" feature (see {@link SubscriptionBuilder#enableRetry(RetryConfig)}), you can
+     * send the timed out task to retry queue by calling {@link #retry()}.
+     * {@code
+     * context.deferCompletion(comp -> {
+     *     comp.completeWith(context.retry()); // Rebind completion to the completion of retry queueing
+     *     return TimeoutChoice.EXTEND;
+     * });
+     * }
+     *
+     * Note that you must return {@link TimeoutChoice#EXTEND} from the callback even in this case to make sure
+     * that decaton waits until it completes retry-queuing asynchronously.
+     *
+     * if the callback returns false, decaton times out completion and forcefully completes it.
+     *
+     * @param callback callback which is called when the returned completion times out.
+     * @return a {@link Completion} which can be used to tell the completion of processing asynchronously.
+     */
+    Completion deferCompletion(Function<Completion, TimeoutChoice> callback);
 
     /**
      * Sends given task to downstream processors if exists.
@@ -81,7 +136,7 @@ public interface ProcessingContext<T> {
      * @return a {@link CompletableFuture} that completes when downstream processor completes processing.
      * @throws InterruptedException when processing gets interrupted.
      */
-    CompletableFuture<Void> push(T task) throws InterruptedException;
+    Completion push(T task) throws InterruptedException;
 
     /**
      * Schedule the currently processing task for retrying.
@@ -93,5 +148,5 @@ public interface ProcessingContext<T> {
      * retry task.
      * @throws InterruptedException when processing gets interrupted.
      */
-    CompletableFuture<Void> retry() throws InterruptedException;
+    Completion retry() throws InterruptedException;
 }

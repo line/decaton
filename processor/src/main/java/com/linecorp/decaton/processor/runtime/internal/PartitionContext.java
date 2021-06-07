@@ -21,14 +21,14 @@ import java.util.concurrent.TimeUnit;
 
 import org.apache.kafka.common.TopicPartition;
 
-import com.linecorp.decaton.processor.DeferredCompletion;
 import com.linecorp.decaton.processor.metrics.Metrics;
 import com.linecorp.decaton.processor.metrics.Metrics.PartitionStateMetrics;
+import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 
 /**
  * Represents all states of one partition assigned to this subscription instance.
  */
-public class PartitionContext {
+public class PartitionContext implements AutoCloseable {
     private final PartitionScope scope;
     private final PartitionProcessor partitionProcessor;
     private final OutOfOrderCommitControl commitControl;
@@ -46,14 +46,17 @@ public class PartitionContext {
         partitionProcessor = new PartitionProcessor(scope, processors);
 
         int capacity = maxPendingRecords + scope.maxPollRecords();
-        commitControl = new OutOfOrderCommitControl(scope.topicPartition(), capacity);
-
         TopicPartition tp = scope.topicPartition();
-        metrics = Metrics.withTags("subscription", scope.subscriptionId(),
-                                   "topic", tp.topic(),
-                                   "partition", String.valueOf(tp.partition()))
-                .new PartitionStateMetrics(commitControl::pendingOffsetsCount, () -> paused() ? 1 : 0);
+        Metrics metricsCtor = Metrics.withTags("subscription", scope.subscriptionId(),
+                                               "topic", tp.topic(),
+                                               "partition", String.valueOf(tp.partition()));
+        OffsetStateReaper offsetStateReaper = new OffsetStateReaper(
+                scope.props().get(ProcessorProperties.CONFIG_DEFERRED_COMPLETE_TIMEOUT_MS),
+                metricsCtor.new CommitControlMetrics());
+        commitControl = new OutOfOrderCommitControl(scope.topicPartition(), capacity, offsetStateReaper);
 
+        metrics = metricsCtor.new PartitionStateMetrics(
+                commitControl::pendingOffsetsCount, () -> paused() ? 1 : 0);
         lastCommittedOffset = -1;
         pausedTimeNanos = -1;
         lastQueueStarvedTime = -1;
@@ -114,7 +117,7 @@ public class PartitionContext {
         }
     }
 
-    public DeferredCompletion registerOffset(long offset) {
+    public OffsetState registerOffset(long offset) {
         return commitControl.reportFetchedOffset(offset);
     }
 
@@ -136,5 +139,11 @@ public class PartitionContext {
         long pausedNanos = System.nanoTime() - pausedTimeNanos;
         pausedTimeNanos = -1;
         metrics.partitionPausedTime.record(pausedNanos, TimeUnit.NANOSECONDS);
+    }
+
+    @Override
+    public void close() throws Exception {
+        resume();
+        commitControl.close();
     }
 }

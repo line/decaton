@@ -19,6 +19,7 @@ package com.linecorp.decaton.processor.runtime.internal;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toMap;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -42,7 +43,7 @@ import com.linecorp.decaton.processor.runtime.internal.CommitManager.OffsetsStor
 import com.linecorp.decaton.processor.runtime.internal.ConsumeManager.PartitionStates;
 import com.linecorp.decaton.processor.runtime.internal.Utils.Task;
 
-public class PartitionContexts implements OffsetsStore, AssignmentStore, PartitionStates {
+public class PartitionContexts implements OffsetsStore, AssignmentStore, PartitionStates, AutoCloseable {
     private static final Logger logger = LoggerFactory.getLogger(PartitionContexts.class);
 
     private final SubscriptionScope scope;
@@ -97,8 +98,16 @@ public class PartitionContexts implements OffsetsStore, AssignmentStore, Partiti
     @Override
     public void removePartition(Collection<TopicPartition> partitions) {
         destroyProcessors(partitions);
+        cleanupPartitions(partitions);
+    }
+
+    private void cleanupPartitions(Collection<TopicPartition> partitions) {
         for (TopicPartition tp : partitions) {
-            contexts.remove(tp).resume(); // Partition might have been paused to resume to cleanup some states.
+            try {
+                contexts.remove(tp).close();
+            } catch (Exception e) {
+                logger.warn("Failed to close partition context {}", tp, e);
+            }
         }
     }
 
@@ -254,5 +263,10 @@ public class PartitionContexts implements OffsetsStore, AssignmentStore, Partiti
                                 }
                             }).collect(toList()))
              .join();
+    }
+
+    @Override
+    public void close() {
+        cleanupPartitions(new ArrayList<>(contexts.keySet()));
     }
 }

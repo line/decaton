@@ -16,14 +16,14 @@
 
 package com.linecorp.decaton.processor.runtime.internal;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 
 import com.linecorp.decaton.processor.DecatonProcessor;
+import com.linecorp.decaton.processor.runtime.Completion;
 import com.linecorp.decaton.processor.runtime.DecatonTask;
-import com.linecorp.decaton.processor.DeferredCompletion;
 import com.linecorp.decaton.processor.ProcessingContext;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.TaskExtractor;
@@ -44,7 +44,26 @@ public class ProcessPipeline<T> implements AutoCloseable {
     private final ExecutionScheduler scheduler;
     private final TaskMetrics taskMetrics;
     private final ProcessMetrics processMetrics;
+    private final Clock clock;
     private volatile boolean terminated;
+
+    ProcessPipeline(ThreadScope scope,
+                    List<DecatonProcessor<T>> processors,
+                    DecatonProcessor<byte[]> retryProcessor,
+                    TaskExtractor<T> taskExtractor,
+                    ExecutionScheduler scheduler,
+                    Metrics metrics,
+                    Clock clock) {
+        this.scope = scope;
+        this.processors = Collections.unmodifiableList(processors);
+        this.retryProcessor = retryProcessor;
+        this.taskExtractor = taskExtractor;
+        this.scheduler = scheduler;
+        this.clock = clock;
+
+        taskMetrics = metrics.new TaskMetrics();
+        processMetrics = metrics.new ProcessMetrics();
+    }
 
     public ProcessPipeline(ThreadScope scope,
                            List<DecatonProcessor<T>> processors,
@@ -52,24 +71,17 @@ public class ProcessPipeline<T> implements AutoCloseable {
                            TaskExtractor<T> taskExtractor,
                            ExecutionScheduler scheduler,
                            Metrics metrics) {
-        this.scope = scope;
-        this.processors = Collections.unmodifiableList(processors);
-        this.retryProcessor = retryProcessor;
-        this.taskExtractor = taskExtractor;
-        this.scheduler = scheduler;
-
-        taskMetrics = metrics.new TaskMetrics();
-        processMetrics = metrics.new ProcessMetrics();
+        this(scope, processors, retryProcessor, taskExtractor, scheduler, metrics, Clock.systemDefaultZone());
     }
 
     public void scheduleThenProcess(TaskRequest request) throws InterruptedException {
-        DeferredCompletion completion = request.completion();
+        OffsetState offsetState = request.offsetState();
         final DecatonTask<T> extracted;
         try {
             extracted = extract(request);
         } catch (RuntimeException e) {
             // Complete the offset to forward offsets
-            completion.complete();
+            offsetState.completion().complete();
 
             log.error("Dropping not-deserializable task [{}]", request.id(), e);
             taskMetrics.tasksDiscarded.increment();
@@ -82,13 +94,13 @@ public class ProcessPipeline<T> implements AutoCloseable {
             return;
         }
 
-        CompletableFuture<Void> result = process(request, extracted);
-        result.whenComplete((r, e) -> {
-            if (e != null) {
-                taskMetrics.tasksError.increment();
-            }
-            completion.complete();
-        });
+        Completion result = process(request, extracted);
+        offsetState.completion().completeWith(result);
+        long timeoutMs = scope.props().get(ProcessorProperties.CONFIG_DEFERRED_COMPLETE_TIMEOUT_MS).value();
+        if (timeoutMs >= 0) {
+            long expireAt = clock.millis() + timeoutMs;
+            offsetState.setTimeout(expireAt);
+        }
     }
 
     // visible for testing
@@ -104,21 +116,20 @@ public class ProcessPipeline<T> implements AutoCloseable {
     }
 
     // visible for testing
-    CompletableFuture<Void> process(TaskRequest request, DecatonTask<T> task) throws InterruptedException {
+    Completion process(TaskRequest request, DecatonTask<T> task) throws InterruptedException {
         ProcessingContext<T> context =
                 new ProcessingContextImpl<>(scope.subscriptionId(), request, task, processors, retryProcessor,
                                             scope.props());
 
         Timer timer = Utils.timer();
-        CompletableFuture<Void> processResult;
+        Completion processResult;
         try (LoggingContext ignored = context.loggingContext()) {
             processResult = context.push(task.taskData());
         } catch (Exception e) {
             if (e instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
             }
-            processResult = new CompletableFuture<>();
-            processResult.completeExceptionally(e);
+            processResult = CompletionImpl.completedCompletion();
 
             log.error("Uncaught exception thrown by processor {} for task {}",
                       scope, request, e);
@@ -131,7 +142,7 @@ public class ProcessPipeline<T> implements AutoCloseable {
             processMetrics.tasksProcessDuration.record(elapsed);
         }
 
-        processResult.whenComplete((r, e) -> {
+        processResult.asFuture().whenComplete((r, e) -> {
             // Performance logging and metrics update
             Duration completeDuration = timer.duration();
             if (log.isTraceEnabled()) {
@@ -139,6 +150,10 @@ public class ProcessPipeline<T> implements AutoCloseable {
                           request.id(), Utils.formatNanos(completeDuration));
             }
             processMetrics.tasksCompleteDuration.record(completeDuration);
+
+            if (e != null) {
+                taskMetrics.tasksError.increment();
+            }
         });
         return processResult;
     }

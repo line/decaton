@@ -24,6 +24,8 @@ import java.util.Map;
 import org.slf4j.MDC;
 
 import com.linecorp.decaton.processor.DecatonProcessor;
+import com.linecorp.decaton.processor.DeferredCompletion;
+import com.linecorp.decaton.processor.ProcessingContext;
 import com.linecorp.decaton.processor.runtime.internal.AbstractDecatonProperties;
 import com.linecorp.decaton.processor.runtime.internal.OutOfOrderCommitControl;
 import com.linecorp.decaton.processor.runtime.internal.RateLimiter;
@@ -136,6 +138,31 @@ public class ProcessorProperties extends AbstractDecatonProperties {
     public static final PropertyDefinition<Boolean> CONFIG_LOGGING_MDC_ENABLED =
             PropertyDefinition.define("decaton.logging.mdc.enabled", Boolean.class, true,
                                       v -> v instanceof Boolean);
+    /**
+     * Control time to "timeout" a deferred completion.
+     * Decaton allows {@link DecatonProcessor}s to defer completion of a task by calling
+     * {@link ProcessingContext#deferCompletion()}, which is useful for processors which integrates with
+     * asynchronous processing frameworks that sends the processing context to somewhere else and get back
+     * later.
+     * However, since leaking {@link Completion} returned by {@link ProcessingContext#deferCompletion()} means
+     * to create a never-completed task, that causes consumption to suck completely after
+     * {@link #CONFIG_MAX_PENDING_RECORDS} records stacked up, which is not desirable for some use cases.
+     *
+     * By setting this timeout, Decaton will try to "timeout" a deferred completion after the specified period.
+     * By setting the timeout to sufficiently large value, which you can be sure that none of normal processing
+     * to take, some potentially leaked completion will be forcefully completed and decaton can continue to
+     * consume the following tasks.
+     *
+     * Be very careful when using this feature since forcefully completing a timed out completion might leads
+     * you some data loss if the corresponding processing hasn't yet complete.
+     *
+     * This timeout can be disabled by setting -1, and it is the default.
+     *
+     * Reloadable: yes
+     */
+    public static final PropertyDefinition<Long> CONFIG_DEFERRED_COMPLETE_TIMEOUT_MS =
+            PropertyDefinition.define("decaton.deferred.complete.timeout.ms", Long.class, -1L,
+                                      v -> v instanceof Long);
 
     public static final List<PropertyDefinition<?>> PROPERTY_DEFINITIONS =
             Collections.unmodifiableList(Arrays.asList(
@@ -146,7 +173,8 @@ public class ProcessorProperties extends AbstractDecatonProperties {
                     CONFIG_COMMIT_INTERVAL_MS,
                     CONFIG_GROUP_REBALANCE_TIMEOUT_MS,
                     CONFIG_SHUTDOWN_TIMEOUT_MS,
-                    CONFIG_LOGGING_MDC_ENABLED));
+                    CONFIG_LOGGING_MDC_ENABLED,
+                    CONFIG_DEFERRED_COMPLETE_TIMEOUT_MS));
 
     /**
      * Find and return a {@link PropertyDefinition} from its name.

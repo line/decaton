@@ -17,38 +17,42 @@
 package com.linecorp.decaton.processor.runtime.internal;
 
 import static org.junit.Assert.assertEquals;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.mock;
+
+import java.time.Clock;
 
 import org.apache.kafka.common.TopicPartition;
 import org.junit.Test;
 
-import com.linecorp.decaton.processor.DeferredCompletion;
-import com.linecorp.decaton.processor.runtime.internal.OutOfOrderCommitControl;
-import com.linecorp.decaton.processor.runtime.internal.OutOfOrderCommitControl.OffsetState;
+import com.linecorp.decaton.processor.metrics.Metrics;
+import com.linecorp.decaton.processor.runtime.ProcessorProperties;
+import com.linecorp.decaton.processor.runtime.Property;
 
 public class OutOfOrderCommitControlTest {
     private static final int STATES_CAPACITY = 1000;
 
     private final TopicPartition topicPartition = new TopicPartition("topic", 0);
     private final OutOfOrderCommitControl partitionState =
-            new OutOfOrderCommitControl(topicPartition, STATES_CAPACITY);
+            new OutOfOrderCommitControl(topicPartition, STATES_CAPACITY, mock(OffsetStateReaper.class));
 
     @Test
     public void testInOrderOffsetCompletion() {
-        DeferredCompletion comp1 = partitionState.reportFetchedOffset(1);
-        DeferredCompletion comp2 = partitionState.reportFetchedOffset(2);
-        DeferredCompletion comp3 = partitionState.reportFetchedOffset(3);
+        OffsetState state1 = partitionState.reportFetchedOffset(1);
+        OffsetState state2 = partitionState.reportFetchedOffset(2);
+        OffsetState state3 = partitionState.reportFetchedOffset(3);
 
-        comp1.complete();
+        state1.completion().complete();
         partitionState.updateHighWatermark();
         assertEquals(2, partitionState.pendingOffsetsCount());
         assertEquals(1, partitionState.commitReadyOffset());
 
-        comp2.complete();
+        state2.completion().complete();
         partitionState.updateHighWatermark();
         assertEquals(1, partitionState.pendingOffsetsCount());
         assertEquals(2, partitionState.commitReadyOffset());
 
-        comp3.complete();
+        state3.completion().complete();
         partitionState.updateHighWatermark();
         assertEquals(0, partitionState.pendingOffsetsCount());
         assertEquals(3, partitionState.commitReadyOffset());
@@ -56,27 +60,27 @@ public class OutOfOrderCommitControlTest {
 
     @Test
     public void testOutOfOrderOffsetCompletion() {
-        DeferredCompletion comp1 = partitionState.reportFetchedOffset(1);
-        DeferredCompletion comp2 = partitionState.reportFetchedOffset(2);
-        DeferredCompletion comp3 = partitionState.reportFetchedOffset(3);
-        DeferredCompletion comp4 = partitionState.reportFetchedOffset(4);
+        OffsetState state1 = partitionState.reportFetchedOffset(1);
+        OffsetState state2 = partitionState.reportFetchedOffset(2);
+        OffsetState state3 = partitionState.reportFetchedOffset(3);
+        OffsetState state4 = partitionState.reportFetchedOffset(4);
 
-        comp3.complete();
+        state3.completion().complete();
         partitionState.updateHighWatermark();
         assertEquals(4, partitionState.pendingOffsetsCount());
         assertEquals(-1, partitionState.commitReadyOffset());
 
-        comp2.complete();
+        state2.completion().complete();
         partitionState.updateHighWatermark();
         assertEquals(4, partitionState.pendingOffsetsCount());
         assertEquals(-1, partitionState.commitReadyOffset());
 
-        comp1.complete();
+        state1.completion().complete();
         partitionState.updateHighWatermark();
         assertEquals(1, partitionState.pendingOffsetsCount());
         assertEquals(3, partitionState.commitReadyOffset());
 
-        comp4.complete();
+        state4.completion().complete();
         partitionState.updateHighWatermark();
         assertEquals(0, partitionState.pendingOffsetsCount());
         assertEquals(4, partitionState.commitReadyOffset());
@@ -84,20 +88,14 @@ public class OutOfOrderCommitControlTest {
 
     @Test
     public void testDoubleCompletingSameOffset() {
-        DeferredCompletion comp1 = partitionState.reportFetchedOffset(1);
+        OffsetState state1 = partitionState.reportFetchedOffset(1);
 
-        comp1.complete();
+        state1.completion().complete();
         assertEquals(-1, partitionState.commitReadyOffset());
-        comp1.complete(); // nothing happens
+        state1.completion().complete(); // nothing happens
         partitionState.updateHighWatermark();
         assertEquals(1, partitionState.commitReadyOffset());
-        comp1.complete(); // nothing happens
-    }
-
-    @Test(expected = IllegalArgumentException.class)
-    public void testCompletingTooHighOffset() {
-        partitionState.reportFetchedOffset(1);
-        partitionState.complete(new OffsetState(2, false)); // throws
+        state1.completion().complete(); // nothing happens
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -111,26 +109,26 @@ public class OutOfOrderCommitControlTest {
     @Test
     public void testDoubleCompletingSameOffsetCaseDuplicateInCommitted() {
         partitionState.reportFetchedOffset(1);
-        DeferredCompletion comp2 = partitionState.reportFetchedOffset(2);
+        OffsetState state2 = partitionState.reportFetchedOffset(2);
 
-        comp2.complete(); // now committedOffsets contains 2
+        state2.completion().complete(); // now committedOffsets contains 2
         partitionState.updateHighWatermark();
         assertEquals(-1, partitionState.commitReadyOffset());
-        comp2.complete(); // commit again
+        state2.completion().complete(); // commit again
         partitionState.updateHighWatermark();
         assertEquals(-1, partitionState.commitReadyOffset());
     }
 
     @Test
     public void testPendingRecordsCountWithGaps() {
-        DeferredCompletion comp1 = partitionState.reportFetchedOffset(1);
+        OffsetState state1 = partitionState.reportFetchedOffset(1);
         assertEquals(1, partitionState.pendingOffsetsCount());
 
-        DeferredCompletion comp3 = partitionState.reportFetchedOffset(3);
+        OffsetState state3 = partitionState.reportFetchedOffset(3);
         assertEquals(2, partitionState.pendingOffsetsCount());
 
-        comp1.complete();
-        comp3.complete();
+        state1.completion().complete();
+        state3.completion().complete();
         partitionState.updateHighWatermark();
         assertEquals(3, partitionState.commitReadyOffset());
         assertEquals(0, partitionState.pendingOffsetsCount());
@@ -138,17 +136,49 @@ public class OutOfOrderCommitControlTest {
 
     @Test
     public void testPendingRecordsCountWithLargeGap() {
-        DeferredCompletion comp1 = partitionState.reportFetchedOffset(1);
+        OffsetState state1 = partitionState.reportFetchedOffset(1);
         assertEquals(1, partitionState.pendingOffsetsCount());
 
         long largeGapOffset = 1 + STATES_CAPACITY;
-        DeferredCompletion compLarge = partitionState.reportFetchedOffset(largeGapOffset);
+        OffsetState stateLarge = partitionState.reportFetchedOffset(largeGapOffset);
         assertEquals(2, partitionState.pendingOffsetsCount());
 
-        comp1.complete();
-        compLarge.complete();
+        state1.completion().complete();
+        stateLarge.completion().complete();
         partitionState.updateHighWatermark();
         assertEquals(largeGapOffset, partitionState.commitReadyOffset());
         assertEquals(0, partitionState.pendingOffsetsCount());
+    }
+
+    @Test(timeout = 5000)
+    public void testTimeoutOffsetReaping() {
+        Clock clock = mock(Clock.class);
+        doReturn(10L).when(clock).millis();
+        OffsetStateReaper reaper = new OffsetStateReaper(
+                Property.ofStatic(ProcessorProperties.CONFIG_DEFERRED_COMPLETE_TIMEOUT_MS, 10L),
+                Metrics.withTags("subscription", "subsc",
+                                 "topic", "topic",
+                                 "partition", "1")
+                        .new CommitControlMetrics(),
+                clock);
+        OutOfOrderCommitControl ooocc = new OutOfOrderCommitControl(topicPartition, 10, reaper);
+
+        OffsetState state1 = ooocc.reportFetchedOffset(1);
+        state1.setTimeout(20);
+        OffsetState state2 = ooocc.reportFetchedOffset(2);
+
+        // 1 is blocking watermark to progress
+        state2.completion().complete();
+        ooocc.updateHighWatermark();
+        assertEquals(-1, ooocc.commitReadyOffset());
+
+        doReturn(20L).when(clock).millis();
+        // offset reaping performed but does not proceed watermark yet
+        ooocc.updateHighWatermark();
+        state1.completion().asFuture().toCompletableFuture().join();
+        assertEquals(-1, ooocc.commitReadyOffset());
+        // offset should progress as offset 1 has reaped in previous call
+        ooocc.updateHighWatermark();
+        assertEquals(2, ooocc.commitReadyOffset());
     }
 }

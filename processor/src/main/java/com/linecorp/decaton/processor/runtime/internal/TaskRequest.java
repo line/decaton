@@ -19,7 +19,6 @@ package com.linecorp.decaton.processor.runtime.internal;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Headers;
 
-import com.linecorp.decaton.processor.DeferredCompletion;
 import com.linecorp.decaton.processor.tracing.TracingProvider.RecordTraceHandle;
 
 import lombok.Getter;
@@ -32,7 +31,7 @@ import lombok.experimental.Accessors;
 public class TaskRequest {
     private final TopicPartition topicPartition;
     private final long recordOffset;
-    private final DeferredCompletion completion;
+    private final OffsetState offsetState;
     private final String key;
     @ToString.Exclude
     private final Headers headers;
@@ -43,14 +42,14 @@ public class TaskRequest {
 
     public TaskRequest(TopicPartition topicPartition,
                        long recordOffset,
-                       DeferredCompletion completion,
+                       OffsetState offsetState,
                        String key,
                        Headers headers,
                        RecordTraceHandle trace,
                        byte[] rawRequestBytes) {
         this.topicPartition = topicPartition;
         this.recordOffset = recordOffset;
-        this.completion = completion;
+        this.offsetState = offsetState;
         this.key = key;
         this.headers = headers;
         this.trace = trace;

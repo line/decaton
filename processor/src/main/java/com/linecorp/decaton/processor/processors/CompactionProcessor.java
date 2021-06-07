@@ -30,6 +30,7 @@ import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.DeferredCompletion;
 import com.linecorp.decaton.processor.ProcessingContext;
 import com.linecorp.decaton.processor.metrics.Metrics;
+import com.linecorp.decaton.processor.runtime.Completion;
 
 import io.micrometer.core.instrument.Counter;
 import lombok.AccessLevel;
@@ -92,11 +93,11 @@ public class CompactionProcessor<T> implements DecatonProcessor<T> {
     @Accessors(fluent = true)
     public static class CompactingTask<T> {
         @Getter(AccessLevel.NONE)
-        private final DeferredCompletion completion;
+        private final Completion completion;
         private final ProcessingContext<T> context;
         private final T task;
 
-        private CompactingTask(DeferredCompletion completion, ProcessingContext<T> context, T task) {
+        private CompactingTask(Completion completion, ProcessingContext<T> context, T task) {
             this.completion = completion;
             this.context = context;
             this.task = task;

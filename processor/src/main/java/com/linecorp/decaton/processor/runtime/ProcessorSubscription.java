@@ -33,9 +33,6 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 
-import com.linecorp.decaton.processor.DeferredCompletion;
-import com.linecorp.decaton.processor.tracing.TracingProvider;
-import com.linecorp.decaton.processor.tracing.TracingProvider.RecordTraceHandle;
 import com.linecorp.decaton.processor.metrics.Metrics;
 import com.linecorp.decaton.processor.metrics.Metrics.SubscriptionMetrics;
 import com.linecorp.decaton.processor.runtime.internal.AssignmentManager;
@@ -43,14 +40,17 @@ import com.linecorp.decaton.processor.runtime.internal.BlacklistedKeysFilter;
 import com.linecorp.decaton.processor.runtime.internal.CommitManager;
 import com.linecorp.decaton.processor.runtime.internal.ConsumeManager;
 import com.linecorp.decaton.processor.runtime.internal.ConsumeManager.ConsumerHandler;
+import com.linecorp.decaton.processor.runtime.internal.OffsetRegressionException;
+import com.linecorp.decaton.processor.runtime.internal.OffsetState;
+import com.linecorp.decaton.processor.runtime.internal.PartitionContext;
+import com.linecorp.decaton.processor.runtime.internal.PartitionContexts;
+import com.linecorp.decaton.processor.runtime.internal.Processors;
 import com.linecorp.decaton.processor.runtime.internal.SubscriptionScope;
 import com.linecorp.decaton.processor.runtime.internal.TaskRequest;
 import com.linecorp.decaton.processor.runtime.internal.Utils;
 import com.linecorp.decaton.processor.runtime.internal.Utils.Timer;
-import com.linecorp.decaton.processor.runtime.internal.OffsetRegressionException;
-import com.linecorp.decaton.processor.runtime.internal.PartitionContext;
-import com.linecorp.decaton.processor.runtime.internal.PartitionContexts;
-import com.linecorp.decaton.processor.runtime.internal.Processors;
+import com.linecorp.decaton.processor.tracing.TracingProvider;
+import com.linecorp.decaton.processor.tracing.TracingProvider.RecordTraceHandle;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -94,42 +94,35 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
             TopicPartition tp = new TopicPartition(record.topic(), record.partition());
             PartitionContext context = contexts.get(tp);
 
-            DeferredCompletion offsetCompletion;
+            OffsetState offsetState;
             try {
-                offsetCompletion = context.registerOffset(record.offset());
+                offsetState = context.registerOffset(record.offset());
             } catch (OffsetRegressionException e) {
                 log.warn("Offset regression at partition {}", tp);
                 assignManager.repair(tp);
                 context = contexts.get(tp);
                 // If it fails even at 2nd attempt... no idea let it die.
-                offsetCompletion = context.registerOffset(record.offset());
+                offsetState = context.registerOffset(record.offset());
             }
 
             TracingProvider provider = scope.tracingProvider();
             RecordTraceHandle trace = provider.traceFor(record, scope.subscriptionId());
-            DeferredCompletion completion = wrapForTracing(offsetCompletion, trace);
-
-            if (blacklistedKeysFilter.shouldTake(record)) {
-                TaskRequest taskRequest =
-                        new TaskRequest(tp, record.offset(), completion, record.key(),
-                                        record.headers(), trace, record.value());
-                context.addRequest(taskRequest);
-            } else {
-                completion.complete();
-            }
-        }
-
-        private DeferredCompletion wrapForTracing(DeferredCompletion offsetCompletion,
-                                                  RecordTraceHandle trace) {
-            return () -> {
-                // Marking offset as complete should be done with highest priority.
-                offsetCompletion.complete();
+            offsetState.completion().asFuture().whenComplete((unused, throwable) -> {
                 try {
                     trace.processingCompletion();
                 } catch (Exception e) {
                     log.error("Exception from tracing", e);
                 }
-            };
+            });
+
+            if (blacklistedKeysFilter.shouldTake(record)) {
+                TaskRequest taskRequest =
+                        new TaskRequest(tp, record.offset(), offsetState, record.key(),
+                                        record.headers(), trace, record.value());
+                context.addRequest(taskRequest);
+            } else {
+                offsetState.completion().complete();
+            }
         }
     }
 
@@ -253,6 +246,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
             } catch (RuntimeException e) {
                 log.error("Offset commit failed before closing consumer", e);
             }
+            contexts.close();
 
             processors.destroySingletonScope(scope.subscriptionId());
 
@@ -276,5 +270,4 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
     public CompletionStage<Void> shutdownFuture() {
         return shutdownFuture;
     }
-
 }

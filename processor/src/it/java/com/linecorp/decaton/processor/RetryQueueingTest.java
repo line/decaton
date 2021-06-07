@@ -30,6 +30,7 @@ import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Test;
 
+import com.linecorp.decaton.processor.runtime.Completion.TimeoutChoice;
 import com.linecorp.decaton.processor.runtime.DecatonTask;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.Property;
@@ -179,6 +180,37 @@ public class RetryQueueingTest {
                         GuaranteeType.SERIAL_PROCESSING)
                 .customSemantics(new ProcessRetriedTask())
                 .customTaskExtractor(new TestTaskExtractor())
+                .build()
+                .run();
+    }
+
+    @Test(timeout = 60000)
+    public void testRetryQueueingFromCompletionTimeoutCallback() {
+        ProcessorTestSuite
+                .builder(rule)
+                .numTasks(100)
+                .propertySupplier(StaticPropertySupplier.of(Property.ofStatic(
+                        ProcessorProperties.CONFIG_DEFERRED_COMPLETE_TIMEOUT_MS, 100L)))
+                .configureProcessorsBuilder(builder -> builder.thenProcess((ctx, task) -> {
+                    if (ctx.metadata().retryCount() == 0) {
+                        // Leak completion
+                        ctx.deferCompletion(comp -> {
+                            try {
+                                comp.completeWith(ctx.retry());
+                            } catch (InterruptedException e) {
+                                throw new RuntimeException(e);
+                            }
+                            return TimeoutChoice.EXTEND;
+                        });
+                    }
+                }))
+                .retryConfig(RetryConfig.builder()
+                                        .retryTopic(retryTopic)
+                                        .backoff(Duration.ofMillis(10))
+                                        .build())
+                .excludeSemantics(GuaranteeType.PROCESS_ORDERING,
+                                  GuaranteeType.SERIAL_PROCESSING)
+                .customSemantics(new ProcessRetriedTask())
                 .build()
                 .run();
     }

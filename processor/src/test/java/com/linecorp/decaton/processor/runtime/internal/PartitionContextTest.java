@@ -30,7 +30,6 @@ import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
 
-import com.linecorp.decaton.processor.DeferredCompletion;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider;
 
@@ -61,10 +60,10 @@ public class PartitionContextTest {
     public void testOffsetWaitingCommit() {
         assertFalse(context.offsetWaitingCommit().isPresent());
 
-        DeferredCompletion comp = context.registerOffset(100);
+        OffsetState state = context.registerOffset(100);
         assertFalse(context.offsetWaitingCommit().isPresent());
 
-        comp.complete();
+        state.completion().complete();
         context.updateHighWatermark();
         assertEquals(OptionalLong.of(100), context.offsetWaitingCommit());
 

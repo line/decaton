@@ -156,4 +156,22 @@ public class CoreFunctionalityTest {
                 .build()
                 .run();
     }
+
+    @Test(timeout = 30000)
+    public void testAsyncCompletionWithLeakAndTimeout() {
+        Random rand = randomRule.random();
+        ProcessorTestSuite
+                .builder(rule)
+                .numTasks(1000)
+                .propertySupplier(StaticPropertySupplier.of(Property.ofStatic(
+                        ProcessorProperties.CONFIG_DEFERRED_COMPLETE_TIMEOUT_MS, 10L)))
+                .configureProcessorsBuilder(builder -> builder.thenProcess((ctx, task) -> {
+                    if (rand.nextInt() % 4 == 0) {
+                        // Leak 25% offsets
+                        ctx.deferCompletion();
+                    }
+                }))
+                .build()
+                .run();
+    }
 }
