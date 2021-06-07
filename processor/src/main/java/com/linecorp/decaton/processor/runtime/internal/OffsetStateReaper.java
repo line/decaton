@@ -75,5 +75,6 @@ public class OffsetStateReaper implements AutoCloseable {
     public void close() throws Exception {
         executor.shutdown();
         executor.awaitTermination(Long.MAX_VALUE, TimeUnit.MILLISECONDS);
+        metrics.close();
     }
 }
