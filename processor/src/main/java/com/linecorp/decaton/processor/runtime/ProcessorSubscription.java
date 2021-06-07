@@ -246,6 +246,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
             } catch (RuntimeException e) {
                 log.error("Offset commit failed before closing consumer", e);
             }
+            contexts.close();
 
             processors.destroySingletonScope(scope.subscriptionId());
 
