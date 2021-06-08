@@ -21,15 +21,15 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 
 import com.linecorp.decaton.example.protocol.Mytasks.PrintMessageTask;
 import com.linecorp.decaton.processor.DecatonProcessor;
-import com.linecorp.decaton.processor.DeferredCompletion;
 import com.linecorp.decaton.processor.ProcessingContext;
+import com.linecorp.decaton.processor.runtime.Completion;
 
 public class PrintMessageTaskAsync implements DecatonProcessor<PrintMessageTask> {
     Producer<String, String> producer;
 
     @Override
     public void process(ProcessingContext<PrintMessageTask> context, PrintMessageTask task) throws InterruptedException {
-        DeferredCompletion completion = context.deferCompletion();
+        Completion completion = context.deferCompletion();
         producer.send(new ProducerRecord<>("next-topic", "Hello" + task.getName()),
                       (metadata, exception) -> completion.complete());
     }
