@@ -20,8 +20,8 @@ import java.util.concurrent.CompletableFuture;
 
 import com.linecorp.decaton.example.protocol.Mytasks.PrintMessageTask;
 import com.linecorp.decaton.processor.DecatonProcessor;
-import com.linecorp.decaton.processor.DeferredCompletion;
 import com.linecorp.decaton.processor.ProcessingContext;
+import com.linecorp.decaton.processor.runtime.Completion;
 
 public class RetryingProcessorAsync implements DecatonProcessor<PrintMessageTask> {
 
@@ -29,7 +29,7 @@ public class RetryingProcessorAsync implements DecatonProcessor<PrintMessageTask
     public void process(ProcessingContext<PrintMessageTask> context, PrintMessageTask task)
             throws InterruptedException {
 
-        DeferredCompletion completion = context.deferCompletion();
+        Completion completion = context.deferCompletion();
 
         CompletableFuture<String> userInfo = getUserInfoAsync("Test");
         userInfo.whenComplete((user, exception) -> {
