@@ -20,9 +20,9 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 
 import com.linecorp.decaton.example.protocol.Mytasks.PrintMessageTask;
+import com.linecorp.decaton.processor.Completion;
 import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.ProcessingContext;
-import com.linecorp.decaton.processor.runtime.Completion;
 
 public class PrintMessageTaskAsync implements DecatonProcessor<PrintMessageTask> {
     Producer<String, String> producer;

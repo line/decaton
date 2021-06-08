@@ -14,11 +14,9 @@
  * under the License.
  */
 
-package com.linecorp.decaton.processor.runtime;
+package com.linecorp.decaton.processor;
 
 import java.util.concurrent.CompletionStage;
-
-import com.linecorp.decaton.processor.DeferredCompletion;
 
 /**
  * An interface for completion status management of tasks.

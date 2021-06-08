@@ -19,9 +19,9 @@ package example.processors;
 import java.util.concurrent.CompletableFuture;
 
 import com.linecorp.decaton.example.protocol.Mytasks.PrintMessageTask;
+import com.linecorp.decaton.processor.Completion;
 import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.ProcessingContext;
-import com.linecorp.decaton.processor.runtime.Completion;
 
 public class RetryingProcessorAsync implements DecatonProcessor<PrintMessageTask> {
 

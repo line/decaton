@@ -23,8 +23,8 @@ import java.util.Map;
 
 import org.slf4j.MDC;
 
+import com.linecorp.decaton.processor.Completion;
 import com.linecorp.decaton.processor.DecatonProcessor;
-import com.linecorp.decaton.processor.DeferredCompletion;
 import com.linecorp.decaton.processor.ProcessingContext;
 import com.linecorp.decaton.processor.runtime.internal.AbstractDecatonProperties;
 import com.linecorp.decaton.processor.runtime.internal.OutOfOrderCommitControl;

@@ -21,7 +21,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.function.Function;
 
-import com.linecorp.decaton.processor.runtime.Completion;
+import com.linecorp.decaton.processor.Completion;
 
 import lombok.Setter;
 import lombok.experimental.Accessors;

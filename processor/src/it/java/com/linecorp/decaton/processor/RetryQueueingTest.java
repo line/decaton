@@ -30,7 +30,7 @@ import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Test;
 
-import com.linecorp.decaton.processor.runtime.Completion.TimeoutChoice;
+import com.linecorp.decaton.processor.Completion.TimeoutChoice;
 import com.linecorp.decaton.processor.runtime.DecatonTask;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.Property;

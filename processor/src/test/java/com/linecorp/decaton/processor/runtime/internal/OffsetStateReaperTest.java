@@ -36,7 +36,7 @@ import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
 
 import com.linecorp.decaton.processor.metrics.Metrics;
-import com.linecorp.decaton.processor.runtime.Completion.TimeoutChoice;
+import com.linecorp.decaton.processor.Completion.TimeoutChoice;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.Property;
 

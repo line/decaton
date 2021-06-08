@@ -27,10 +27,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.linecorp.decaton.processor.DecatonProcessor;
-import com.linecorp.decaton.processor.DeferredCompletion;
 import com.linecorp.decaton.processor.ProcessingContext;
 import com.linecorp.decaton.processor.metrics.Metrics;
-import com.linecorp.decaton.processor.runtime.Completion;
+import com.linecorp.decaton.processor.Completion;
 
 import io.micrometer.core.instrument.Counter;
 import lombok.AccessLevel;
