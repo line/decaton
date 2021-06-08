@@ -43,6 +43,7 @@ public class DecatonRunner implements Runner {
             new HashMap<String, Function<String, Object>>() {{
                 put(ProcessorProperties.CONFIG_MAX_PENDING_RECORDS.name(), Integer::parseInt);
                 put(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY.name(), Integer::parseInt);
+                put(ProcessorProperties.CONFIG_LOGGING_MDC_ENABLED.name(), Boolean::parseBoolean);
             }};
 
     private ProcessorSubscription subscription;
