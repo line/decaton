@@ -21,10 +21,10 @@ import java.io.UncheckedIOException;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import com.linecorp.decaton.processor.DecatonTask;
-import com.linecorp.decaton.processor.TaskExtractor;
 import com.linecorp.decaton.processor.TaskMetadata;
 
+import com.linecorp.decaton.processor.runtime.DecatonTask;
+import com.linecorp.decaton.processor.runtime.TaskExtractor;
 import example.models.UserEvent;
 
 public class JSONUserEventExtractor implements TaskExtractor<UserEvent> {

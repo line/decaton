@@ -20,8 +20,8 @@ import java.util.Properties;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 
-import com.linecorp.decaton.processor.ProcessorsBuilder;
 import com.linecorp.decaton.processor.runtime.ProcessorSubscription;
+import com.linecorp.decaton.processor.runtime.ProcessorsBuilder;
 import com.linecorp.decaton.processor.runtime.SubscriptionBuilder;
 
 import example.processors.UserEventProcessor;

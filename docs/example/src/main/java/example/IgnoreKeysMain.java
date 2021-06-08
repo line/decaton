@@ -16,7 +16,8 @@
 
 package example;
 
-import static com.linecorp.decaton.processor.ProcessorProperties.CONFIG_IGNORE_KEYS;
+
+import static com.linecorp.decaton.processor.runtime.ProcessorProperties.CONFIG_IGNORE_KEYS;
 
 import java.util.Arrays;
 import java.util.Properties;
@@ -24,10 +25,10 @@ import java.util.Properties;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 
 import com.linecorp.decaton.example.protocol.Mytasks.PrintMessageTask;
-import com.linecorp.decaton.processor.ProcessorsBuilder;
-import com.linecorp.decaton.processor.Property;
-import com.linecorp.decaton.processor.StaticPropertySupplier;
 import com.linecorp.decaton.processor.runtime.ProcessorSubscription;
+import com.linecorp.decaton.processor.runtime.ProcessorsBuilder;
+import com.linecorp.decaton.processor.runtime.Property;
+import com.linecorp.decaton.processor.runtime.StaticPropertySupplier;
 import com.linecorp.decaton.processor.runtime.SubscriptionBuilder;
 import com.linecorp.decaton.protobuf.ProtocolBuffersDeserializer;
 

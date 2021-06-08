@@ -23,16 +23,16 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import com.linecorp.decaton.processor.DecatonTask;
-import com.linecorp.decaton.processor.ProcessorsBuilder;
-import com.linecorp.decaton.processor.TaskExtractor;
 import com.linecorp.decaton.processor.TaskMetadata;
-import com.linecorp.decaton.processor.runtime.CompactionProcessor;
-import com.linecorp.decaton.processor.runtime.CompactionProcessor.CompactChoice;
+import com.linecorp.decaton.processor.processors.CompactionProcessor;
+import com.linecorp.decaton.processor.processors.CompactionProcessor.CompactChoice;
+import com.linecorp.decaton.processor.runtime.DecatonTask;
 import com.linecorp.decaton.processor.runtime.ProcessorScope;
 import com.linecorp.decaton.processor.runtime.ProcessorSubscription;
+import com.linecorp.decaton.processor.runtime.ProcessorsBuilder;
 import com.linecorp.decaton.processor.runtime.SubscriptionBuilder;
 
+import com.linecorp.decaton.processor.runtime.TaskExtractor;
 import example.models.LocationEvent;
 import example.processors.LocationEventProcessor;
 
