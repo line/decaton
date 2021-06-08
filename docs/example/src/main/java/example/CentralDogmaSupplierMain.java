@@ -24,8 +24,8 @@ import com.linecorp.centraldogma.client.CentralDogma;
 import com.linecorp.centraldogma.client.armeria.ArmeriaCentralDogmaBuilder;
 import com.linecorp.decaton.centraldogma.CentralDogmaPropertySupplier;
 import com.linecorp.decaton.example.protocol.Mytasks.PrintMessageTask;
-import com.linecorp.decaton.processor.ProcessorsBuilder;
 import com.linecorp.decaton.processor.runtime.ProcessorSubscription;
+import com.linecorp.decaton.processor.runtime.ProcessorsBuilder;
 import com.linecorp.decaton.processor.runtime.SubscriptionBuilder;
 import com.linecorp.decaton.protobuf.ProtocolBuffersDeserializer;
 

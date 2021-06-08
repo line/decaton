@@ -16,20 +16,19 @@
 
 package example;
 
-import static com.linecorp.decaton.processor.ProcessorProperties.CONFIG_PROCESSING_RATE;
-
-import java.util.Properties;
+import static com.linecorp.decaton.processor.runtime.ProcessorProperties.CONFIG_PROCESSING_RATE;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 
+import java.util.Properties;
+
 import com.linecorp.decaton.example.protocol.Mytasks.PrintMessageTask;
-import com.linecorp.decaton.processor.ProcessorsBuilder;
-import com.linecorp.decaton.processor.Property;
-import com.linecorp.decaton.processor.StaticPropertySupplier;
 import com.linecorp.decaton.processor.runtime.ProcessorSubscription;
+import com.linecorp.decaton.processor.runtime.ProcessorsBuilder;
+import com.linecorp.decaton.processor.runtime.Property;
+import com.linecorp.decaton.processor.runtime.StaticPropertySupplier;
 import com.linecorp.decaton.processor.runtime.SubscriptionBuilder;
 import com.linecorp.decaton.protobuf.ProtocolBuffersDeserializer;
-
 import example.processors.PrintMessageTaskProcessor;
 
 public class ProcessingRateMain {
