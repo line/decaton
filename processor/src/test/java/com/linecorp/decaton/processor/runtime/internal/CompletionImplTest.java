@@ -24,7 +24,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.Test;
 
-import com.linecorp.decaton.processor.runtime.Completion.TimeoutChoice;
+import com.linecorp.decaton.processor.Completion.TimeoutChoice;
 
 public class CompletionImplTest {
 

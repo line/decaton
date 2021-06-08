@@ -22,8 +22,7 @@ import java.util.function.Function;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.header.Headers;
 
-import com.linecorp.decaton.processor.runtime.Completion;
-import com.linecorp.decaton.processor.runtime.Completion.TimeoutChoice;
+import com.linecorp.decaton.processor.Completion.TimeoutChoice;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.RetryConfig;
 import com.linecorp.decaton.processor.runtime.SubscriptionBuilder;

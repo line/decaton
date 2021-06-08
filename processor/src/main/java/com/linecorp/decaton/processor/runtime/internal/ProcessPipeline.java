@@ -22,7 +22,7 @@ import java.util.Collections;
 import java.util.List;
 
 import com.linecorp.decaton.processor.DecatonProcessor;
-import com.linecorp.decaton.processor.runtime.Completion;
+import com.linecorp.decaton.processor.Completion;
 import com.linecorp.decaton.processor.runtime.DecatonTask;
 import com.linecorp.decaton.processor.ProcessingContext;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;

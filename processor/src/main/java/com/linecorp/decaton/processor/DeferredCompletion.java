@@ -19,8 +19,6 @@ package com.linecorp.decaton.processor;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 
-import com.linecorp.decaton.processor.runtime.Completion;
-
 public interface DeferredCompletion {
     /**
      * Complete this deferred processing to tell it's ready for committing the corresponding offset.
