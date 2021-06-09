@@ -1,7 +1,7 @@
 Decaton Versioning
 ==================
 
-Since the release of 0.1.0, this project uses [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html) for versioning its releases.
+Since the release of 1.0.0, this project uses [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html) for versioning its releases.
 In short, quoting from the official document's summary section:
 
 Given a version number MAJOR.MINOR.PATCH, increment the:
