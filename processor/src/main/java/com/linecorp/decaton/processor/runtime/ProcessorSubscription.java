@@ -22,7 +22,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -57,7 +56,6 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class ProcessorSubscription extends Thread implements AsyncShutdownable {
     private final SubscriptionScope scope;
-    private final AtomicBoolean terminated;
     private final BlacklistedKeysFilter blacklistedKeysFilter;
     final PartitionContexts contexts;
     private final Processors<?> processors;
@@ -67,7 +65,10 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
     private final CommitManager commitManager;
     private final AssignmentManager assignManager;
     private final ConsumeManager consumeManager;
-    private final CompletableFuture<Void> shutdownFuture = new CompletableFuture<>();
+    private final CompletableFuture<Void> loopTerminateFuture;
+    private final CompletableFuture<Void> shutdownFuture;
+    private volatile boolean started;
+    private volatile boolean terminated;
 
     class Handler implements ConsumerHandler {
         @Override
@@ -136,7 +137,6 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
         this.processors = processors;
         this.stateListener = stateListener;
         this.contexts = contexts;
-        terminated = new AtomicBoolean();
         metrics = Metrics.withTags("subscription", scope.subscriptionId()).new SubscriptionMetrics();
 
         Consumer<String, byte[]> consumer = consumerSupplier.get();
@@ -146,6 +146,9 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
         assignManager = new AssignmentManager(contexts);
         blacklistedKeysFilter = new BlacklistedKeysFilter(props);
         rebalanceTimeoutMillis = props.get(ProcessorProperties.CONFIG_GROUP_REBALANCE_TIMEOUT_MS);
+
+        loopTerminateFuture = new CompletableFuture<>();
+        shutdownFuture = loopTerminateFuture.whenComplete((unused, throwable) -> cleanUp());
 
         setName(String.format("DecatonSubscriptionThread-%s", scope));
     }
@@ -212,11 +215,21 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
 
     @Override
     public void run() {
-        updateState(SubscriptionStateListener.State.INITIALIZING);
-        consumeManager.init(subscribeTopics());
-
+        started = true;
         try {
-            while (!terminated.get()) {
+            if (!terminated) {
+                updateState(SubscriptionStateListener.State.INITIALIZING);
+                consumeManager.init(subscribeTopics());
+                consumeLoop();
+            }
+        } finally {
+            loopTerminateFuture.complete(null);
+        }
+    }
+
+    private void consumeLoop() {
+        try {
+            while (!terminated) {
                 consumeManager.poll();
 
                 Timer timer = Utils.timer();
@@ -230,7 +243,9 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
             updateState(SubscriptionStateListener.State.SHUTTING_DOWN);
             final long timeoutMillis =
                     scope.props().get(ProcessorProperties.CONFIG_SHUTDOWN_TIMEOUT_MS).value();
-            if (timeoutMillis > 0) { waitForRemainingTasksCompletion(timeoutMillis); }
+            if (timeoutMillis > 0) {
+                waitForRemainingTasksCompletion(timeoutMillis);
+            }
         } catch (RuntimeException e) {
             log.error("Unknown exception thrown at subscription loop, thread will be terminated: {}", scope, e);
             updateState(SubscriptionStateListener.State.SHUTTING_DOWN);
@@ -246,24 +261,26 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
             } catch (RuntimeException e) {
                 log.error("Offset commit failed before closing consumer", e);
             }
-            contexts.close();
-
             processors.destroySingletonScope(scope.subscriptionId());
-
-            consumeManager.close();
-            log.info("ProcessorSubscription {} terminated in {} ms", scope,
-                     timer.elapsedMillis());
-
-            updateState(SubscriptionStateListener.State.TERMINATED);
-            metrics.close();
-            shutdownFuture.complete(null);
+            log.info("ProcessorSubscription {} terminated in {} ms", scope, timer.elapsedMillis());
         }
     }
 
     @Override
     public void initiateShutdown() {
         log.info("Initiating shutdown of subscription thread: {}", getName());
-        terminated.set(true);
+        terminated = true;
+        if (!started) {
+            loopTerminateFuture.complete(null);
+        }
+    }
+
+    private void cleanUp() {
+        contexts.close();
+        processors.destroySingletonScope(scope.subscriptionId());
+        consumeManager.close();
+        metrics.close();
+        updateState(SubscriptionStateListener.State.TERMINATED);
     }
 
     @Override
