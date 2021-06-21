@@ -23,6 +23,7 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.verify;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -60,6 +61,7 @@ import org.mockito.stubbing.Answer;
 
 import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.DeferredCompletion;
+import com.linecorp.decaton.processor.ProcessingContext;
 import com.linecorp.decaton.processor.TaskMetadata;
 import com.linecorp.decaton.processor.runtime.SubscriptionStateListener.State;
 import com.linecorp.decaton.processor.runtime.internal.ConsumerSupplier;
@@ -273,5 +275,14 @@ public class ProcessorSubscriptionTest {
         assertEquals(13, consumer.committed(singleton(tp)).get(tp).offset());
         executor.shutdown();
         executor.awaitTermination(Long.MAX_VALUE, TimeUnit.SECONDS);
+    }
+
+    @Test(timeout = 5000)
+    public void closeWithoutStart() throws Exception {
+        TopicPartition tp = new TopicPartition("topic", 0);
+        ProcessorSubscription subscription = subscription(consumer, null, tp, (context, task) -> {});
+        // The main point is that the below close returns within timeout.
+        subscription.close();
+        verify(consumer).close();
     }
 }
