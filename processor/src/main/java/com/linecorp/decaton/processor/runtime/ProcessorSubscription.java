@@ -277,7 +277,6 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
 
     private void cleanUp() {
         contexts.close();
-        processors.destroySingletonScope(scope.subscriptionId());
         consumeManager.close();
         metrics.close();
         updateState(SubscriptionStateListener.State.TERMINATED);
