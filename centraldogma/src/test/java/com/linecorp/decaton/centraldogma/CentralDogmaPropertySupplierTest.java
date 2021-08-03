@@ -21,27 +21,15 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import org.junit.Before;
 import org.junit.Rule;
@@ -49,6 +37,7 @@ import org.junit.Test;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
+import org.mockito.quality.Strictness;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -56,22 +45,13 @@ import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 
 import com.linecorp.centraldogma.client.CentralDogma;
 import com.linecorp.centraldogma.client.Watcher;
-import com.linecorp.centraldogma.common.Change;
-import com.linecorp.centraldogma.common.Entry;
 import com.linecorp.centraldogma.common.Query;
-import com.linecorp.centraldogma.common.Revision;
-import com.linecorp.centraldogma.internal.Jackson;
-import com.linecorp.centraldogma.testing.junit4.CentralDogmaRule;
 import com.linecorp.decaton.processor.runtime.DynamicProperty;
-import com.linecorp.decaton.processor.runtime.Property;
 import com.linecorp.decaton.processor.runtime.PropertyDefinition;
 
 public class CentralDogmaPropertySupplierTest {
     @Rule
-    public MockitoRule rule = MockitoJUnit.rule();
-
-    @Rule
-    public CentralDogmaRule centralDogmaRule = new CentralDogmaRule();
+    public MockitoRule rule = MockitoJUnit.rule().strictness(Strictness.STRICT_STUBS);
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -90,43 +70,36 @@ public class CentralDogmaPropertySupplierTest {
     @Mock
     private CentralDogma centralDogma;
 
+    @Mock
+    Watcher<JsonNode> rootWatcher;
+
     private CentralDogmaPropertySupplier supplier;
 
-    @SuppressWarnings({ "unchecked", "rawtypes" })
     @Before
     public void setUp() {
-        Watcher<Map> rootWatcher = mock(Watcher.class);
-        doAnswer(invocation -> {
-            ((Consumer<Map>) invocation.getArgument(0)).accept(
-                    Stream.of(LONG_PROPERTY, LIST_PROPERTY)
-                          .collect(Collectors.toMap(PropertyDefinition::name, p -> "")));
-            return null;
-        }).when(rootWatcher).watch((Consumer<? super Map>) any());
+        when(centralDogma.fileWatcher(PROJECT_NAME, REPOSITORY_NAME, Query.ofJsonPath(FILENAME)))
+                .thenReturn(rootWatcher);
 
-        doReturn(rootWatcher)
-                .when(centralDogma)
-                .fileWatcher(eq(PROJECT_NAME), eq(REPOSITORY_NAME),
-                             eq(Query.ofJsonPath(FILENAME, "$")), any());
-
-        supplier = new CentralDogmaPropertySupplier(centralDogma, PROJECT_NAME, REPOSITORY_NAME,
-                                                    FILENAME);
+        supplier = new CentralDogmaPropertySupplier(centralDogma, PROJECT_NAME, REPOSITORY_NAME, FILENAME);
     }
 
     @Test
     @SuppressWarnings("unchecked")
     public void testWatcherSetup() {
+        when(rootWatcher.latestValue()).thenReturn(objectMapper.createObjectNode().put(LONG_PROPERTY.name(), 123L));
+
         Watcher<JsonNode> longPropertyWatcher = mock(Watcher.class);
         Watcher<JsonNode> listPropertyWatcher = mock(Watcher.class);
 
-        when(centralDogma.fileWatcher(eq(PROJECT_NAME), eq(REPOSITORY_NAME), (Query<JsonNode>) any()))
+        when(rootWatcher.newChild((Query<JsonNode>) any()))
                 .thenReturn(longPropertyWatcher)
                 .thenReturn(listPropertyWatcher)
                 .thenReturn(null);
 
-        supplier.getProperty(LONG_PROPERTY);
+        assertTrue(supplier.getProperty(LONG_PROPERTY).isPresent());
 
-        verify(centralDogma, times(1)).fileWatcher(eq(PROJECT_NAME), eq(REPOSITORY_NAME), any());
-        verify(longPropertyWatcher, times(1)).watch(any(Consumer.class));
+        verify(rootWatcher).newChild(any());
+        verify(longPropertyWatcher).watch(any(Consumer.class));
     }
 
     @Test
@@ -150,175 +123,14 @@ public class CentralDogmaPropertySupplierTest {
 
         DynamicProperty<Long> prop = spy(new DynamicProperty<>(LONG_PROPERTY));
         supplier.setValue(prop, factory.numberNode(10L));
-        verify(prop, times(1)).checkingSet(Long.valueOf(10L));
+        verify(prop).checkingSet(10L);
     }
 
-    @SuppressWarnings("unchecked")
     @Test
-    public void testGetProperty() {
-        Watcher<JsonNode> longPropertyWatcher = mock(Watcher.class);
-        doAnswer(invocation -> {
-            ((Consumer<JsonNode>) invocation.getArgument(0)).accept(
-                    objectMapper.getNodeFactory().numberNode(100L));
-            return null;
-        }).when(longPropertyWatcher).watch((Consumer<JsonNode>) any());
-
-        when(centralDogma.fileWatcher(eq(PROJECT_NAME), eq(REPOSITORY_NAME), (Query<JsonNode>) any()))
-                .thenReturn(longPropertyWatcher)
-                .thenReturn(null);
-
-        Property<Long> prop = supplier.getProperty(LONG_PROPERTY).get();
-
-        assertEquals(LONG_PROPERTY, prop.definition());
-        assertEquals(100L, prop.value().longValue());
-    }
-
-    @Test(timeout = 5000)
     public void testGetPropertyAbsentName() {
-        assertFalse(supplier.getProperty(PropertyDefinition.define("absent.value", Long.class)).isPresent());
-    }
+        when(rootWatcher.latestValue()).thenReturn(objectMapper.createObjectNode());
 
-    @Test(timeout = 50000)
-    public void testCDIntegration() throws InterruptedException {
-        CentralDogma client = centralDogmaRule.client();
-
-        final String ORIGINAL =
-                "{\n"
-                + "  \"num.property\": 10,\n"
-                + "  \"ignore.keys\": [\n"
-                + "    \"123456\",\n"
-                + "    \"79797979\"\n"
-                + "  ],\n"
-                + "  \"partition.processing.rate\": 50\n"
-                + "}\n";
-
-        client.createProject(PROJECT_NAME).join();
-        client.createRepository(PROJECT_NAME, REPOSITORY_NAME).join();
-        client.push(PROJECT_NAME, REPOSITORY_NAME, Revision.HEAD, "summary",
-                    Change.ofJsonUpsert(FILENAME, ORIGINAL)).join();
-
-        CentralDogmaPropertySupplier supplier = new CentralDogmaPropertySupplier(
-                client, PROJECT_NAME, REPOSITORY_NAME, FILENAME);
-
-        Property<Long> prop = supplier.getProperty(LONG_PROPERTY).get();
-
-        assertEquals(10L, prop.value().longValue());
-
-        final String UPDATED =
-                "{\n"
-                + "  \"num.property\": 20,\n"
-                + "  \"ignore.keys\": [\n"
-                + "    \"123456\",\n"
-                + "    \"79797979\"\n"
-                + "  ],\n"
-                + "  \"partition.processing.rate\": 50\n"
-                + "}\n";
-
-        CountDownLatch latch = new CountDownLatch(2);
-        prop.listen((o, n) -> latch.countDown());
-
-        client.push(PROJECT_NAME, REPOSITORY_NAME, Revision.HEAD, "summary",
-                    Change.ofJsonPatch(FILENAME, ORIGINAL, UPDATED)).join();
-
-        latch.await();
-        assertEquals(20L, prop.value().longValue());
-    }
-
-    @Test
-    public void testFileExist() {
-        CentralDogma client = centralDogmaRule.client();
-        client.createProject(PROJECT_NAME).join();
-        client.createRepository(PROJECT_NAME, REPOSITORY_NAME).join();
-        client.push(PROJECT_NAME, REPOSITORY_NAME, Revision.HEAD, "test",
-                    Change.ofJsonUpsert(FILENAME, "{}")).join();
-        assertTrue(CentralDogmaPropertySupplier
-                           .fileExists(client, PROJECT_NAME, REPOSITORY_NAME, FILENAME, Revision.HEAD));
-    }
-
-    @Test
-    public void testFileNonExistent() {
-        CentralDogma client = centralDogmaRule.client();
-        client.createProject(PROJECT_NAME).join();
-        client.createRepository(PROJECT_NAME, REPOSITORY_NAME).join();
-        assertFalse(CentralDogmaPropertySupplier
-                            .fileExists(client, PROJECT_NAME, REPOSITORY_NAME, FILENAME, Revision.HEAD));
-    }
-
-    @Test(timeout = 10000)
-    public void testCDRegisterSuccess() {
-        CentralDogma client = centralDogmaRule.client();
-        client.createProject(PROJECT_NAME).join();
-        client.createRepository(PROJECT_NAME, REPOSITORY_NAME).join();
-
-        CentralDogmaPropertySupplier.register(client, PROJECT_NAME, REPOSITORY_NAME, FILENAME);
-        Entry<JsonNode> prop = client.getFile(PROJECT_NAME, REPOSITORY_NAME,
-                                              Revision.HEAD, Query.ofJson(FILENAME)).join();
-
-        assertEquals(CentralDogmaPropertySupplier.defaultProperties().asText(),
-                     prop.content().asText());
-    }
-
-    @Test(timeout = 10000, expected = RuntimeException.class)
-    public void testCDRegisterNonExistentProject() {
-        CentralDogmaPropertySupplier.register(centralDogmaRule.client(),
-                                              "non-existent-project", REPOSITORY_NAME, FILENAME);
-    }
-
-    @Test(timeout = 15000, expected = RuntimeException.class)
-    public void testCDRegisterTimeout() {
-        CentralDogma client = spy(centralDogmaRule.client());
-        client.createProject(PROJECT_NAME).join();
-        client.createRepository(PROJECT_NAME, REPOSITORY_NAME).join();
-
-        doReturn(CompletableFuture.completedFuture(new Revision(1)))
-                .when(client)
-                .normalizeRevision(eq(PROJECT_NAME), eq(REPOSITORY_NAME), any());
-
-        CentralDogmaPropertySupplier.register(client, PROJECT_NAME, REPOSITORY_NAME, FILENAME);
-
-        CentralDogmaPropertySupplier.register(client, PROJECT_NAME, REPOSITORY_NAME, FILENAME);
-    }
-
-    @Test(timeout = 15000)
-    public void testCDRegisterConflict() throws Exception {
-        CountDownLatch userAIsRunning = new CountDownLatch(1);
-        CountDownLatch userBIsRunning = new CountDownLatch(1);
-
-        CentralDogma userA = spy(centralDogmaRule.client());
-        CentralDogma userB = centralDogmaRule.client();
-        JsonNode userBPush = Jackson.readTree("{\"foo\": \"bar\"}");
-
-        userA.createProject(PROJECT_NAME).join();
-        userA.createRepository(PROJECT_NAME, REPOSITORY_NAME).join();
-
-        doAnswer(i -> {
-            userAIsRunning.countDown();
-            userBIsRunning.await();
-            return i.callRealMethod();
-        }).when(userA)
-          .push(eq(PROJECT_NAME), eq(REPOSITORY_NAME), any(), any(),
-                eq(Change.ofJsonUpsert(FILENAME, CentralDogmaPropertySupplier.defaultProperties())));
-
-        ExecutorService service = Executors.newFixedThreadPool(2);
-        service.submit(() -> CentralDogmaPropertySupplier
-                .register(userA, PROJECT_NAME, REPOSITORY_NAME, FILENAME));
-        service.submit(() -> {
-            try {
-                userAIsRunning.await();
-                userB.push(PROJECT_NAME, REPOSITORY_NAME, Revision.HEAD, "test",
-                           Change.ofJsonUpsert(FILENAME, userBPush)).join();
-                userBIsRunning.countDown();
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new RuntimeException(e);
-            }
-        });
-        service.shutdown();
-        service.awaitTermination(Long.MAX_VALUE, TimeUnit.SECONDS);
-
-        Entry<JsonNode> prop = userA.getFile(PROJECT_NAME, REPOSITORY_NAME,
-                                             Revision.HEAD, Query.ofJson(FILENAME)).join();
-
-        assertEquals(userBPush, prop.content());
+        PropertyDefinition<Object> missingProperty = PropertyDefinition.define("absent.value", Long.class);
+        assertFalse(supplier.getProperty(missingProperty).isPresent());
     }
 }
