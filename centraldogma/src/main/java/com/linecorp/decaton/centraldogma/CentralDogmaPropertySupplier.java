@@ -16,11 +16,8 @@
 
 package com.linecorp.decaton.centraldogma;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -48,18 +45,18 @@ import com.linecorp.decaton.processor.runtime.PropertySupplier;
 /**
  * A {@link PropertySupplier} implementation with Central Dogma backend.
  *
- * This implementation maps property's {@link PropertyDefinition#name} as the absolute field name in the file
+ * This implementation maps property's {@link PropertyDefinition#name()} as the absolute field name in the file
  * on Central Dogma.
  *
  * An example JSON format would be look like:
  * {@code
  * {
- *     "partition.threads": 10,
- *     "ignore.keys": [
+ *     "decaton.partition.concurrency": 10,
+ *     "decaton.ignore.keys": [
  *       "123456",
  *       "79797979"
  *     ],
- *     "partition.processing.rate": 50
+ *     "decaton.processing.rate.per.partition": 50
  * }
  * }
  */
@@ -69,16 +66,9 @@ public class CentralDogmaPropertySupplier implements PropertySupplier, AutoClose
     private static final long INITIAL_VALUE_TIMEOUT_SECS = 30;
     private static final long PROPERTY_CREATION_TIMEOUT_MILLIS = 10000;
 
-    private final CentralDogma centralDogma;
-    private final String projectName;
-    private final String repositoryName;
-    private final String fileName;
-    private final List<Watcher<?>> watchers;
-
     private static final ObjectMapper objectMapper = new ObjectMapper();
 
-    // FIXME: after CentralDogma supports API to query field's existence, those fields will no longer necessary.
-    private volatile Set<String> configuredKeys;
+    private final Watcher<JsonNode> rootWatcher;
 
     /**
      * Creates a new {@link CentralDogmaPropertySupplier}.
@@ -89,23 +79,7 @@ public class CentralDogmaPropertySupplier implements PropertySupplier, AutoClose
      */
     public CentralDogmaPropertySupplier(CentralDogma centralDogma, String projectName,
                                         String repositoryName, String fileName) {
-        this.centralDogma = centralDogma;
-        this.projectName = projectName;
-        this.repositoryName = repositoryName;
-        this.fileName = fileName;
-        watchers = new ArrayList<>();
-
-        setupWatcherForConfiguredKeys();
-    }
-
-    // FIXME: dumb workaround to check field's existence, until CD client supports API for querying it.
-    @SuppressWarnings("unchecked")
-    private void setupWatcherForConfiguredKeys() {
-        Watcher<Map> rootWatcher = centralDogma.fileWatcher(
-                projectName, repositoryName, Query.ofJsonPath(fileName, "$"),
-                node -> objectMapper.convertValue(node, Map.class));
-        watchers.add(rootWatcher);
-        rootWatcher.watch(rootObject -> configuredKeys = (Set<String>) rootObject.keySet());
+        rootWatcher = centralDogma.fileWatcher(projectName, repositoryName, Query.ofJsonPath(fileName));
         try {
             rootWatcher.awaitInitialValue(INITIAL_VALUE_TIMEOUT_SECS, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
@@ -129,18 +103,13 @@ public class CentralDogmaPropertySupplier implements PropertySupplier, AutoClose
 
     @Override
     public <T> Optional<Property<T>> getProperty(PropertyDefinition<T> definition) {
-        // FIXME: dumb workaround to check field's existence, until CD client supports API for querying it.
-        if (!configuredKeys.contains(definition.name())) {
+        if (!rootWatcher.latestValue().has(definition.name())) {
             return Optional.empty();
         }
 
-        Watcher<JsonNode> watcher = centralDogma.fileWatcher(
-                projectName, repositoryName,
-                Query.ofJsonPath(fileName, String.format("$.['%s']", definition.name())));
-        watchers.add(watcher);
-
         DynamicProperty<T> prop = new DynamicProperty<>(definition);
-        watcher.watch(node -> {
+        Watcher<JsonNode> child = rootWatcher.newChild(jsonNode -> jsonNode.path(definition.name()));
+        child.watch(node -> {
             try {
                 setValue(prop, node);
             } catch (RuntimeException e) {
@@ -148,22 +117,18 @@ public class CentralDogmaPropertySupplier implements PropertySupplier, AutoClose
             }
         });
         try {
-            watcher.awaitInitialValue(INITIAL_VALUE_TIMEOUT_SECS, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new RuntimeException(e);
-        } catch (TimeoutException e) {
-            throw new RuntimeException(e);
+            JsonNode node = child.initialValueFuture().join().value(); //doesn't fail since it's a child watcher
+            setValue(prop, node);
+        }  catch (RuntimeException e) {
+            logger.warn("Failed to set initial value from CentralDogma for {}", definition.name(), e);
         }
 
         return Optional.of(prop);
     }
 
     @Override
-    public void close() throws Exception {
-        for (Watcher<?> watcher : watchers) {
-            watcher.close();
-        }
+    public void close() {
+        rootWatcher.close();
     }
 
     /**
