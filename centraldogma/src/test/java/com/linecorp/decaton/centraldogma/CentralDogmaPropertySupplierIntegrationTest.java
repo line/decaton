@@ -16,6 +16,7 @@
 
 package com.linecorp.decaton.centraldogma;
 
+import static com.linecorp.decaton.processor.runtime.ProcessorProperties.CONFIG_PARTITION_CONCURRENCY;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -44,7 +45,6 @@ import com.linecorp.centraldogma.common.Revision;
 import com.linecorp.centraldogma.internal.Jackson;
 import com.linecorp.centraldogma.testing.junit4.CentralDogmaRule;
 import com.linecorp.decaton.processor.runtime.Property;
-import com.linecorp.decaton.processor.runtime.PropertyDefinition;
 
 public class CentralDogmaPropertySupplierIntegrationTest {
 
@@ -55,22 +55,18 @@ public class CentralDogmaPropertySupplierIntegrationTest {
     private static final String REPOSITORY_NAME = "repo";
     private static final String FILENAME = "/subscription.json";
 
-    private static final PropertyDefinition<Long> LONG_PROPERTY =
-            PropertyDefinition.define("num.property", Long.class, 0L,
-                                      v -> v instanceof Long && (Long) v >= 0L);
-
     @Test(timeout = 50000)
     public void testCDIntegration() throws InterruptedException {
         CentralDogma client = centralDogmaRule.client();
 
         final String ORIGINAL =
                 "{\n"
-                + "  \"num.property\": 10,\n"
-                + "  \"ignore.keys\": [\n"
+                + "  \"decaton.partition.concurrency\": 10,\n"
+                + "  \"decaton.ignore.keys\": [\n"
                 + "    \"123456\",\n"
                 + "    \"79797979\"\n"
                 + "  ],\n"
-                + "  \"partition.processing.rate\": 50\n"
+                + "  \"decaton.processing.rate.per.partition\": 50\n"
                 + "}\n";
 
         client.createProject(PROJECT_NAME).join();
@@ -81,18 +77,18 @@ public class CentralDogmaPropertySupplierIntegrationTest {
         CentralDogmaPropertySupplier supplier = new CentralDogmaPropertySupplier(
                 client, PROJECT_NAME, REPOSITORY_NAME, FILENAME);
 
-        Property<Long> prop = supplier.getProperty(LONG_PROPERTY).get();
+        Property<Integer> prop = supplier.getProperty(CONFIG_PARTITION_CONCURRENCY).get();
 
-        assertEquals(10L, prop.value().longValue());
+        assertEquals(10, prop.value().intValue());
 
         final String UPDATED =
                 "{\n"
-                + "  \"num.property\": 20,\n"
-                + "  \"ignore.keys\": [\n"
+                + "  \"decaton.partition.concurrency\": 20,\n"
+                + "  \"decaton.ignore.keys\": [\n"
                 + "    \"123456\",\n"
                 + "    \"79797979\"\n"
                 + "  ],\n"
-                + "  \"partition.processing.rate\": 50\n"
+                + "  \"decaton.processing.rate.per.partition\": 50\n"
                 + "}\n";
 
         CountDownLatch latch = new CountDownLatch(2);
@@ -102,7 +98,7 @@ public class CentralDogmaPropertySupplierIntegrationTest {
                     Change.ofJsonPatch(FILENAME, ORIGINAL, UPDATED)).join();
 
         latch.await();
-        assertEquals(20L, prop.value().longValue());
+        assertEquals(20, prop.value().intValue());
     }
 
     @Test

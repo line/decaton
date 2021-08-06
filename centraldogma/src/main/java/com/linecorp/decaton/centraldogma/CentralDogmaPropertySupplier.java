@@ -51,12 +51,12 @@ import com.linecorp.decaton.processor.runtime.PropertySupplier;
  * An example JSON format would be look like:
  * {@code
  * {
- *     "partition.threads": 10,
- *     "ignore.keys": [
+ *     "decaton.partition.concurrency": 10,
+ *     "decaton.ignore.keys": [
  *       "123456",
  *       "79797979"
  *     ],
- *     "partition.processing.rate": 50
+ *     "decaton.processing.rate.per.partition": 50
  * }
  * }
  */
