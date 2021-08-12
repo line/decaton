@@ -26,7 +26,7 @@ import lombok.experimental.Accessors;
 
 @Value
 @Accessors(fluent = true)
-@Builder
+@Builder(toBuilder = true)
 public class BenchmarkConfig {
     /**
      * Title of this benchmark.

@@ -31,7 +31,7 @@ import lombok.Value;
 import lombok.experimental.Accessors;
 
 @Value
-@Builder
+@Builder(toBuilder = true)
 @Accessors(fluent = true)
 public class RetryConfig {
     public static final String DEFAULT_RETRY_TOPIC_SUFFIX = "-retry";
