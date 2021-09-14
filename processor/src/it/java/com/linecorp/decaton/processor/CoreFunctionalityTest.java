@@ -101,7 +101,7 @@ public class CoreFunctionalityTest {
         ProcessorTestSuite
                 .builder(rule)
                 .configureProcessorsBuilder(builder -> builder.thenProcess((ctx, task) -> {
-                    DeferredCompletion completion = ctx.deferCompletion();
+                    ctx.deferCompletion();
                     executorService.execute(() -> {
                         try {
                             Thread.sleep(rand.nextInt(10));
@@ -109,7 +109,7 @@ public class CoreFunctionalityTest {
                             Thread.currentThread().interrupt();
                             throw new RuntimeException(e);
                         } finally {
-                            completion.complete();
+                            ctx.deferCompletion().complete();
                         }
                     });
                 }))
