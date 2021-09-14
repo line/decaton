@@ -116,7 +116,7 @@ public class ProcessingContextImpl<T> implements ProcessingContext<T> {
                 subscriptionId, request, task, downstreams.subList(1, downstreams.size()),
                 retryQueueingProcessor, props);
 
-        final CompletionImpl completion;
+        CompletionImpl completion;
         try {
             try {
                 traceHandle.processingStart();
@@ -130,9 +130,8 @@ public class ProcessingContextImpl<T> implements ProcessingContext<T> {
                 log.error("Exception from tracing", e);
             }
         } finally {
-            if (nextContext.deferredCompletion.get() != null) {
-                completion = nextContext.deferredCompletion.getAndSet(null);
-            } else {
+            completion = nextContext.deferredCompletion.get();
+            if (completion == null) {
                 // If process didn't requested for deferred completion, we understand it as process
                 // completed synchronously.
                 completion = CompletionImpl.completedCompletion();
