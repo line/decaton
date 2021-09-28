@@ -25,11 +25,15 @@ import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Future;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
@@ -37,12 +41,15 @@ import org.apache.kafka.common.TopicPartition;
 
 import com.google.protobuf.ByteString;
 
+import com.linecorp.decaton.client.DecatonClientBuilder.DefaultKafkaProducerSupplier;
+import com.linecorp.decaton.client.KafkaProducerSupplier;
 import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.ProcessorSubscription;
 import com.linecorp.decaton.processor.runtime.ProcessorsBuilder;
 import com.linecorp.decaton.processor.runtime.PropertySupplier;
 import com.linecorp.decaton.processor.runtime.RetryConfig;
+import com.linecorp.decaton.processor.runtime.RetryConfig.RetryConfigBuilder;
 import com.linecorp.decaton.processor.runtime.SubscriptionStateListener;
 import com.linecorp.decaton.processor.runtime.TaskExtractor;
 import com.linecorp.decaton.processor.tracing.TracingProvider;
@@ -212,15 +219,19 @@ public class ProcessorTestSuite {
 
         try {
             producer = producerSupplier.apply(rule.bootstrapServers());
+            ConcurrentMap<TopicPartition, Long> retryOffsets = new ConcurrentHashMap<>();
             for (int i = 0; i < subscriptions.length; i++) {
-                subscriptions[i] = newSubscription(i, topic, Optional.of(rollingRestartLatch));
+                subscriptions[i] = newSubscription(i, topic, Optional.of(rollingRestartLatch), retryOffsets);
             }
-            CompletableFuture<Map<Integer, Long>> produceFuture =
+            CompletableFuture<Map<TopicPartition, Long>> produceFuture =
                     produceTasks(producer, topic, record -> semantics.forEach(g -> g.onProduce(record)));
 
             rollingRestartLatch.await();
-            performRollingRestart(subscriptions, i -> newSubscription(i, topic, Optional.empty()));
-            awaitAllOffsetsCommitted(topic, produceFuture);
+            performRollingRestart(subscriptions, i -> newSubscription(i, topic, Optional.empty(), retryOffsets));
+            awaitAllOffsetsCommitted(produceFuture.join());
+            if (!retryOffsets.isEmpty()) {
+                awaitAllOffsetsCommitted(retryOffsets);
+            }
 
             for (ProcessingGuarantee guarantee : semantics) {
                 guarantee.doAssert();
@@ -237,7 +248,11 @@ public class ProcessorTestSuite {
         }
     }
 
-    private ProcessorSubscription newSubscription(int id, String topic, Optional<CountDownLatch> processLatch) {
+    private ProcessorSubscription newSubscription(
+            int id,
+            String topic,
+            Optional<CountDownLatch> processLatch,
+            ConcurrentMap<TopicPartition, Long> retryOffsets) {
         DecatonProcessor<TestTask> preprocessor = (context, task) -> {
             long startTime = System.nanoTime();
             try {
@@ -258,21 +273,31 @@ public class ProcessorTestSuite {
         ProcessorsBuilder<TestTask> processorsBuilder =
                 configureProcessorsBuilder.apply(sourceBuilder.thenProcess(preprocessor));
 
-        return TestUtils.subscription("subscription-" + id,
-                                      rule.bootstrapServers(),
-                                      builder -> {
-                                          builder.processorsBuilder(processorsBuilder);
-                                          if (retryConfig != null) {
-                                              builder.enableRetry(retryConfig);
-                                          }
-                                          if (propertySuppliers != null) {
-                                              builder.properties(propertySuppliers);
-                                          }
-                                          if(tracingProvider != null) {
-                                              builder.enableTracing(tracingProvider);
-                                          }
-                                          builder.stateListener(state -> statesListener.onChange(id, state));
-                                      });
+        return TestUtils.subscription(
+                "subscription-" + id,
+                rule.bootstrapServers(),
+                builder -> {
+                    builder.processorsBuilder(processorsBuilder);
+                    if (retryConfig != null) {
+                        RetryConfigBuilder retryConfigBuilder = retryConfig.toBuilder();
+                        KafkaProducerSupplier innerSupplier =
+                                Optional.ofNullable(retryConfig.producerSupplier())
+                                        .orElseGet(DefaultKafkaProducerSupplier::new);
+                        retryConfigBuilder.producerSupplier(props -> new InterceptingProducer(
+                                innerSupplier.getProducer(props),
+                                meta -> retryOffsets.compute(new TopicPartition(meta.topic(), meta.partition()),
+                                                             (k, v) -> Math.max(v == null ? -1L : v, meta.offset())))
+                        );
+                        builder.enableRetry(retryConfigBuilder.build());
+                    }
+                    if (propertySuppliers != null) {
+                        builder.properties(propertySuppliers);
+                    }
+                    if (tracingProvider != null) {
+                        builder.enableTracing(tracingProvider);
+                    }
+                    builder.stateListener(state -> statesListener.onChange(id, state));
+                });
     }
 
     private static void performRollingRestart(ProcessorSubscription[] subscriptions,
@@ -286,18 +311,14 @@ public class ProcessorTestSuite {
         }
     }
 
-    private void awaitAllOffsetsCommitted(String topic,
-                                          CompletableFuture<Map<Integer, Long>> produceFuture) {
-        Map<Integer, Long> producedOffsets = produceFuture.join();
+    private void awaitAllOffsetsCommitted(Map<TopicPartition, Long> producedOffsets) {
         TestUtils.awaitCondition("all produced offsets should be committed", () -> {
             Map<TopicPartition, OffsetAndMetadata> committed =
                     rule.admin().consumerGroupOffsets(TestUtils.DEFAULT_GROUP_ID);
 
-            for (Entry<Integer, Long> entry : producedOffsets.entrySet()) {
-                int partition = entry.getKey();
+            for (Entry<TopicPartition, Long> entry : producedOffsets.entrySet()) {
                 long produced = entry.getValue();
-
-                OffsetAndMetadata metadata = committed.get(new TopicPartition(topic, partition));
+                OffsetAndMetadata metadata = committed.get(entry.getKey());
                 if (metadata == null || metadata.offset() <= produced) {
                     return false;
                 }
@@ -323,7 +344,7 @@ public class ProcessorTestSuite {
      * @param onProduce Callback which is called when a task is complete to be sent
      * @return A CompletableFuture of Map, which holds partition as the key and max offset as the value
      */
-    private CompletableFuture<Map<Integer, Long>> produceTasks(
+    private CompletableFuture<Map<TopicPartition, Long>> produceTasks(
             Producer<String, DecatonTaskRequest> producer,
             String topic,
             Consumer<ProducedRecord> onProduce) {
@@ -366,15 +387,34 @@ public class ProcessorTestSuite {
         }
 
         return CompletableFuture.allOf(produceFutures).thenApply(notUsed -> {
-            Map<Integer, Long> result = new HashMap<>();
+            Map<TopicPartition, Long> result = new HashMap<>();
             for (CompletableFuture<RecordMetadata> future : produceFutures) {
                 RecordMetadata metadata = future.join();
-                long offset = result.getOrDefault(metadata.partition(), -1L);
-                if (offset < metadata.offset()) {
-                    result.put(metadata.partition(), metadata.offset());
-                }
+                result.compute(new TopicPartition(metadata.topic(), metadata.partition()),
+                               (k, v) -> Math.max(v == null ? -1L : v, metadata.offset()));
             }
             return result;
         });
+    }
+
+    private static class InterceptingProducer extends ProducerAdaptor<String, DecatonTaskRequest> {
+        private final Consumer<RecordMetadata> interceptor;
+
+        InterceptingProducer(Producer<String, DecatonTaskRequest> delegate,
+                             Consumer<RecordMetadata> interceptor) {
+            super(delegate);
+            this.interceptor = interceptor;
+        }
+
+        @Override
+        public Future<RecordMetadata> send(ProducerRecord<String, DecatonTaskRequest> record,
+                                           Callback callback) {
+            return super.send(record, (meta, e) -> {
+                if (meta != null) {
+                    interceptor.accept(meta);
+                }
+                callback.onCompletion(meta, e);
+            });
+        }
     }
 }

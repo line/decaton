@@ -117,6 +117,37 @@ public class CoreFunctionalityTest {
                 .run();
     }
 
+    /*
+     * This test aims to check if we can complete deferred completion even we get
+     * completion instance separately from first deferCompletion() call.
+     *
+     * NOTE: Though it is a valid way to complete deferred completion like this,
+     * it's recommended holding only `Completion` instance if possible to avoid unnecessary
+     * heap pressure by holding entire ProcessingContext instance.
+     */
+    @Test(timeout = 30000)
+    public void testGetCompletionInstanceLater() {
+        ExecutorService executorService = Executors.newFixedThreadPool(16);
+        Random rand = randomRule.random();
+        ProcessorTestSuite
+                .builder(rule)
+                .configureProcessorsBuilder(builder -> builder.thenProcess((ctx, task) -> {
+                    ctx.deferCompletion();
+                    executorService.execute(() -> {
+                        try {
+                            Thread.sleep(rand.nextInt(10));
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                            throw new RuntimeException(e);
+                        } finally {
+                            ctx.deferCompletion().complete();
+                        }
+                    });
+                }))
+                .build()
+                .run();
+    }
+
     @Test(timeout = 60000)
     public void testSingleThreadProcessing() {
         // Note that this processing semantics is not be considered as Decaton specification which users can rely on.

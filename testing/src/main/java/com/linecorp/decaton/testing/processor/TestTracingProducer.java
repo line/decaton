@@ -17,56 +17,21 @@
 package com.linecorp.decaton.testing.processor;
 
 import java.nio.charset.StandardCharsets;
-import java.time.Duration;
-import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.Future;
 
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
-import org.apache.kafka.common.Metric;
-import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.PartitionInfo;
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.header.internals.RecordHeader;
 
 import com.linecorp.decaton.processor.tracing.TestTracingProvider;
 import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
 
-public class TestTracingProducer implements Producer<String, DecatonTaskRequest> {
-    private final Producer<String, DecatonTaskRequest> inner;
-
-    public TestTracingProducer(Producer<String, DecatonTaskRequest> inner) {this.inner = inner;}
-
-    @Override
-    public void initTransactions() {
-        inner.initTransactions();
-    }
-
-    @Override
-    public void beginTransaction() throws ProducerFencedException {
-        inner.beginTransaction();
-    }
-
-    @Override
-    public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets, String consumerGroupId)
-            throws ProducerFencedException {
-        inner.sendOffsetsToTransaction(offsets, consumerGroupId);
-    }
-
-    @Override
-    public void commitTransaction() throws ProducerFencedException {
-        inner.commitTransaction();
-    }
-
-    @Override
-    public void abortTransaction() throws ProducerFencedException {
-        inner.abortTransaction();
+public class TestTracingProducer extends ProducerAdaptor<String, DecatonTaskRequest> {
+    public TestTracingProducer(Producer<String, DecatonTaskRequest> delegate) {
+        super(delegate);
     }
 
     private static void propagateCurrentTrace(ProducerRecord<String, DecatonTaskRequest> record) {
@@ -82,37 +47,12 @@ public class TestTracingProducer implements Producer<String, DecatonTaskRequest>
     @Override
     public Future<RecordMetadata> send(ProducerRecord<String, DecatonTaskRequest> record) {
         propagateCurrentTrace(record);
-        return inner.send(record);
+        return super.send(record);
     }
 
     @Override
     public Future<RecordMetadata> send(ProducerRecord<String, DecatonTaskRequest> record, Callback callback) {
         propagateCurrentTrace(record);
-        return inner.send(record, callback);
-    }
-
-    @Override
-    public void flush() {
-        inner.flush();
-    }
-
-    @Override
-    public List<PartitionInfo> partitionsFor(String topic) {
-        return inner.partitionsFor(topic);
-    }
-
-    @Override
-    public Map<MetricName, ? extends Metric> metrics() {
-        return inner.metrics();
-    }
-
-    @Override
-    public void close() {
-        inner.close();
-    }
-
-    @Override
-    public void close(Duration timeout) {
-        inner.close(timeout);
+        return super.send(record, callback);
     }
 }

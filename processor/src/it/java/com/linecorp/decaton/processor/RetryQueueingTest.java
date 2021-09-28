@@ -23,6 +23,8 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.junit.After;
@@ -131,6 +133,40 @@ public class RetryQueueingTest {
                                         .backoff(Duration.ofMillis(10))
                                         .build())
                 // If we retry tasks, there's no guarantee about ordering nor serial processing
+                .excludeSemantics(
+                        GuaranteeType.PROCESS_ORDERING,
+                        GuaranteeType.SERIAL_PROCESSING)
+                .customSemantics(new ProcessRetriedTask())
+                .build()
+                .run();
+    }
+
+    @Test(timeout = 30000)
+    public void testRetryQueuingOnAsyncProcessor() throws Exception {
+        ExecutorService executorService = Executors.newFixedThreadPool(16);
+        ProcessorTestSuite
+                .builder(rule)
+                .numTasks(1000)
+                .configureProcessorsBuilder(builder -> builder.thenProcess((ctx, task) -> {
+                    ctx.deferCompletion();
+                    executorService.execute(() -> {
+                        try {
+                            if (ctx.metadata().retryCount() == 0) {
+                                ctx.retry();
+                            } else {
+                                ctx.deferCompletion().complete();
+                            }
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                            throw new RuntimeException(e);
+                        }
+                    });
+
+                }))
+                .retryConfig(RetryConfig.builder()
+                                        .retryTopic(retryTopic)
+                                        .backoff(Duration.ofMillis(10))
+                                        .build())
                 .excludeSemantics(
                         GuaranteeType.PROCESS_ORDERING,
                         GuaranteeType.SERIAL_PROCESSING)
