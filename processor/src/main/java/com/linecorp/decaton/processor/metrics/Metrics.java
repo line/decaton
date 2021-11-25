@@ -25,6 +25,8 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
+import org.apache.kafka.clients.consumer.Consumer;
+
 import com.linecorp.decaton.processor.metrics.internal.AvailableTags;
 
 import io.micrometer.core.instrument.Counter;
@@ -33,6 +35,7 @@ import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.Meter.Id;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
+import io.micrometer.core.instrument.binder.kafka.KafkaClientMetrics;
 import io.micrometer.core.instrument.composite.CompositeMeterRegistry;
 import io.micrometer.core.instrument.config.MeterFilter;
 
@@ -99,6 +102,22 @@ public class Metrics {
     }
 
     public class SubscriptionMetrics extends AbstractMetrics {
+        KafkaClientMetrics kafkaClientMetrics;
+
+        public void bindClientMetrics(Consumer<String, byte[]> consumer) {
+            if (kafkaClientMetrics != null) {
+                closeClientMetrics();
+            }
+            kafkaClientMetrics = new KafkaClientMetrics(consumer, availableTags.subscriptionScope());
+            kafkaClientMetrics.bindTo(registry);
+        }
+
+        private void closeClientMetrics() {
+            if (kafkaClientMetrics != null) {
+                kafkaClientMetrics.close();
+            }
+        }
+
         private Timer processDuration(String section) {
             return meter(() -> Timer.builder("subscription.process.durations")
                                     .description(String.format(
@@ -118,6 +137,12 @@ public class Metrics {
         public final Timer handlePausesTime = processDuration("pause");
 
         public final Timer commitOffsetTime = processDuration("commit");
+
+        @Override
+        public void close() {
+            super.close();
+            closeClientMetrics();
+        }
     }
 
     public class TaskMetrics extends AbstractMetrics {

@@ -16,6 +16,8 @@
 
 package com.linecorp.decaton.testing;
 
+import static com.linecorp.decaton.processor.runtime.ProcessorProperties.CONFIG_BIND_CLIENT_METRICS;
+
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
@@ -25,6 +27,10 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
+import com.linecorp.decaton.processor.runtime.ProcessorProperties;
+import com.linecorp.decaton.processor.runtime.Property;
+import com.linecorp.decaton.processor.runtime.PropertySupplier;
+import com.linecorp.decaton.processor.runtime.StaticPropertySupplier;
 import com.linecorp.decaton.processor.runtime.SubscriptionStateListener;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -160,6 +166,7 @@ public class TestUtils {
 
         builderConfigurer.accept(builder);
         builder.consumerConfig(props)
+               .properties(StaticPropertySupplier.of(Property.ofStatic(CONFIG_BIND_CLIENT_METRICS, true)))
                .stateListener(outerStateListener);
         ProcessorSubscription subscription = builder.buildAndStart();
 
