@@ -111,34 +111,72 @@ subprojects {
                 }
                 publications {
                     mavenJava(MavenPublication) {
+                        artifactId = rootProject.name + '-' + project.name
+
+                        // Create a custom publication that ships shadow jar (along with few other jars) with
+                        // maven pom which properly declares necessary dependencies.
+                        // We can't simply do `from components.java`.
+                        // The java component contains non-shaded jar, so its jar doesn't contain reloated
+                        // protobuf-java.
+                        // We can't modify `artifacts` of java component either because it is prevented by
+                        // gradle: https://github.com/gradle/gradle/blob/8d6c7361264fdfbe75feb113501758c0deeca5f4/subprojects/maven/src/main/java/org/gradle/api/publish/maven/internal/publication/DefaultMavenPublication.java#L815
+                        // The shadow plugin provides `shadow` configuration, but all these dependencies are
+                        // mapped to "runtime" scope so just `components.shadow` doesn't work either.
+                        // Apparently there's no API for obtaining dependency list from one component and
+                        // bring it to another component, so customizing maven pom directly is the only option.
+                        artifacts = [artifact(source: shadowJar, classifier: null),
+                                     artifact(source: sourcesJar),
+                                     artifact(source: javadocJar)]
                         afterEvaluate {
-                            artifactId = rootProject.name + '-' + project.name
-
-                            // Overwrite `artifacts` to clear previously added artifact XX-shadow.jar by `from components.shadow`
-                            artifacts = [artifact(source: shadowJar, classifier: null), artifact(source: sourcesJar), artifact(source: javadocJar)]
-                            pom {
-                                name = 'Decaton'
-                                description = 'High throughput asynchronous task processing on Apache Kafka'
-                                url = 'https://github.com/line/decaton'
-
-                                scm {
-                                    url = 'git@github.com:line/decaton.git'
-                                    connection = 'scm:git:git@github.com:line/decaton.git'
-                                    developerConnection = 'scm:git:git@github.com:line/decaton.git'
+                            pom.withXml {
+                                def rootNode = asNode()
+                                def depListNode = null
+                                if (rootNode.dependencies) {
+                                    depListNode = rootNode.dependencies.get(0)
+                                } else {
+                                    depListNode = new Node(rootNode, 'dependencies')
                                 }
 
-                                licenses {
-                                    license {
-                                        name = 'The Apache License, Version 2.0'
-                                        url = 'https://www.apache.org/licenses/LICENSE-2.0'
+                                if (!shadeAllDependencies) {
+                                    def excludeDeps = new HashSet<>(project.configurations.shade.allDependencies)
+                                    for (config in [["api", "compile"], ["implementation", "runtime"]]) {
+                                        project.configurations.getByName(config[0]).allDependencies.each { dep ->
+                                            if (!excludeDeps.add(dep)) {
+                                                return;
+                                            }
+                                            def depNode = new Node(depListNode, 'dependency')
+                                            depNode.appendNode('groupId', dep.group)
+                                            def prefix = dep.group == 'com.linecorp.decaton' && !dep.name.startsWith('decaton-') ? 'decaton-' : ''
+                                            depNode.appendNode('artifactId', prefix + dep.name)
+                                            depNode.appendNode('version', dep.version)
+                                            depNode.appendNode('scope', config[1])
+                                        }
                                     }
                                 }
+                            }
+                        }
+                        pom {
+                            name = 'Decaton'
+                            description = 'High throughput asynchronous task processing on Apache Kafka'
+                            url = 'https://github.com/line/decaton'
 
-                                developers {
-                                    developer {
-                                        name = 'Decaton developers'
-                                        email = 'dl_oss_dev@linecorp.com'
-                                    }
+                            scm {
+                                url = 'git@github.com:line/decaton.git'
+                                connection = 'scm:git:git@github.com:line/decaton.git'
+                                developerConnection = 'scm:git:git@github.com:line/decaton.git'
+                            }
+
+                            licenses {
+                                license {
+                                    name = 'The Apache License, Version 2.0'
+                                    url = 'https://www.apache.org/licenses/LICENSE-2.0'
+                                }
+                            }
+
+                            developers {
+                                developer {
+                                    name = 'Decaton developers'
+                                    email = 'dl_oss_dev@linecorp.com'
                                 }
                             }
                         }
@@ -150,53 +188,55 @@ subprojects {
                 sign publishing.publications.mavenJava
             }
         }
+    }
 
-        shadowJar {
-            if (!shadeAllDependencies) {
-                // Shade only dependencies which are declared to be shaded explicitly.
-                // By this line, all dependencies declared with `compile` or `runtime` will be added as
-                // external dependencies and their classes aren't be merged into resulting shadow jar.
-                configurations = [project.configurations.shade]
-            }
+    shadowJar {
+        if (!shadeAllDependencies) {
+            // Shade only dependencies which are declared to be shaded explicitly.
+            // By this line, all dependencies declared with `compile` or `runtime` will be added as
+            // external dependencies and their classes aren't be merged into resulting shadow jar.
+            configurations = [project.configurations.shade]
+        }
 
-            archiveClassifier.set('shadow')
+        archiveClassifier.set('shadow')
+        afterEvaluate {
             if (relocatePb) {
                 // Relocate protobuf package prefixing unique identifier `com.linecorp.decaton`
                 relocate "com.google.protobuf.", "com.linecorp.decaton.com.google.protobuf."
             }
         }
-
-        tasks.withType(PublishToMavenRepository) {
-            onlyIf {
-                !publishOnlyLocal
-            }
-        }
-
-        task sourcesJar(type: Jar, dependsOn: classes) {
-            archiveClassifier.set('sources')
-            from sourceSets.main.allSource
-        }
-
-        task delombok(type: io.franzbecker.gradle.lombok.task.DelombokTask, dependsOn: compileJava) {
-            ext.outputDir = file("$buildDir/delombok")
-            outputs.dir(outputDir)
-            sourceSets.main.java.srcDirs.each {
-                inputs.dir(it)
-                args(it, "-d", outputDir)
-            }
-        }
-
-        javadoc {
-            dependsOn delombok
-            source = delombok.outputDir
-            options.encoding = 'UTF-8'
-            options.locale = 'en_US'
-        }
-
-        task javadocJar(type: Jar) {
-            archiveClassifier.set('javadoc')
-            from javadoc
-        }
-        build.dependsOn(javadoc)
     }
+
+    tasks.withType(PublishToMavenRepository) {
+        onlyIf {
+            !publishOnlyLocal
+        }
+    }
+
+    task sourcesJar(type: Jar, dependsOn: classes) {
+        archiveClassifier.set('sources')
+        from sourceSets.main.allSource
+    }
+
+    task delombok(type: io.franzbecker.gradle.lombok.task.DelombokTask, dependsOn: compileJava) {
+        ext.outputDir = file("$buildDir/delombok")
+        outputs.dir(outputDir)
+        sourceSets.main.java.srcDirs.each {
+            inputs.dir(it)
+            args(it, "-d", outputDir)
+        }
+    }
+
+    javadoc {
+        dependsOn delombok
+        source = delombok.outputDir
+        options.encoding = 'UTF-8'
+        options.locale = 'en_US'
+    }
+
+    task javadocJar(type: Jar) {
+        archiveClassifier.set('javadoc')
+        from javadoc
+    }
+    build.dependsOn(javadoc)
 }
