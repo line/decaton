@@ -18,12 +18,16 @@ package com.linecorp.decaton.testing;
 
 import static com.linecorp.decaton.processor.runtime.ProcessorProperties.CONFIG_BIND_CLIENT_METRICS;
 
+import java.time.Duration;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.LockSupport;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -68,6 +72,7 @@ public class TestUtils {
     }
 
     public static final String DEFAULT_GROUP_ID = "test-group";
+    public static final Duration DEFINITELY_TOO_SLOW = Duration.ofSeconds(20);
 
     /**
      * A helper to instantiate {@link DecatonClient} for producing protobuf tasks with preset configurations
@@ -122,7 +127,8 @@ public class TestUtils {
      * @return {@link ProcessorSubscription} instance which is already running with unique subscription id assigned
      */
     public static ProcessorSubscription subscription(String bootstrapServers,
-                                                     Consumer<SubscriptionBuilder> builderConfigurer) {
+                                                     Consumer<SubscriptionBuilder> builderConfigurer)
+            throws InterruptedException, TimeoutException {
         return subscription("subscription-" + sequence(),
                             bootstrapServers,
                             builderConfigurer);
@@ -139,7 +145,8 @@ public class TestUtils {
      */
     public static ProcessorSubscription subscription(String subscriptionId,
                                                      String bootstrapServers,
-                                                     Consumer<SubscriptionBuilder> builderConfigurer) {
+                                                     Consumer<SubscriptionBuilder> builderConfigurer)
+            throws InterruptedException, TimeoutException {
         AtomicReference<SubscriptionStateListener> stateListenerRef = new AtomicReference<>();
         CountDownLatch initializationLatch = new CountDownLatch(1);
         SubscriptionStateListener outerStateListener = state -> {
@@ -170,11 +177,8 @@ public class TestUtils {
                .stateListener(outerStateListener);
         ProcessorSubscription subscription = builder.buildAndStart();
 
-        try {
-            initializationLatch.await();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new RuntimeException(e);
+        if (!initializationLatch.await(DEFINITELY_TOO_SLOW.toMillis(), TimeUnit.MILLISECONDS)) {
+            throw new TimeoutException("Initialization did not complete within " + DEFINITELY_TOO_SLOW);
         }
         return subscription;
     }
@@ -185,7 +189,7 @@ public class TestUtils {
      * @param condition expected condition to be met
      */
     public static void awaitCondition(String message,
-                                      Supplier<Boolean> condition) {
+                                      BooleanSupplier condition) {
         awaitCondition(message, condition, Long.MAX_VALUE);
     }
 
@@ -196,20 +200,15 @@ public class TestUtils {
      * @param timeoutMillis max duration to wait
      */
     public static void awaitCondition(String message,
-                                      Supplier<Boolean> condition,
+                                      BooleanSupplier condition,
                                       long timeoutMillis) {
         long start = System.nanoTime();
-        while (!condition.get()) {
+        while (!condition.getAsBoolean()) {
             long elapsedMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start);
             if (elapsedMillis >= timeoutMillis) {
                 throw new AssertionError(message);
             }
-            try {
-                Thread.sleep(100L);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new RuntimeException(e);
-            }
+            LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(100));
         }
     }
 }
