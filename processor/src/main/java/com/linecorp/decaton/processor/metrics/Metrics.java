@@ -102,7 +102,7 @@ public class Metrics {
     }
 
     public class SubscriptionMetrics extends AbstractMetrics {
-        KafkaClientMetrics kafkaClientMetrics;
+        volatile KafkaClientMetrics kafkaClientMetrics;
 
         public void bindClientMetrics(Consumer<String, byte[]> consumer) {
             if (kafkaClientMetrics != null) {
@@ -115,6 +115,7 @@ public class Metrics {
         private void closeClientMetrics() {
             if (kafkaClientMetrics != null) {
                 kafkaClientMetrics.close();
+                kafkaClientMetrics = null;
             }
         }
 
