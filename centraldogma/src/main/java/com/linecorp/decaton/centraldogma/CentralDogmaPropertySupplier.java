@@ -16,11 +16,14 @@
 
 package com.linecorp.decaton.centraldogma;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,6 +44,7 @@ import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.Property;
 import com.linecorp.decaton.processor.runtime.PropertyDefinition;
 import com.linecorp.decaton.processor.runtime.PropertySupplier;
+import com.linecorp.decaton.processor.runtime.StaticPropertySupplier;
 
 /**
  * A {@link PropertySupplier} implementation with Central Dogma backend.
@@ -119,7 +123,7 @@ public class CentralDogmaPropertySupplier implements PropertySupplier, AutoClose
         try {
             JsonNode node = child.initialValueFuture().join().value(); //doesn't fail since it's a child watcher
             setValue(prop, node);
-        }  catch (RuntimeException e) {
+        } catch (RuntimeException e) {
             logger.warn("Failed to set initial value from CentralDogma for {}", definition.name(), e);
         }
 
@@ -145,19 +149,43 @@ public class CentralDogmaPropertySupplier implements PropertySupplier, AutoClose
         return new CentralDogmaPropertySupplier(centralDogma, project, repository, filename);
     }
 
+    public static CentralDogmaPropertySupplier register(CentralDogma centralDogma, String project,
+                                                        String repository, String filename,
+                                                        StaticPropertySupplier supplier) {
+        List<Property<?>> properties = defaultPropertiesAsList().stream().map(defaultProperty -> {
+            if (supplier.getProperty(defaultProperty.definition()).isPresent()) {
+                return supplier.getProperty(defaultProperty.definition()).get();
+            } else {
+                return defaultProperty;
+            }
+        }).collect(Collectors.toList());
+
+        createPropertyFile(centralDogma, project, repository, filename, properties);
+        return new CentralDogmaPropertySupplier(centralDogma, project, repository, filename);
+    }
+
     private static void createPropertyFile(CentralDogma centralDogma, String project,
                                            String repository, String fileName) {
+        createPropertyFile(centralDogma,
+                           project, repository, fileName, defaultPropertiesAsList());
+    }
+
+    private static void createPropertyFile(CentralDogma centralDogma, String project,
+                                           String repository, String fileName,
+                                           List<Property<?>> properties) {
         Revision baseRevision = normalizeRevision(centralDogma, project, repository, Revision.HEAD);
         boolean fileExists = fileExists(centralDogma, project, repository, fileName, baseRevision);
         long startedTime = System.currentTimeMillis();
         long remainingTime = remainingTime(PROPERTY_CREATION_TIMEOUT_MILLIS, startedTime);
+
+        JsonNode jsonNodeProperties = convertPropertyListToJsonNode(properties);
 
         while (!fileExists && remainingTime > 0) {
             try {
                 centralDogma.push(project, repository, baseRevision,
                                   String.format("[CentralDogmaPropertySupplier] Property file created: %s",
                                                 fileName),
-                                  Change.ofJsonUpsert(fileName, defaultProperties()))
+                                  Change.ofJsonUpsert(fileName, jsonNodeProperties))
                             .get(remainingTime, TimeUnit.MILLISECONDS);
                 logger.info("New property file registered on Central Dogma: {}/{}/{}",
                             project, repository, fileName);
@@ -224,6 +252,19 @@ public class CentralDogmaPropertySupplier implements PropertySupplier, AutoClose
         return totalTime - (System.currentTimeMillis() - startedTime);
     }
 
+    private static JsonNode convertPropertyListToJsonNode(List<Property<?>> properties) {
+        final ObjectNode propertiesObjectNode = objectMapper.createObjectNode();
+        properties.forEach(
+                property -> {
+                    propertiesObjectNode.set(
+                            property.definition().name(),
+                            objectMapper.valueToTree(property.value())
+                    );
+                }
+        );
+        return propertiesObjectNode;
+    }
+
     // visible for testing
     static JsonNode defaultProperties() {
         final ObjectNode properties = objectMapper.createObjectNode();
@@ -231,6 +272,15 @@ public class CentralDogmaPropertySupplier implements PropertySupplier, AutoClose
                 .forEach(definition -> properties.set(definition.name(),
                                                       objectMapper.valueToTree(definition.defaultValue()))
                 );
+
+        return properties;
+    }
+
+    // visible for testing
+    static List<Property<?>> defaultPropertiesAsList() {
+        List<Property<?>> properties = new ArrayList<>();
+        ProcessorProperties.PROPERTY_DEFINITIONS
+                .forEach(definition -> properties.add(new DynamicProperty(definition)));
 
         return properties;
     }
