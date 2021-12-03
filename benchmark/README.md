@@ -76,26 +76,7 @@ public class CustomRunner implements Runner {
 
 #### Build a shadowJar of the custom runner:
 
-build.gradle
-
-```groovy
-buildscript {
-    repositories {
-        jcenter()
-    }
-    dependencies {
-        classpath 'com.github.jengelman.gradle.plugins:shadow:5.1.0'
-    }
-}
-
-apply plugin: 'com.github.johnrengelman.shadow'
-```
-
-```sh
-cd /path/to/custom-runner
-
-./gradlew shadowJar
-```
+Build one using https://github.com/johnrengelman/shadow
 
 ### Run benchmark:
 
