@@ -16,7 +16,7 @@ $root_dir/gradlew --no-daemon clean benchmark:shadowJar
 
 function run_with_opts() {
     name=$1; shift
-    tmp="/tmp/${out_dir}-${name}-benchmark.json"
+    tmp="/tmp/decaton-cb-$$.json"
     $root_dir/benchmark/debm.sh \
         --runs 3 \
         --title "$rev-$name" \
