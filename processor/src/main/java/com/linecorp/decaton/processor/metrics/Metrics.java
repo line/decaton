@@ -105,9 +105,6 @@ public class Metrics {
         volatile KafkaClientMetrics kafkaClientMetrics;
 
         public void bindClientMetrics(Consumer<String, byte[]> consumer) {
-            if (kafkaClientMetrics != null) {
-                closeClientMetrics();
-            }
             kafkaClientMetrics = new KafkaClientMetrics(consumer, availableTags.subscriptionScope());
             kafkaClientMetrics.bindTo(registry);
         }
