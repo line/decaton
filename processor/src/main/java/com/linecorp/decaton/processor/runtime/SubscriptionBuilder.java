@@ -59,8 +59,8 @@ public class SubscriptionBuilder {
         presetRetryProducerConfig.put(ProducerConfig.LINGER_MS_CONFIG, "100");
     }
 
-    private final ProcessorProperties.Builder<ProcessorProperties> propertiesBuilder =
-            ProcessorProperties.builder();
+    @Setter(AccessLevel.NONE)
+    private ProcessorProperties.Builder<ProcessorProperties> propertiesBuilder;
 
     /**
      * A unique identifier for this subscription. This ID is used mainly for identifying logs, metrics and
@@ -93,6 +93,7 @@ public class SubscriptionBuilder {
 
     public SubscriptionBuilder(String subscriptionId) {
         this.subscriptionId = Objects.requireNonNull(subscriptionId, "subscriptionId");
+        propertiesBuilder = ProcessorProperties.builder();
     }
 
     public static SubscriptionBuilder newBuilder(String subscriptionId) {
@@ -110,9 +111,11 @@ public class SubscriptionBuilder {
      * @return updated instance of {@link SubscriptionBuilder}.
      */
     public SubscriptionBuilder properties(PropertySupplier... suppliers) {
+        ProcessorProperties.Builder<ProcessorProperties> builder = ProcessorProperties.builder();
         for (PropertySupplier supplier : suppliers) {
-            propertiesBuilder.setBySupplier(supplier);
+            builder.setBySupplier(supplier);
         }
+        propertiesBuilder = builder;
         return this;
     }
 
