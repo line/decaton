@@ -300,7 +300,7 @@ public class ProcessorTestSuite {
                         builder.enableRetry(retryConfigBuilder.build());
                     }
                     if (propertySuppliers != null) {
-                        builder.properties(propertySuppliers);
+                        builder.addProperties(propertySuppliers);
                     }
                     if (tracingProvider != null) {
                         builder.enableTracing(tracingProvider);

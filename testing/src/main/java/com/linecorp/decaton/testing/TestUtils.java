@@ -173,7 +173,7 @@ public class TestUtils {
 
         builderConfigurer.accept(builder);
         builder.consumerConfig(props)
-               .properties(StaticPropertySupplier.of(Property.ofStatic(CONFIG_BIND_CLIENT_METRICS, true)))
+               .addProperties(StaticPropertySupplier.of(Property.ofStatic(CONFIG_BIND_CLIENT_METRICS, true)))
                .stateListener(outerStateListener);
         ProcessorSubscription subscription = builder.buildAndStart();
 
