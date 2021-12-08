@@ -43,8 +43,7 @@ public class BatchingProcessor<T> implements DecatonProcessor<T> {
     int capacity;
     long maxRetryCount;
 
-    private final ConcurrentMap<String, BufferedTaskGroup> windowedTasks = new ConcurrentHashMap<>(64, 0.75f,
-                                                                                                   2);
+    private final ConcurrentMap<String, BufferedTaskGroup> windowedTasks = new ConcurrentHashMap<>();
     final ScheduledExecutorService scheduler = initScheduler();
 
     protected ScheduledExecutorService initScheduler() {
