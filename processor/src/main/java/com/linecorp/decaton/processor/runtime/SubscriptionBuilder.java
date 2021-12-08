@@ -110,13 +110,20 @@ public class SubscriptionBuilder {
      * @param suppliers {@link PropertySupplier} instances
      * @return updated instance of {@link SubscriptionBuilder}.
      */
-    public SubscriptionBuilder properties(PropertySupplier... suppliers) {
-        ProcessorProperties.Builder<ProcessorProperties> builder = ProcessorProperties.builder();
+    public SubscriptionBuilder addProperties(PropertySupplier... suppliers) {
         for (PropertySupplier supplier : suppliers) {
-            builder.setBySupplier(supplier);
+            propertiesBuilder.setBySupplier(supplier);
         }
-        propertiesBuilder = builder;
         return this;
+    }
+
+    /**
+     * Resets previous invocations of {@link #properties(PropertySupplier...)}
+     * and applies {@link #addProperties(PropertySupplier...)}.
+     */
+    public SubscriptionBuilder properties(PropertySupplier... suppliers) {
+        propertiesBuilder = ProcessorProperties.builder();
+        return addProperties(suppliers);
     }
 
     /**

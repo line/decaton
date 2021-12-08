@@ -49,7 +49,7 @@ public class CoreFunctionalityTest {
     public RandomRule randomRule = new RandomRule();
 
     @Test(timeout = 30000)
-    public void testProcessConcurrent() {
+    public void testProcessConcurrent() throws Exception {
         Random rand = randomRule.random();
         ProcessorTestSuite
                 .builder(rule)
@@ -65,7 +65,7 @@ public class CoreFunctionalityTest {
     }
 
     @Test(timeout = 30000)
-    public void testProcessConcurrent_PartitionScopeProcessor() {
+    public void testProcessConcurrent_PartitionScopeProcessor() throws Exception {
         Random rand = randomRule.random();
         ProcessorTestSuite
                 .builder(rule)
@@ -80,7 +80,7 @@ public class CoreFunctionalityTest {
     }
 
     @Test(timeout = 30000)
-    public void testProcessConcurrent_ThreadScopeProcessor() {
+    public void testProcessConcurrent_ThreadScopeProcessor() throws Exception {
         Random rand = randomRule.random();
         ProcessorTestSuite
                 .builder(rule)
@@ -95,7 +95,7 @@ public class CoreFunctionalityTest {
     }
 
     @Test(timeout = 30000)
-    public void testAsyncTaskCompletion() {
+    public void testAsyncTaskCompletion() throws Exception {
         ExecutorService executorService = Executors.newFixedThreadPool(16);
         Random rand = randomRule.random();
         ProcessorTestSuite
@@ -126,7 +126,7 @@ public class CoreFunctionalityTest {
      * heap pressure by holding entire ProcessingContext instance.
      */
     @Test(timeout = 30000)
-    public void testGetCompletionInstanceLater() {
+    public void testGetCompletionInstanceLater() throws Exception {
         ExecutorService executorService = Executors.newFixedThreadPool(16);
         Random rand = randomRule.random();
         ProcessorTestSuite
@@ -149,7 +149,7 @@ public class CoreFunctionalityTest {
     }
 
     @Test(timeout = 60000)
-    public void testSingleThreadProcessing() {
+    public void testSingleThreadProcessing() throws Exception {
         // Note that this processing semantics is not be considered as Decaton specification which users can rely on.
         // Rather, this is just a expected behavior based on current implementation when we set concurrency to 1.
         ProcessingGuarantee noDuplicates = new ProcessingGuarantee() {
@@ -189,7 +189,7 @@ public class CoreFunctionalityTest {
     }
 
     @Test(timeout = 30000)
-    public void testAsyncCompletionWithLeakAndTimeout() {
+    public void testAsyncCompletionWithLeakAndTimeout() throws Exception {
         Random rand = randomRule.random();
         ProcessorTestSuite
                 .builder(rule)
