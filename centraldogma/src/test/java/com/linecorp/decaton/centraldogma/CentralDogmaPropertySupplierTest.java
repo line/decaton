@@ -23,13 +23,16 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 import org.junit.Before;
 import org.junit.Rule;
@@ -45,9 +48,16 @@ import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 
 import com.linecorp.centraldogma.client.CentralDogma;
 import com.linecorp.centraldogma.client.Watcher;
+import com.linecorp.centraldogma.common.Change;
+import com.linecorp.centraldogma.common.PushResult;
 import com.linecorp.centraldogma.common.Query;
+import com.linecorp.centraldogma.common.Revision;
 import com.linecorp.decaton.processor.runtime.DynamicProperty;
+import com.linecorp.decaton.processor.runtime.ProcessorProperties;
+import com.linecorp.decaton.processor.runtime.Property;
 import com.linecorp.decaton.processor.runtime.PropertyDefinition;
+import com.linecorp.decaton.processor.runtime.PropertySupplier;
+import com.linecorp.decaton.processor.runtime.StaticPropertySupplier;
 
 public class CentralDogmaPropertySupplierTest {
     @Rule
@@ -86,7 +96,8 @@ public class CentralDogmaPropertySupplierTest {
     @Test
     @SuppressWarnings("unchecked")
     public void testWatcherSetup() {
-        when(rootWatcher.latestValue()).thenReturn(objectMapper.createObjectNode().put(LONG_PROPERTY.name(), 123L));
+        when(rootWatcher.latestValue()).thenReturn(
+                objectMapper.createObjectNode().put(LONG_PROPERTY.name(), 123L));
 
         Watcher<JsonNode> longPropertyWatcher = mock(Watcher.class);
         Watcher<JsonNode> listPropertyWatcher = mock(Watcher.class);
@@ -132,5 +143,107 @@ public class CentralDogmaPropertySupplierTest {
 
         PropertyDefinition<Object> missingProperty = PropertyDefinition.define("absent.value", Long.class);
         assertFalse(supplier.getProperty(missingProperty).isPresent());
+    }
+
+    @Test
+    public void testRegisterWithDefaultSettings() {
+        when(centralDogma.normalizeRevision(PROJECT_NAME, REPOSITORY_NAME, Revision.HEAD)).thenReturn(
+                CompletableFuture.completedFuture(Revision.HEAD)
+        );
+        when(centralDogma.listFiles(PROJECT_NAME, REPOSITORY_NAME, Revision.HEAD, FILENAME)).thenReturn(
+                CompletableFuture.completedFuture(Collections.emptyMap())
+        );
+        when(centralDogma.push(
+                PROJECT_NAME, REPOSITORY_NAME, Revision.HEAD,
+                String.format("[CentralDogmaPropertySupplier] Property file created: %s",
+                              FILENAME),
+                Change.ofJsonUpsert(FILENAME, defaultProperties()))
+        ).thenReturn(
+                CompletableFuture.completedFuture(
+                        new PushResult(Revision.HEAD, 1)
+                )
+        );
+
+        CentralDogmaPropertySupplier.register(centralDogma, PROJECT_NAME, REPOSITORY_NAME, FILENAME);
+
+        verify(centralDogma, times(1)).normalizeRevision(PROJECT_NAME, REPOSITORY_NAME, Revision.HEAD);
+        verify(centralDogma, times(1)).listFiles(PROJECT_NAME, REPOSITORY_NAME, Revision.HEAD, FILENAME);
+        verify(centralDogma, times(1)).push(PROJECT_NAME, REPOSITORY_NAME, Revision.HEAD,
+                                            String.format(
+                                                    "[CentralDogmaPropertySupplier] Property file created: %s",
+                                                    FILENAME),
+                                            Change.ofJsonUpsert(FILENAME, defaultProperties()));
+
+    }
+
+    @Test
+    public void testRegisterWithCustomizedSettings() {
+        final Integer settingForPartitionConcurrency = 188;
+        final Integer settingForMaxPendingRecords = 121212;
+
+        final PropertySupplier properties = StaticPropertySupplier.of(
+                Property.ofStatic(ProcessorProperties.CONFIG_IGNORE_KEYS),
+                Property.ofStatic(ProcessorProperties.CONFIG_PROCESSING_RATE),
+
+                // Customized User Settings
+                Property.ofStatic(
+                        ProcessorProperties.CONFIG_PARTITION_CONCURRENCY,
+                        settingForPartitionConcurrency
+                ),
+                Property.ofStatic(
+                        ProcessorProperties.CONFIG_MAX_PENDING_RECORDS,
+                        settingForMaxPendingRecords
+                ),
+
+                Property.ofStatic(ProcessorProperties.CONFIG_COMMIT_INTERVAL_MS),
+                Property.ofStatic(ProcessorProperties.CONFIG_GROUP_REBALANCE_TIMEOUT_MS),
+                Property.ofStatic(ProcessorProperties.CONFIG_SHUTDOWN_TIMEOUT_MS),
+                Property.ofStatic(ProcessorProperties.CONFIG_LOGGING_MDC_ENABLED),
+                Property.ofStatic(ProcessorProperties.CONFIG_DEFERRED_COMPLETE_TIMEOUT_MS)
+        );
+
+        final List<Property<?>> listProperties = CentralDogmaPropertySupplier
+                .defaultProperties()
+                .stream()
+                .map(
+                        defaultProperty -> properties
+                                .getProperty(defaultProperty.definition())
+                                .get()
+                ).collect(Collectors.toList());
+
+        final JsonNode jsonNodeProperties = CentralDogmaPropertySupplier
+                .convertPropertyListToJsonNode(listProperties);
+
+        when(centralDogma.normalizeRevision(PROJECT_NAME, REPOSITORY_NAME, Revision.HEAD)).thenReturn(
+                CompletableFuture.completedFuture(Revision.HEAD)
+        );
+        when(centralDogma.listFiles(PROJECT_NAME, REPOSITORY_NAME, Revision.HEAD, FILENAME)).thenReturn(
+                CompletableFuture.completedFuture(Collections.emptyMap())
+        );
+
+        when(centralDogma.push(
+                PROJECT_NAME, REPOSITORY_NAME, Revision.HEAD,
+                String.format("[CentralDogmaPropertySupplier] Property file created: %s", FILENAME),
+                Change.ofJsonUpsert(FILENAME, jsonNodeProperties))
+        ).thenReturn(
+                CompletableFuture.completedFuture(
+                        new PushResult(Revision.HEAD, 1)
+                )
+        );
+
+        CentralDogmaPropertySupplier.register(centralDogma, PROJECT_NAME, REPOSITORY_NAME, FILENAME,
+                                              properties);
+
+        verify(centralDogma, times(1)).normalizeRevision(PROJECT_NAME, REPOSITORY_NAME, Revision.HEAD);
+        verify(centralDogma, times(1)).listFiles(PROJECT_NAME, REPOSITORY_NAME, Revision.HEAD, FILENAME);
+        verify(centralDogma, times(1))
+                .push(PROJECT_NAME, REPOSITORY_NAME, Revision.HEAD,
+                      String.format("[CentralDogmaPropertySupplier] Property file created: %s", FILENAME),
+                      Change.ofJsonUpsert(FILENAME, jsonNodeProperties));
+    }
+
+    private static JsonNode defaultProperties() {
+        return CentralDogmaPropertySupplier.convertPropertyListToJsonNode(
+                CentralDogmaPropertySupplier.defaultProperties());
     }
 }
