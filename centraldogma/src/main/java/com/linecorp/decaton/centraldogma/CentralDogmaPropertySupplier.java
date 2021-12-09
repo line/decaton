@@ -151,7 +151,7 @@ public class CentralDogmaPropertySupplier implements PropertySupplier, AutoClose
     public static CentralDogmaPropertySupplier register(CentralDogma centralDogma, String project,
                                                         String repository, String filename,
                                                         PropertySupplier supplier) {
-        List<Property<?>> properties = defaultPropertiesAsList().stream().map(defaultProperty -> {
+        List<Property<?>> properties = defaultProperties().stream().map(defaultProperty -> {
             if (supplier.getProperty(defaultProperty.definition()).isPresent()) {
                 return supplier.getProperty(defaultProperty.definition()).get();
             } else {
@@ -166,7 +166,7 @@ public class CentralDogmaPropertySupplier implements PropertySupplier, AutoClose
     private static void createPropertyFile(CentralDogma centralDogma, String project,
                                            String repository, String fileName) {
         createPropertyFile(centralDogma,
-                           project, repository, fileName, defaultPropertiesAsList());
+                           project, repository, fileName, defaultProperties());
     }
 
     private static void createPropertyFile(CentralDogma centralDogma, String project,
@@ -251,7 +251,8 @@ public class CentralDogmaPropertySupplier implements PropertySupplier, AutoClose
         return totalTime - (System.currentTimeMillis() - startedTime);
     }
 
-    private static JsonNode convertPropertyListToJsonNode(List<Property<?>> properties) {
+    // visible for testing
+    static JsonNode convertPropertyListToJsonNode(List<Property<?>> properties) {
         final ObjectNode propertiesObjectNode = objectMapper.createObjectNode();
         properties.forEach(
                 property -> {
@@ -265,18 +266,7 @@ public class CentralDogmaPropertySupplier implements PropertySupplier, AutoClose
     }
 
     // visible for testing
-    static JsonNode defaultProperties() {
-        final ObjectNode properties = objectMapper.createObjectNode();
-        ProcessorProperties.PROPERTY_DEFINITIONS
-                .forEach(definition -> properties.set(definition.name(),
-                                                      objectMapper.valueToTree(definition.defaultValue()))
-                );
-
-        return properties;
-    }
-
-    // visible for testing
-    static List<Property<?>> defaultPropertiesAsList() {
+    static List<Property<?>> defaultProperties() {
         List<Property<?>> properties = new ArrayList<>();
         ProcessorProperties.PROPERTY_DEFINITIONS
                 .forEach(definition -> properties.add(new DynamicProperty(definition)));

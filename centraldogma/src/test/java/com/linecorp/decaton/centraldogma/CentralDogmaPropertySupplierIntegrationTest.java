@@ -55,6 +55,11 @@ public class CentralDogmaPropertySupplierIntegrationTest {
     private static final String REPOSITORY_NAME = "repo";
     private static final String FILENAME = "/subscription.json";
 
+    private JsonNode defaultProperties() {
+        return CentralDogmaPropertySupplier.convertPropertyListToJsonNode(
+                CentralDogmaPropertySupplier.defaultProperties());
+    }
+
     @Test(timeout = 50000)
     public void testCDIntegration() throws InterruptedException {
         CentralDogma client = centralDogmaRule.client();
@@ -131,7 +136,7 @@ public class CentralDogmaPropertySupplierIntegrationTest {
         Entry<JsonNode> prop = client.getFile(PROJECT_NAME, REPOSITORY_NAME,
                                               Revision.HEAD, Query.ofJson(FILENAME)).join();
 
-        assertEquals(CentralDogmaPropertySupplier.defaultProperties().asText(),
+        assertEquals(defaultProperties().asText(),
                      prop.content().asText());
     }
 
@@ -174,7 +179,7 @@ public class CentralDogmaPropertySupplierIntegrationTest {
             return i.callRealMethod();
         }).when(userA)
           .push(eq(PROJECT_NAME), eq(REPOSITORY_NAME), any(), any(),
-                eq(Change.ofJsonUpsert(FILENAME, CentralDogmaPropertySupplier.defaultProperties())));
+                eq(Change.ofJsonUpsert(FILENAME, defaultProperties())));
 
         ExecutorService service = Executors.newFixedThreadPool(2);
         service.submit(() -> CentralDogmaPropertySupplier
