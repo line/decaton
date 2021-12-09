@@ -44,7 +44,6 @@ import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.Property;
 import com.linecorp.decaton.processor.runtime.PropertyDefinition;
 import com.linecorp.decaton.processor.runtime.PropertySupplier;
-import com.linecorp.decaton.processor.runtime.StaticPropertySupplier;
 
 /**
  * A {@link PropertySupplier} implementation with Central Dogma backend.
@@ -151,7 +150,7 @@ public class CentralDogmaPropertySupplier implements PropertySupplier, AutoClose
 
     public static CentralDogmaPropertySupplier register(CentralDogma centralDogma, String project,
                                                         String repository, String filename,
-                                                        StaticPropertySupplier supplier) {
+                                                        PropertySupplier supplier) {
         List<Property<?>> properties = defaultPropertiesAsList().stream().map(defaultProperty -> {
             if (supplier.getProperty(defaultProperty.definition()).isPresent()) {
                 return supplier.getProperty(defaultProperty.definition()).get();
