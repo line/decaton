@@ -144,7 +144,7 @@ public class CentralDogmaPropertySupplier implements PropertySupplier, AutoClose
      */
     public static CentralDogmaPropertySupplier register(CentralDogma centralDogma, String project,
                                                         String repository, String filename) {
-        createPropertyFile(centralDogma, project, repository, filename, defaultProperties());
+        createPropertyFile(centralDogma, project, repository, filename, ProcessorProperties.defaultProperties());
         return new CentralDogmaPropertySupplier(centralDogma, project, repository, filename);
     }
 
@@ -160,7 +160,7 @@ public class CentralDogmaPropertySupplier implements PropertySupplier, AutoClose
     public static CentralDogmaPropertySupplier register(CentralDogma centralDogma, String project,
                                                         String repository, String filename,
                                                         PropertySupplier supplier) {
-        List<Property<?>> properties = defaultProperties().stream().map(defaultProperty -> {
+        List<Property<?>> properties = ProcessorProperties.defaultProperties().stream().map(defaultProperty -> {
             Optional<? extends Property<?>> prop = supplier.getProperty(defaultProperty.definition());
             if (prop.isPresent()) {
                 return prop.get();
@@ -267,14 +267,5 @@ public class CentralDogmaPropertySupplier implements PropertySupplier, AutoClose
                 }
         );
         return propertiesObjectNode;
-    }
-
-    // visible for testing
-    static List<Property<?>> defaultProperties() {
-        List<Property<?>> properties = new ArrayList<>();
-        ProcessorProperties.PROPERTY_DEFINITIONS
-                .forEach(definition -> properties.add(new DynamicProperty(definition)));
-
-        return properties;
     }
 }

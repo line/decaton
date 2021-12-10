@@ -16,6 +16,7 @@
 
 package com.linecorp.decaton.processor.runtime;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -217,5 +218,11 @@ public class ProcessorProperties extends AbstractDecatonProperties {
 
     public ProcessorProperties(Map<PropertyDefinition<?>, Property<?>> properties) {
         super(properties);
+    }
+
+    public static List<Property<?>> defaultProperties() {
+        List<Property<?>> properties = new ArrayList<>();
+        PROPERTY_DEFINITIONS.forEach(definition -> properties.add(new DynamicProperty(definition)));
+        return properties;
     }
 }

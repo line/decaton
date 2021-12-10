@@ -44,6 +44,7 @@ import com.linecorp.centraldogma.common.Query;
 import com.linecorp.centraldogma.common.Revision;
 import com.linecorp.centraldogma.internal.Jackson;
 import com.linecorp.centraldogma.testing.junit4.CentralDogmaRule;
+import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.Property;
 
 public class CentralDogmaPropertySupplierIntegrationTest {
@@ -57,7 +58,7 @@ public class CentralDogmaPropertySupplierIntegrationTest {
 
     private JsonNode defaultProperties() {
         return CentralDogmaPropertySupplier.convertPropertyListToJsonNode(
-                CentralDogmaPropertySupplier.defaultProperties());
+                ProcessorProperties.defaultProperties());
     }
 
     @Test(timeout = 50000)

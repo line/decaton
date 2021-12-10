@@ -202,7 +202,7 @@ public class CentralDogmaPropertySupplierTest {
                 Property.ofStatic(ProcessorProperties.CONFIG_DEFERRED_COMPLETE_TIMEOUT_MS)
         );
 
-        final List<Property<?>> listProperties = CentralDogmaPropertySupplier
+        final List<Property<?>> listProperties = ProcessorProperties
                 .defaultProperties()
                 .stream()
                 .map(
@@ -244,6 +244,6 @@ public class CentralDogmaPropertySupplierTest {
 
     private static JsonNode defaultProperties() {
         return CentralDogmaPropertySupplier.convertPropertyListToJsonNode(
-                CentralDogmaPropertySupplier.defaultProperties());
+                ProcessorProperties.defaultProperties());
     }
 }
