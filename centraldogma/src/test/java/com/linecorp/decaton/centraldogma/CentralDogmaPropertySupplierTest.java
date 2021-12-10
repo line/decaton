@@ -166,8 +166,6 @@ public class CentralDogmaPropertySupplierTest {
 
         CentralDogmaPropertySupplier.register(centralDogma, PROJECT_NAME, REPOSITORY_NAME, FILENAME);
 
-        verify(centralDogma, times(1)).normalizeRevision(PROJECT_NAME, REPOSITORY_NAME, Revision.HEAD);
-        verify(centralDogma, times(1)).listFiles(PROJECT_NAME, REPOSITORY_NAME, Revision.HEAD, FILENAME);
         verify(centralDogma, times(1)).push(PROJECT_NAME, REPOSITORY_NAME, Revision.HEAD,
                                             String.format(
                                                     "[CentralDogmaPropertySupplier] Property file created: %s",
@@ -234,8 +232,6 @@ public class CentralDogmaPropertySupplierTest {
         CentralDogmaPropertySupplier.register(centralDogma, PROJECT_NAME, REPOSITORY_NAME, FILENAME,
                                               properties);
 
-        verify(centralDogma, times(1)).normalizeRevision(PROJECT_NAME, REPOSITORY_NAME, Revision.HEAD);
-        verify(centralDogma, times(1)).listFiles(PROJECT_NAME, REPOSITORY_NAME, Revision.HEAD, FILENAME);
         verify(centralDogma, times(1))
                 .push(PROJECT_NAME, REPOSITORY_NAME, Revision.HEAD,
                       String.format("[CentralDogmaPropertySupplier] Property file created: %s", FILENAME),
