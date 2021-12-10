@@ -35,6 +35,10 @@ import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Warmup;
 
 import com.linecorp.decaton.processor.DeferredCompletion;
+import com.linecorp.decaton.processor.metrics.Metrics;
+import com.linecorp.decaton.processor.metrics.internal.AvailableTags;
+import com.linecorp.decaton.processor.runtime.internal.OffsetState;
+import com.linecorp.decaton.processor.runtime.internal.OffsetStateReaper;
 import com.linecorp.decaton.processor.runtime.internal.OutOfOrderCommitControl;
 
 /**
@@ -169,7 +173,11 @@ public class OutOfOrderCommitControlBenchmark {
     public static class BmStateV3 extends BmState<OutOfOrderCommitControl> {
         @Override
         OutOfOrderCommitControl createCommitControl() {
-            return new OutOfOrderCommitControl(topicPartition, CAPACITY);
+            OffsetStateReaper reaper = new OffsetStateReaper(
+                    Property.ofStatic(ProcessorProperties.CONFIG_DEFERRED_COMPLETE_TIMEOUT_MS),
+                    Metrics.withTags("subscription", "subsc", "topic", "topic", "partition", "1")
+                            .new CommitControlMetrics());
+            return new OutOfOrderCommitControl(topicPartition, CAPACITY, reaper);
         }
     }
 
@@ -185,9 +193,9 @@ public class OutOfOrderCommitControlBenchmark {
                     break;
                 }
                 noProgress = false;
-                DeferredCompletion completion = control.reportFetchedOffset(offset);
+                OffsetState offsetState = control.reportFetchedOffset(offset);
 
-                state.workers.execute(completion::complete);
+                state.workers.execute(offsetState.completion()::complete);
             }
             if (noProgress) {
                 Thread.yield();
