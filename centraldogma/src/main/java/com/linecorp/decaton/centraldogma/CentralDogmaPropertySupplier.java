@@ -144,7 +144,7 @@ public class CentralDogmaPropertySupplier implements PropertySupplier, AutoClose
      */
     public static CentralDogmaPropertySupplier register(CentralDogma centralDogma, String project,
                                                         String repository, String filename) {
-        createPropertyFile(centralDogma, project, repository, filename);
+        createPropertyFile(centralDogma, project, repository, filename, defaultProperties());
         return new CentralDogmaPropertySupplier(centralDogma, project, repository, filename);
     }
 
@@ -170,12 +170,6 @@ public class CentralDogmaPropertySupplier implements PropertySupplier, AutoClose
 
         createPropertyFile(centralDogma, project, repository, filename, properties);
         return new CentralDogmaPropertySupplier(centralDogma, project, repository, filename);
-    }
-
-    private static void createPropertyFile(CentralDogma centralDogma, String project,
-                                           String repository, String fileName) {
-        createPropertyFile(centralDogma,
-                           project, repository, fileName, defaultProperties());
     }
 
     private static void createPropertyFile(CentralDogma centralDogma, String project,
