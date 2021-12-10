@@ -148,6 +148,15 @@ public class CentralDogmaPropertySupplier implements PropertySupplier, AutoClose
         return new CentralDogmaPropertySupplier(centralDogma, project, repository, filename);
     }
 
+    /**
+     * Create a default property file if it doesn't exist on Central Dogma and
+     * return a {@link CentralDogmaPropertySupplier}.
+     * @param centralDogma a {@link CentralDogma} instance to use to access Central Dogma server.
+     * @param project the project name where the properties are placed.
+     * @param repository the repository name where the properties are placed.
+     * @param filename the name of the file containing properties as top-level fields.
+     * @param supplier user-customized settings for kafka-consumer.
+     */
     public static CentralDogmaPropertySupplier register(CentralDogma centralDogma, String project,
                                                         String repository, String filename,
                                                         PropertySupplier supplier) {
