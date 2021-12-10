@@ -176,8 +176,9 @@ public class CentralDogmaPropertySupplierTest {
 
     @Test
     public void testRegisterWithCustomizedSettings() {
-        final Integer settingForPartitionConcurrency = 188;
-        final Integer settingForMaxPendingRecords = 121212;
+        final int settingForPartitionConcurrency = 188;
+        final int settingForMaxPendingRecords = 121212;
+        final int whenCentralDogmaPushed = 111111;
 
         final PropertySupplier properties = StaticPropertySupplier.of(
                 Property.ofStatic(ProcessorProperties.CONFIG_IGNORE_KEYS),
@@ -225,7 +226,7 @@ public class CentralDogmaPropertySupplierTest {
                 Change.ofJsonUpsert(FILENAME, jsonNodeProperties))
         ).thenReturn(
                 CompletableFuture.completedFuture(
-                        new PushResult(Revision.HEAD, 1)
+                        new PushResult(Revision.HEAD, whenCentralDogmaPushed)
                 )
         );
 
