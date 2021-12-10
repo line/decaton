@@ -161,8 +161,9 @@ public class CentralDogmaPropertySupplier implements PropertySupplier, AutoClose
                                                         String repository, String filename,
                                                         PropertySupplier supplier) {
         List<Property<?>> properties = defaultProperties().stream().map(defaultProperty -> {
-            if (supplier.getProperty(defaultProperty.definition()).isPresent()) {
-                return supplier.getProperty(defaultProperty.definition()).get();
+            Optional<? extends Property<?>> prop = supplier.getProperty(defaultProperty.definition());
+            if (prop.isPresent()) {
+                return prop.get();
             } else {
                 return defaultProperty;
             }
