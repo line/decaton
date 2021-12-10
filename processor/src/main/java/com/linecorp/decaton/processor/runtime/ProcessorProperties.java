@@ -222,7 +222,7 @@ public class ProcessorProperties extends AbstractDecatonProperties {
 
     public static List<Property<?>> defaultProperties() {
         List<Property<?>> properties = new ArrayList<>();
-        PROPERTY_DEFINITIONS.forEach(definition -> properties.add(new DynamicProperty(definition)));
+        PROPERTY_DEFINITIONS.forEach(definition -> properties.add(Property.ofStatic(definition)));
         return properties;
     }
 }
