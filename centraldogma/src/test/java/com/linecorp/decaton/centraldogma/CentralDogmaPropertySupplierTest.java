@@ -21,6 +21,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
@@ -221,9 +222,9 @@ public class CentralDogmaPropertySupplierTest {
         );
 
         when(centralDogma.push(
-                PROJECT_NAME, REPOSITORY_NAME, Revision.HEAD,
-                String.format("[CentralDogmaPropertySupplier] Property file created: %s", FILENAME),
-                Change.ofJsonUpsert(FILENAME, jsonNodeProperties))
+                eq(PROJECT_NAME), eq(REPOSITORY_NAME), eq(Revision.HEAD),
+                any(String.class),
+                eq(Change.ofJsonUpsert(FILENAME, jsonNodeProperties)))
         ).thenReturn(
                 CompletableFuture.completedFuture(
                         new PushResult(Revision.HEAD, whenCentralDogmaPushed)
@@ -233,10 +234,10 @@ public class CentralDogmaPropertySupplierTest {
         CentralDogmaPropertySupplier.register(centralDogma, PROJECT_NAME, REPOSITORY_NAME, FILENAME,
                                               properties);
 
-        verify(centralDogma, times(1))
-                .push(PROJECT_NAME, REPOSITORY_NAME, Revision.HEAD,
-                      String.format("[CentralDogmaPropertySupplier] Property file created: %s", FILENAME),
-                      Change.ofJsonUpsert(FILENAME, jsonNodeProperties));
+        verify(centralDogma, times(1)).push(
+                eq(PROJECT_NAME), eq(REPOSITORY_NAME), eq(Revision.HEAD),
+                any(String.class),
+                eq(Change.ofJsonUpsert(FILENAME, jsonNodeProperties)));
     }
 
     private static JsonNode defaultProperties() {
