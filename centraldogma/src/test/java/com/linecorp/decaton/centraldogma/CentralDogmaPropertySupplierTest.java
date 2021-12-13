@@ -31,10 +31,12 @@ import static org.mockito.Mockito.when;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
+import org.graalvm.compiler.phases.common.PropagateDeoptimizeProbabilityPhase;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -208,9 +210,15 @@ public class CentralDogmaPropertySupplierTest {
                 .defaultProperties()
                 .stream()
                 .map(
-                        defaultProperty -> properties
-                                .getProperty(defaultProperty.definition())
-                                .get()
+                        defaultProperty -> {
+                            final Optional<? extends Property<?>> specified =properties
+                                    .getProperty(defaultProperty.definition());
+                            if (specified.isPresent()) {
+                                return specified.get();
+                            } else {
+                                return defaultProperty;
+                            }
+                        }
                 ).collect(Collectors.toList());
 
         final JsonNode jsonNodeProperties = CentralDogmaPropertySupplier
