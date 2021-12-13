@@ -155,7 +155,9 @@ public class CentralDogmaPropertySupplierTest {
                 CompletableFuture.completedFuture(Collections.emptyMap())
         );
         when(centralDogma.push(
-                eq(PROJECT_NAME), eq(REPOSITORY_NAME), eq(Revision.HEAD),
+                eq(PROJECT_NAME),
+                eq(REPOSITORY_NAME),
+                eq(Revision.HEAD),
                 any(String.class),
                 eq(Change.ofJsonUpsert(FILENAME, defaultProperties())))
         ).thenReturn(
@@ -222,7 +224,9 @@ public class CentralDogmaPropertySupplierTest {
         );
 
         when(centralDogma.push(
-                eq(PROJECT_NAME), eq(REPOSITORY_NAME), eq(Revision.HEAD),
+                eq(PROJECT_NAME),
+                eq(REPOSITORY_NAME),
+                eq(Revision.HEAD),
                 any(String.class),
                 eq(Change.ofJsonUpsert(FILENAME, jsonNodeProperties)))
         ).thenReturn(
@@ -235,9 +239,12 @@ public class CentralDogmaPropertySupplierTest {
                                               properties);
 
         verify(centralDogma, times(1)).push(
-                eq(PROJECT_NAME), eq(REPOSITORY_NAME), eq(Revision.HEAD),
+                eq(PROJECT_NAME),
+                eq(REPOSITORY_NAME),
+                eq(Revision.HEAD),
                 any(String.class),
-                eq(Change.ofJsonUpsert(FILENAME, jsonNodeProperties)));
+                eq(Change.ofJsonUpsert(FILENAME, jsonNodeProperties))
+        );
     }
 
     private static JsonNode defaultProperties() {
