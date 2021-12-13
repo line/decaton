@@ -220,6 +220,9 @@ public class ProcessorProperties extends AbstractDecatonProperties {
         super(properties);
     }
 
+    /**
+     * Returns a List of properties with default values.
+     */
     public static List<Property<?>> defaultProperties() {
         List<Property<?>> properties = new ArrayList<>();
         PROPERTY_DEFINITIONS.forEach(definition -> properties.add(Property.ofStatic(definition)));
