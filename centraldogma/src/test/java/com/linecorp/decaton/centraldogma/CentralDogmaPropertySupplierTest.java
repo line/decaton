@@ -211,11 +211,13 @@ public class CentralDogmaPropertySupplierTest {
                 .stream()
                 .map(
                         defaultProperty -> {
-                            final Optional<? extends Property<?>> specified =properties
+                            final Optional<? extends Property<?>> specified = properties
                                     .getProperty(defaultProperty.definition());
                             if (specified.isPresent()) {
                                 return specified.get();
                             } else {
+                                System.out.println(
+                                        "failed to get property for " + defaultProperty.definition().name());
                                 return defaultProperty;
                             }
                         }
