@@ -155,7 +155,7 @@ public class CentralDogmaPropertySupplier implements PropertySupplier, AutoClose
      * @param project the project name where the properties are placed.
      * @param repository the repository name where the properties are placed.
      * @param filename the name of the file containing properties as top-level fields.
-     * @param supplier user-customized settings for kafka-consumer.
+     * @param supplier a {@link PropertySupplier} which provides a set of properties with customized initial values.
      */
     public static CentralDogmaPropertySupplier register(CentralDogma centralDogma, String project,
                                                         String repository, String filename,
