@@ -155,10 +155,9 @@ public class CentralDogmaPropertySupplierTest {
                 CompletableFuture.completedFuture(Collections.emptyMap())
         );
         when(centralDogma.push(
-                PROJECT_NAME, REPOSITORY_NAME, Revision.HEAD,
-                String.format("[CentralDogmaPropertySupplier] Property file created: %s",
-                              FILENAME),
-                Change.ofJsonUpsert(FILENAME, defaultProperties()))
+                eq(PROJECT_NAME), eq(REPOSITORY_NAME), eq(Revision.HEAD),
+                any(String.class),
+                eq(Change.ofJsonUpsert(FILENAME, defaultProperties())))
         ).thenReturn(
                 CompletableFuture.completedFuture(
                         new PushResult(Revision.HEAD, 1)
@@ -166,12 +165,13 @@ public class CentralDogmaPropertySupplierTest {
         );
 
         CentralDogmaPropertySupplier.register(centralDogma, PROJECT_NAME, REPOSITORY_NAME, FILENAME);
-
-        verify(centralDogma, times(1)).push(PROJECT_NAME, REPOSITORY_NAME, Revision.HEAD,
-                                            String.format(
-                                                    "[CentralDogmaPropertySupplier] Property file created: %s",
-                                                    FILENAME),
-                                            Change.ofJsonUpsert(FILENAME, defaultProperties()));
+        verify(centralDogma, times(1)).push(
+                eq(PROJECT_NAME),
+                eq(REPOSITORY_NAME),
+                eq(Revision.HEAD),
+                any(String.class),
+                eq(Change.ofJsonUpsert(FILENAME, defaultProperties()))
+        );
 
     }
 
