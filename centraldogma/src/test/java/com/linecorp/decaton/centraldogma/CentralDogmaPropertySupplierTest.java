@@ -183,32 +183,36 @@ public class CentralDogmaPropertySupplierTest {
         final int settingForMaxPendingRecords = 121212;
         final int whenCentralDogmaPushed = 111111;
 
-        final PropertySupplier properties = StaticPropertySupplier.of(
-                Property.ofStatic(ProcessorProperties.CONFIG_IGNORE_KEYS),
-                Property.ofStatic(ProcessorProperties.CONFIG_PROCESSING_RATE),
+        List<Property<?>> properties = ProcessorProperties
+                .defaultProperties()
+                .stream()
+                .map(property -> {
+                    // Customized User Settings
+                    if (property.definition()
+                        == ProcessorProperties.CONFIG_PARTITION_CONCURRENCY) {
+                        return Property.ofStatic(
+                                ProcessorProperties.CONFIG_PARTITION_CONCURRENCY,
+                                settingForPartitionConcurrency
+                        );
+                    } else if (property.definition()
+                               == ProcessorProperties.CONFIG_MAX_PENDING_RECORDS) {
+                        return Property.ofStatic(
+                                ProcessorProperties.CONFIG_MAX_PENDING_RECORDS,
+                                settingForMaxPendingRecords
+                        );
+                    } else {
+                        return property;
+                    }
+                })
+                .collect(Collectors.toList());
 
-                // Customized User Settings
-                Property.ofStatic(
-                        ProcessorProperties.CONFIG_PARTITION_CONCURRENCY,
-                        settingForPartitionConcurrency
-                ),
-                Property.ofStatic(
-                        ProcessorProperties.CONFIG_MAX_PENDING_RECORDS,
-                        settingForMaxPendingRecords
-                ),
-
-                Property.ofStatic(ProcessorProperties.CONFIG_COMMIT_INTERVAL_MS),
-                Property.ofStatic(ProcessorProperties.CONFIG_GROUP_REBALANCE_TIMEOUT_MS),
-                Property.ofStatic(ProcessorProperties.CONFIG_SHUTDOWN_TIMEOUT_MS),
-                Property.ofStatic(ProcessorProperties.CONFIG_LOGGING_MDC_ENABLED),
-                Property.ofStatic(ProcessorProperties.CONFIG_DEFERRED_COMPLETE_TIMEOUT_MS)
-        );
+        final PropertySupplier supplier = StaticPropertySupplier.of(properties);
 
         final List<Property<?>> listProperties = ProcessorProperties
                 .defaultProperties()
                 .stream()
                 .map(
-                        defaultProperty -> properties.getProperty(defaultProperty.definition()).get()
+                        defaultProperty -> supplier.getProperty(defaultProperty.definition()).get()
                 ).collect(Collectors.toList());
 
         final JsonNode jsonNodeProperties = CentralDogmaPropertySupplier
@@ -233,8 +237,7 @@ public class CentralDogmaPropertySupplierTest {
                 )
         );
 
-        CentralDogmaPropertySupplier.register(centralDogma, PROJECT_NAME, REPOSITORY_NAME, FILENAME,
-                                              properties);
+        CentralDogmaPropertySupplier.register(centralDogma, PROJECT_NAME, REPOSITORY_NAME, FILENAME, supplier);
 
         verify(centralDogma, times(1)).push(
                 eq(PROJECT_NAME),
