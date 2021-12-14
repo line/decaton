@@ -31,6 +31,7 @@ import static org.mockito.Mockito.when;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -183,40 +184,34 @@ public class CentralDogmaPropertySupplierTest {
         final int settingForMaxPendingRecords = 121212;
         final int whenCentralDogmaPushed = 111111;
 
-        List<Property<?>> properties = ProcessorProperties
+        List<Property<?>> listPropertiesProvidedByUser = Arrays.asList(
+                Property.ofStatic(
+                        ProcessorProperties.CONFIG_PARTITION_CONCURRENCY,
+                        settingForPartitionConcurrency),
+                Property.ofStatic(
+                        ProcessorProperties.CONFIG_MAX_PENDING_RECORDS,
+                        settingForMaxPendingRecords
+                )
+        );
+        final PropertySupplier supplier = StaticPropertySupplier.of(listPropertiesProvidedByUser);
+
+        final List<Property<?>> listPropertiesForVerifyingMock = ProcessorProperties
                 .defaultProperties()
                 .stream()
                 .map(property -> {
-                    // Customized User Settings
-                    if (property.definition()
-                        == ProcessorProperties.CONFIG_PARTITION_CONCURRENCY) {
-                        return Property.ofStatic(
-                                ProcessorProperties.CONFIG_PARTITION_CONCURRENCY,
-                                settingForPartitionConcurrency
-                        );
-                    } else if (property.definition()
-                               == ProcessorProperties.CONFIG_MAX_PENDING_RECORDS) {
-                        return Property.ofStatic(
-                                ProcessorProperties.CONFIG_MAX_PENDING_RECORDS,
-                                settingForMaxPendingRecords
-                        );
+                    final Optional<Property<?>> element = listPropertiesProvidedByUser
+                            .stream()
+                            .filter(e -> e.definition() == property.definition())
+                            .findAny();
+                    if (element.isPresent()) {
+                        return element.get();
                     } else {
                         return property;
                     }
-                })
-                .collect(Collectors.toList());
-
-        final PropertySupplier supplier = StaticPropertySupplier.of(properties);
-
-        final List<Property<?>> listProperties = ProcessorProperties
-                .defaultProperties()
-                .stream()
-                .map(
-                        defaultProperty -> supplier.getProperty(defaultProperty.definition()).get()
-                ).collect(Collectors.toList());
+                }).collect(Collectors.toList());
 
         final JsonNode jsonNodeProperties = CentralDogmaPropertySupplier
-                .convertPropertyListToJsonNode(listProperties);
+                .convertPropertyListToJsonNode(listPropertiesForVerifyingMock);
 
         when(centralDogma.normalizeRevision(PROJECT_NAME, REPOSITORY_NAME, Revision.HEAD)).thenReturn(
                 CompletableFuture.completedFuture(Revision.HEAD)
