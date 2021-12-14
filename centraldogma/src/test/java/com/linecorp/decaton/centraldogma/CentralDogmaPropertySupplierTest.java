@@ -159,7 +159,7 @@ public class CentralDogmaPropertySupplierTest {
                 eq(REPOSITORY_NAME),
                 eq(Revision.HEAD),
                 any(String.class),
-                eq(Change.ofJsonUpsert(FILENAME, defaultProperties())))
+                eq(Change.ofJsonUpsert(FILENAME, defaultPropertiesAsJsonNode())))
         ).thenReturn(
                 CompletableFuture.completedFuture(
                         new PushResult(Revision.HEAD, 1)
@@ -172,7 +172,7 @@ public class CentralDogmaPropertySupplierTest {
                 eq(REPOSITORY_NAME),
                 eq(Revision.HEAD),
                 any(String.class),
-                eq(Change.ofJsonUpsert(FILENAME, defaultProperties()))
+                eq(Change.ofJsonUpsert(FILENAME, defaultPropertiesAsJsonNode()))
         );
 
     }
@@ -245,7 +245,7 @@ public class CentralDogmaPropertySupplierTest {
         );
     }
 
-    private static JsonNode defaultProperties() {
+    private static JsonNode defaultPropertiesAsJsonNode() {
         return CentralDogmaPropertySupplier.convertPropertyListToJsonNode(
                 ProcessorProperties.defaultProperties());
     }
