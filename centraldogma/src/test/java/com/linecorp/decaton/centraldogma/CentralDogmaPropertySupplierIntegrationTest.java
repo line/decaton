@@ -44,6 +44,7 @@ import com.linecorp.centraldogma.common.Query;
 import com.linecorp.centraldogma.common.Revision;
 import com.linecorp.centraldogma.internal.Jackson;
 import com.linecorp.centraldogma.testing.junit4.CentralDogmaRule;
+import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.Property;
 
 public class CentralDogmaPropertySupplierIntegrationTest {
@@ -54,6 +55,11 @@ public class CentralDogmaPropertySupplierIntegrationTest {
     private static final String PROJECT_NAME = "unit-test";
     private static final String REPOSITORY_NAME = "repo";
     private static final String FILENAME = "/subscription.json";
+
+    private JsonNode defaultProperties() {
+        return CentralDogmaPropertySupplier.convertPropertyListToJsonNode(
+                ProcessorProperties.defaultProperties());
+    }
 
     @Test(timeout = 50000)
     public void testCDIntegration() throws InterruptedException {
@@ -131,7 +137,7 @@ public class CentralDogmaPropertySupplierIntegrationTest {
         Entry<JsonNode> prop = client.getFile(PROJECT_NAME, REPOSITORY_NAME,
                                               Revision.HEAD, Query.ofJson(FILENAME)).join();
 
-        assertEquals(CentralDogmaPropertySupplier.defaultProperties().asText(),
+        assertEquals(defaultProperties().asText(),
                      prop.content().asText());
     }
 
@@ -174,7 +180,7 @@ public class CentralDogmaPropertySupplierIntegrationTest {
             return i.callRealMethod();
         }).when(userA)
           .push(eq(PROJECT_NAME), eq(REPOSITORY_NAME), any(), any(),
-                eq(Change.ofJsonUpsert(FILENAME, CentralDogmaPropertySupplier.defaultProperties())));
+                eq(Change.ofJsonUpsert(FILENAME, defaultProperties())));
 
         ExecutorService service = Executors.newFixedThreadPool(2);
         service.submit(() -> CentralDogmaPropertySupplier

@@ -16,11 +16,14 @@
 
 package com.linecorp.decaton.centraldogma;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -119,7 +122,7 @@ public class CentralDogmaPropertySupplier implements PropertySupplier, AutoClose
         try {
             JsonNode node = child.initialValueFuture().join().value(); //doesn't fail since it's a child watcher
             setValue(prop, node);
-        }  catch (RuntimeException e) {
+        } catch (RuntimeException e) {
             logger.warn("Failed to set initial value from CentralDogma for {}", definition.name(), e);
         }
 
@@ -141,23 +144,51 @@ public class CentralDogmaPropertySupplier implements PropertySupplier, AutoClose
      */
     public static CentralDogmaPropertySupplier register(CentralDogma centralDogma, String project,
                                                         String repository, String filename) {
-        createPropertyFile(centralDogma, project, repository, filename);
+        createPropertyFile(centralDogma, project, repository, filename, ProcessorProperties.defaultProperties());
+        return new CentralDogmaPropertySupplier(centralDogma, project, repository, filename);
+    }
+
+    /**
+     * Create a default property file if it doesn't exist on Central Dogma and
+     * return a {@link CentralDogmaPropertySupplier}.
+     * @param centralDogma a {@link CentralDogma} instance to use to access Central Dogma server.
+     * @param project the project name where the properties are placed.
+     * @param repository the repository name where the properties are placed.
+     * @param filename the name of the file containing properties as top-level fields.
+     * @param supplier a {@link PropertySupplier} which provides a set of properties with customized initial values.
+     */
+    public static CentralDogmaPropertySupplier register(CentralDogma centralDogma, String project,
+                                                        String repository, String filename,
+                                                        PropertySupplier supplier) {
+        List<Property<?>> properties = ProcessorProperties.defaultProperties().stream().map(defaultProperty -> {
+            Optional<? extends Property<?>> prop = supplier.getProperty(defaultProperty.definition());
+            if (prop.isPresent()) {
+                return prop.get();
+            } else {
+                return defaultProperty;
+            }
+        }).collect(Collectors.toList());
+
+        createPropertyFile(centralDogma, project, repository, filename, properties);
         return new CentralDogmaPropertySupplier(centralDogma, project, repository, filename);
     }
 
     private static void createPropertyFile(CentralDogma centralDogma, String project,
-                                           String repository, String fileName) {
+                                           String repository, String fileName,
+                                           List<Property<?>> properties) {
         Revision baseRevision = normalizeRevision(centralDogma, project, repository, Revision.HEAD);
         boolean fileExists = fileExists(centralDogma, project, repository, fileName, baseRevision);
         long startedTime = System.currentTimeMillis();
         long remainingTime = remainingTime(PROPERTY_CREATION_TIMEOUT_MILLIS, startedTime);
+
+        JsonNode jsonNodeProperties = convertPropertyListToJsonNode(properties);
 
         while (!fileExists && remainingTime > 0) {
             try {
                 centralDogma.push(project, repository, baseRevision,
                                   String.format("[CentralDogmaPropertySupplier] Property file created: %s",
                                                 fileName),
-                                  Change.ofJsonUpsert(fileName, defaultProperties()))
+                                  Change.ofJsonUpsert(fileName, jsonNodeProperties))
                             .get(remainingTime, TimeUnit.MILLISECONDS);
                 logger.info("New property file registered on Central Dogma: {}/{}/{}",
                             project, repository, fileName);
@@ -225,13 +256,16 @@ public class CentralDogmaPropertySupplier implements PropertySupplier, AutoClose
     }
 
     // visible for testing
-    static JsonNode defaultProperties() {
-        final ObjectNode properties = objectMapper.createObjectNode();
-        ProcessorProperties.PROPERTY_DEFINITIONS
-                .forEach(definition -> properties.set(definition.name(),
-                                                      objectMapper.valueToTree(definition.defaultValue()))
-                );
-
-        return properties;
+    static JsonNode convertPropertyListToJsonNode(List<Property<?>> properties) {
+        final ObjectNode propertiesObjectNode = objectMapper.createObjectNode();
+        properties.forEach(
+                property -> {
+                    propertiesObjectNode.set(
+                            property.definition().name(),
+                            objectMapper.valueToTree(property.value())
+                    );
+                }
+        );
+        return propertiesObjectNode;
     }
 }
