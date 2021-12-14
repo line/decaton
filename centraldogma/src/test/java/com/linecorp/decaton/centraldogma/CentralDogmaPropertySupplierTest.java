@@ -208,9 +208,7 @@ public class CentralDogmaPropertySupplierTest {
                 .defaultProperties()
                 .stream()
                 .map(
-                        defaultProperty -> properties
-                                .getProperty(defaultProperty.definition())
-                                .get()
+                        defaultProperty -> properties.getProperty(defaultProperty.definition()).get()
                 ).collect(Collectors.toList());
 
         final JsonNode jsonNodeProperties = CentralDogmaPropertySupplier
