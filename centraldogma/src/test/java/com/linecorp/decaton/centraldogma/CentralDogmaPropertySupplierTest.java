@@ -198,15 +198,12 @@ public class CentralDogmaPropertySupplierTest {
         final List<Property<?>> listPropertiesForVerifyingMock = ProcessorProperties
                 .defaultProperties()
                 .stream()
-                .map(property -> {
-                    final Optional<Property<?>> element = listPropertiesProvidedByUser
-                            .stream()
-                            .filter(e -> e.definition() == property.definition())
-                            .findAny();
-                    if (element.isPresent()) {
-                        return element.get();
+                .map(defaultProperty -> {
+                    Optional<? extends Property<?>> prop = supplier.getProperty(defaultProperty.definition());
+                    if (prop.isPresent()) {
+                        return prop.get();
                     } else {
-                        return property;
+                        return defaultProperty;
                     }
                 }).collect(Collectors.toList());
 
