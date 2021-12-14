@@ -140,6 +140,16 @@ public class ProcessorProperties extends AbstractDecatonProperties {
             PropertyDefinition.define("decaton.logging.mdc.enabled", Boolean.class, true,
                                       v -> v instanceof Boolean);
     /**
+     * Controls whether to enable or disable binding Micrometer's KafkaClientMetrics to decaton consumers.
+     * This is disabled for backwards compatiblity, but recommended if you rely on Micrometer
+     * since JMX metrics are deprecated. The downside is a possible increase in metrics count.
+     *
+     * Reloadable: no
+     */
+    public static final PropertyDefinition<Boolean> CONFIG_BIND_CLIENT_METRICS =
+            PropertyDefinition.define("decaton.client.metrics.micrometer.bound", Boolean.class, false,
+                                      v -> v instanceof Boolean);
+    /**
      * Control time to "timeout" a deferred completion.
      * Decaton allows {@link DecatonProcessor}s to defer completion of a task by calling
      * {@link ProcessingContext#deferCompletion()}, which is useful for processors which integrates with
@@ -175,6 +185,7 @@ public class ProcessorProperties extends AbstractDecatonProperties {
                     CONFIG_GROUP_REBALANCE_TIMEOUT_MS,
                     CONFIG_SHUTDOWN_TIMEOUT_MS,
                     CONFIG_LOGGING_MDC_ENABLED,
+                    CONFIG_BIND_CLIENT_METRICS,
                     CONFIG_DEFERRED_COMPLETE_TIMEOUT_MS));
 
     /**

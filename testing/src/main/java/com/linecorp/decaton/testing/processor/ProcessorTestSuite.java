@@ -16,6 +16,8 @@
 
 package com.linecorp.decaton.testing.processor;
 
+import static com.linecorp.decaton.testing.TestUtils.DEFINITELY_TOO_SLOW;
+
 import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -28,7 +30,10 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -211,14 +216,12 @@ public class ProcessorTestSuite {
      * Can be called only once per {@link ProcessorTestSuite} instance since
      * running the test possibly mutates {@link ProcessingGuarantee}'s internal state
      */
-    public void run() {
+    public void run() throws InterruptedException, ExecutionException, TimeoutException {
         String topic = rule.admin().createRandomTopic(NUM_PARTITIONS, 3);
         CountDownLatch rollingRestartLatch = new CountDownLatch(numTasks / 2);
-        Producer<String, DecatonTaskRequest> producer = null;
         ProcessorSubscription[] subscriptions = new ProcessorSubscription[NUM_SUBSCRIPTION_INSTANCES];
 
-        try {
-            producer = producerSupplier.apply(rule.bootstrapServers());
+        try (Producer<String, DecatonTaskRequest> producer = producerSupplier.apply(rule.bootstrapServers())) {
             ConcurrentMap<TopicPartition, Long> retryOffsets = new ConcurrentHashMap<>();
             for (int i = 0; i < subscriptions.length; i++) {
                 subscriptions[i] = newSubscription(i, topic, Optional.of(rollingRestartLatch), retryOffsets);
@@ -226,9 +229,11 @@ public class ProcessorTestSuite {
             CompletableFuture<Map<TopicPartition, Long>> produceFuture =
                     produceTasks(producer, topic, record -> semantics.forEach(g -> g.onProduce(record)));
 
-            rollingRestartLatch.await();
+            if (!rollingRestartLatch.await(DEFINITELY_TOO_SLOW.toMillis(), TimeUnit.MILLISECONDS)) {
+                throw new TimeoutException("Rolling restart did not complete within " + DEFINITELY_TOO_SLOW);
+            }
             performRollingRestart(subscriptions, i -> newSubscription(i, topic, Optional.empty(), retryOffsets));
-            awaitAllOffsetsCommitted(produceFuture.join());
+            awaitAllOffsetsCommitted(produceFuture.get(DEFINITELY_TOO_SLOW.toMillis(), TimeUnit.MILLISECONDS));
             if (!retryOffsets.isEmpty()) {
                 awaitAllOffsetsCommitted(retryOffsets);
             }
@@ -236,13 +241,17 @@ public class ProcessorTestSuite {
             for (ProcessingGuarantee guarantee : semantics) {
                 guarantee.doAssert();
             }
-        } catch (Exception e) {
-            throw new RuntimeException(e);
         } finally {
-            safeClose(producer);
             for (int i = 0; i < subscriptions.length; i++) {
                 log.info("Closing subscription-{} (threadId: {})", i, subscriptions[i].getId());
-                safeClose(subscriptions[i]);
+                subscriptions[i].initiateShutdown();
+            }
+            for (ProcessorSubscription subscription : subscriptions) {
+                try {
+                    subscription.awaitShutdown(DEFINITELY_TOO_SLOW);
+                } catch (TimeoutException | ExecutionException e) {
+                    log.warn("Failed to close the resource within {}", DEFINITELY_TOO_SLOW, e);
+                }
             }
             rule.admin().deleteTopics(true, topic);
         }
@@ -252,7 +261,7 @@ public class ProcessorTestSuite {
             int id,
             String topic,
             Optional<CountDownLatch> processLatch,
-            ConcurrentMap<TopicPartition, Long> retryOffsets) {
+            ConcurrentMap<TopicPartition, Long> retryOffsets) throws InterruptedException, TimeoutException {
         DecatonProcessor<TestTask> preprocessor = (context, task) -> {
             long startTime = System.nanoTime();
             try {
@@ -291,7 +300,7 @@ public class ProcessorTestSuite {
                         builder.enableRetry(retryConfigBuilder.build());
                     }
                     if (propertySuppliers != null) {
-                        builder.properties(propertySuppliers);
+                        builder.addProperties(propertySuppliers);
                     }
                     if (tracingProvider != null) {
                         builder.enableTracing(tracingProvider);
@@ -300,18 +309,25 @@ public class ProcessorTestSuite {
                 });
     }
 
+    @FunctionalInterface
+    interface SubscriptionConstructor {
+        ProcessorSubscription apply(int index) throws InterruptedException, TimeoutException;
+    }
+
     private static void performRollingRestart(ProcessorSubscription[] subscriptions,
-                                              Function<Integer, ProcessorSubscription> subscriptionConstructor)
-            throws Exception {
+                                              SubscriptionConstructor subscriptionConstructor)
+            throws ExecutionException, InterruptedException, TimeoutException {
         for (int i = 0; i < subscriptions.length; i++) {
             log.info("Start restarting subscription-{} (threadId: {})", i, subscriptions[i].getId());
-            subscriptions[i].close();
+            subscriptions[i].initiateShutdown();
+            subscriptions[i].awaitShutdown(DEFINITELY_TOO_SLOW);
             subscriptions[i] = subscriptionConstructor.apply(i);
             log.info("Finished restarting subscription-{} (threadId: {})", i, subscriptions[i].getId());
         }
     }
 
-    private void awaitAllOffsetsCommitted(Map<TopicPartition, Long> producedOffsets) {
+    private void awaitAllOffsetsCommitted(Map<TopicPartition, Long> producedOffsets)
+            throws InterruptedException {
         TestUtils.awaitCondition("all produced offsets should be committed", () -> {
             Map<TopicPartition, OffsetAndMetadata> committed =
                     rule.admin().consumerGroupOffsets(TestUtils.DEFAULT_GROUP_ID);
@@ -324,17 +340,7 @@ public class ProcessorTestSuite {
                 }
             }
             return true;
-        });
-    }
-
-    private static void safeClose(AutoCloseable resource) {
-        try {
-            if (resource != null) {
-                resource.close();
-            }
-        } catch (Exception e) {
-            log.warn("Failed to close the resource", e);
-        }
+        }, DEFINITELY_TOO_SLOW.toMillis());
     }
 
     /**

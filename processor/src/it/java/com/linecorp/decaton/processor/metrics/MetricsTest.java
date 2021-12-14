@@ -37,10 +37,10 @@ import com.linecorp.decaton.client.kafka.PrintableAsciiStringSerializer;
 import com.linecorp.decaton.client.kafka.ProtocolBuffersKafkaSerializer;
 import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
+import com.linecorp.decaton.processor.runtime.ProcessorSubscription;
 import com.linecorp.decaton.processor.runtime.ProcessorsBuilder;
 import com.linecorp.decaton.processor.runtime.Property;
 import com.linecorp.decaton.processor.runtime.StaticPropertySupplier;
-import com.linecorp.decaton.processor.runtime.ProcessorSubscription;
 import com.linecorp.decaton.protobuf.ProtocolBuffersDeserializer;
 import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
 import com.linecorp.decaton.protocol.Sample.HelloTask;
@@ -111,7 +111,7 @@ public class MetricsTest {
                                                              .consuming(topicName,
                                                                         new ProtocolBuffersDeserializer<>(HelloTask.parser()))
                                                              .thenProcess(processor))
-                                  .properties(StaticPropertySupplier.of(
+                                  .addProperties(StaticPropertySupplier.of(
                                           Property.ofStatic(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY, 1),
                                           Property.ofStatic(ProcessorProperties.CONFIG_MAX_PENDING_RECORDS, 1))));
              Producer<String, DecatonTaskRequest> producer =

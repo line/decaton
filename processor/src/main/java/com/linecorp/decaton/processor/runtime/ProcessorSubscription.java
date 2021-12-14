@@ -16,6 +16,8 @@
 
 package com.linecorp.decaton.processor.runtime;
 
+import static com.linecorp.decaton.processor.runtime.ProcessorProperties.CONFIG_BIND_CLIENT_METRICS;
+
 import java.time.Duration;
 import java.util.Collection;
 import java.util.Optional;
@@ -140,6 +142,9 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
         metrics = Metrics.withTags("subscription", scope.subscriptionId()).new SubscriptionMetrics();
 
         Consumer<String, byte[]> consumer = consumerSupplier.get();
+        if (props.get(CONFIG_BIND_CLIENT_METRICS).value()) {
+            metrics.bindClientMetrics(consumer);
+        }
         consumeManager = new ConsumeManager(consumer, contexts, new Handler(), metrics);
         commitManager = new CommitManager(
                 consumer, props.get(ProcessorProperties.CONFIG_COMMIT_INTERVAL_MS), contexts);

@@ -78,7 +78,7 @@ public class DecatonRunner implements Runner {
         subscription = SubscriptionBuilder
                 .newBuilder("decaton-benchmark")
                 .consumerConfig(props)
-                .properties(StaticPropertySupplier.of(properties))
+                .addProperties(StaticPropertySupplier.of(properties))
                 .processorsBuilder(
                         ProcessorsBuilder.consuming(config.topic(),
                                                     (TaskExtractor<Task>) bytes -> {

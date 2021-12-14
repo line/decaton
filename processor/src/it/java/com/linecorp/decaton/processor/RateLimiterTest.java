@@ -77,7 +77,7 @@ public class RateLimiterTest {
                                                              .consuming(topicName,
                                                                         new ProtocolBuffersDeserializer<>(HelloTask.parser()))
                                                              .thenProcess(processor))
-                                  .properties(StaticPropertySupplier.of(rateProp)));
+                                  .addProperties(StaticPropertySupplier.of(rateProp)));
              DecatonClient<HelloTask> client = TestUtils.client(topicName, rule.bootstrapServers())) {
 
             int count = 0;

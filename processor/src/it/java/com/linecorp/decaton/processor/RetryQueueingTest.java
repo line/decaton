@@ -221,7 +221,7 @@ public class RetryQueueingTest {
     }
 
     @Test(timeout = 60000)
-    public void testRetryQueueingFromCompletionTimeoutCallback() {
+    public void testRetryQueueingFromCompletionTimeoutCallback() throws Exception {
         ProcessorTestSuite
                 .builder(rule)
                 .numTasks(100)

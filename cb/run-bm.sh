@@ -16,6 +16,7 @@ $root_dir/gradlew --no-daemon clean benchmark:shadowJar
 
 function run_with_opts() {
     name=$1; shift
+    tmp=$(mktemp)
     $root_dir/benchmark/debm.sh \
         --runs 3 \
         --title "$rev-$name" \
@@ -30,7 +31,8 @@ function run_with_opts() {
         --warmup 10000000 \
         --param=decaton.max.pending.records=10000 \
         "$@" \
-        >$out_dir/$name-benchmark.json
+        >$tmp
+    mv $tmp $out_dir/$name-benchmark.json
 }
 
 $root_dir/cb/sysinfo.sh >$out_dir/sysinfo.json
