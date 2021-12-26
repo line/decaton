@@ -32,6 +32,12 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.experimental.Accessors;
 
+/**
+ * An Abstract {@link DecatonProcessor} to Batch several tasks of type T to List<T> and process them at once.
+ * e.g. when downstream-DB supports batching I/O (which often very efficient).
+ * Batch-flushing should be done in time-based and size-based.
+ * @param <T> type of task to batch
+ */
 abstract public class BatchingProcessor<T> implements DecatonProcessor<T> {
 
     private final ScheduledExecutorService executor;
@@ -54,23 +60,25 @@ abstract public class BatchingProcessor<T> implements DecatonProcessor<T> {
         }
     }
 
-    // visible for testing
-    BatchingProcessor(
-        long lingerMillis,
-        int capacity,
-        ScheduledThreadPoolExecutor scheduledExecutor
-    ) {
+    /**
+     * Instantiate {@link BatchingProcessor}.
+     * If you only need one limit, please set large enough value to another.
+     * @param lingerMillis time limit for this processor. On every lingerMillis milliseconds,
+     * tasks in past lingerMillis milliseconds are pushed to {@link BatchingTask#processBatchingTasks(List)}.
+     * @param capacity size limit for this processor. Every time tasks’size reaches capacity,
+     * tasks in past before reaching capacity are pushed to {@link BatchingTask#processBatchingTasks(List)}.
+     */
+    public BatchingProcessor(long lingerMillis, int capacity) {
         this.lingerMillis = lingerMillis;
         this.capacity = capacity;
 
-        if (scheduledExecutor == null) {
-            scheduledExecutor = new ScheduledThreadPoolExecutor(1, r -> {
+        ScheduledThreadPoolExecutor scheduledExecutor = new ScheduledThreadPoolExecutor(1, r -> {
                 Thread th = new Thread(r);
                 th.setName("Decaton" + BatchingProcessor.class.getSimpleName()
                            + '/' + System.identityHashCode(this));
                 return th;
             });
-        }
+
         // For faster shutdown cancel all pending flush on executor shutdown.
         // In fact for this purpose we have two options here:
         // A. Cancel all pending flush
@@ -86,14 +94,6 @@ abstract public class BatchingProcessor<T> implements DecatonProcessor<T> {
         scheduleFlush();
     }
 
-    public BatchingProcessor(long lingerMillis) {
-        this(lingerMillis, Integer.MAX_VALUE, null);
-    }
-
-    public BatchingProcessor(long lingerMillis, int capacity) {
-        this(lingerMillis, capacity, null);
-    }
-
     private void flush() {
         if (windowedTasks.isEmpty()) {
             return;
@@ -104,8 +104,7 @@ abstract public class BatchingProcessor<T> implements DecatonProcessor<T> {
         }
     }
 
-    // visible for testing
-    Runnable periodicallyFlushTask() {
+    private Runnable periodicallyFlushTask() {
         return () -> {
             flush();
             scheduleFlush();
