@@ -82,6 +82,8 @@ abstract public class BatchingProcessor<T> implements DecatonProcessor<T> {
         // we think taking A is much desirable behavior in most cases.
         scheduledExecutor.setExecuteExistingDelayedTasksAfterShutdownPolicy(false);
         executor = scheduledExecutor;
+
+        scheduleFlush();
     }
 
     public BatchingProcessor(long lingerMillis) {
@@ -103,22 +105,21 @@ abstract public class BatchingProcessor<T> implements DecatonProcessor<T> {
     }
 
     // visible for testing
-    Runnable flushTask() {
-        return this::flush;
+    Runnable periodicallyFlushTask() {
+        return () -> {
+            flush();
+            scheduleFlush();
+        };
     }
 
     private void scheduleFlush() {
-        executor.schedule(flushTask(), lingerMillis, TimeUnit.MILLISECONDS);
+        executor.schedule(periodicallyFlushTask(), lingerMillis, TimeUnit.MILLISECONDS);
     }
 
     @Override
     public void process(ProcessingContext<T> context, T task) throws InterruptedException {
         BatchingTask<T> newTask = new BatchingTask<>(context.deferCompletion(), context, task);
-        boolean isInitialTask = windowedTasks.isEmpty();
         windowedTasks.add(newTask);
-        if (isInitialTask) {
-            scheduleFlush();
-        }
         if (windowedTasks.size() >= this.capacity) {
             flush();
         }
