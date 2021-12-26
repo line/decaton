@@ -97,7 +97,8 @@ abstract public class BatchingProcessor<T> implements DecatonProcessor<T> {
             return;
         }
         synchronized (windowedTasks) {
-            processBatchingTasks(windowedTasks);
+            processBatchingTasks(new ArrayList<>(windowedTasks));
+            windowedTasks.clear();
         }
     }
 
