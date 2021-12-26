@@ -93,7 +93,7 @@ abstract public class BatchingProcessor<T> implements DecatonProcessor<T> {
     }
 
     private void flush() {
-        if (!windowedTasks.isEmpty()) {
+        if (windowedTasks.isEmpty()) {
             return;
         }
         synchronized (windowedTasks) {
