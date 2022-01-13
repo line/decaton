@@ -95,19 +95,19 @@ public abstract class BatchingProcessor<T> implements DecatonProcessor<T> {
         scheduleFlush();
     }
 
-    private void flush() {
-        if (windowedTasks.isEmpty()) {
+    private void flush(List<BatchingTask<T>> batchingTasks) {
+        if (batchingTasks.isEmpty()) {
             return;
         }
-        synchronized (windowedTasks) {
-            processBatchingTasks(new ArrayList<>(windowedTasks));
-            windowedTasks.clear();
-        }
+        processBatchingTasks(batchingTasks);
     }
 
     private Runnable periodicallyFlushTask() {
         return () -> {
-            flush();
+            synchronized (windowedTasks) {
+                flush(new ArrayList<>(windowedTasks));
+                windowedTasks.clear();
+            }
             scheduleFlush();
         };
     }
@@ -122,7 +122,12 @@ public abstract class BatchingProcessor<T> implements DecatonProcessor<T> {
         BatchingTask<T> newTask = new BatchingTask<>(context.deferCompletion(), context, task);
         windowedTasks.add(newTask);
         if (windowedTasks.size() >= this.capacity) {
-            flush();
+            synchronized (windowedTasks) {
+                List<BatchingTask<T>> currentBatchingTasks = new ArrayList<>(windowedTasks);
+                flush(currentBatchingTasks.subList(0, this.capacity));
+                windowedTasks.clear();
+                windowedTasks.addAll(currentBatchingTasks.subList(this.capacity, currentBatchingTasks.size()));
+            }
         }
     }
 
