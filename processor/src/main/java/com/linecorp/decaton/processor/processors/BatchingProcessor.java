@@ -38,7 +38,7 @@ import lombok.experimental.Accessors;
  * Batch-flushing should be done in time-based and size-based.
  * @param <T> type of task to batch
  */
-abstract public class BatchingProcessor<T> implements DecatonProcessor<T> {
+public abstract class BatchingProcessor<T> implements DecatonProcessor<T> {
 
     private final ScheduledExecutorService executor;
     private final List<BatchingTask<T>> windowedTasks = Collections.synchronizedList(new ArrayList<>());
