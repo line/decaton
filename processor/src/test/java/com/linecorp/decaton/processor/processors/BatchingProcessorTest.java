@@ -63,8 +63,8 @@ public class BatchingProcessorTest {
             @Override
             void processBatchingTasks(List<BatchingTask<HelloTask>> batchingTasks) {
                 batchingTasks.forEach(batchingTask -> {
-                    processedTasks.add(batchingTask.task);
-                    batchingTask.completion.complete();
+                    processedTasks.add(batchingTask.task());
+                    batchingTask.completion().complete();
                 });
             }
         };
