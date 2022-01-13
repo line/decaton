@@ -17,13 +17,17 @@
 package com.linecorp.decaton.processor.processors;
 
 import static org.junit.Assert.assertEquals;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.internal.verification.VerificationModeFactory.times;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 
 import org.junit.Before;
 import org.junit.Rule;
@@ -72,24 +76,33 @@ public class BatchingProcessorTest {
 
     @Test(timeout = 5000)
     public void testLingerLimit() throws InterruptedException {
-        long lingerMs = 500;
-        BatchingProcessor<HelloTask> processor = buildProcessor(lingerMs, Integer.MAX_VALUE);
+        long lingerMs = 1000;
+        BatchingProcessor<HelloTask> processor = spy(buildProcessor(lingerMs, Integer.MAX_VALUE));
+        CountDownLatch waitFlush = new CountDownLatch(1);
+
+        doAnswer(invocation -> {
+            Runnable original = (Runnable) invocation.callRealMethod();
+            return (Runnable) () -> {
+                try {
+                    waitFlush.await();
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+                original.run();
+            };
+        }).when(processor).scheduleFlush();
 
         HelloTask task1 = buildHelloTask("one", 1);
         HelloTask task2 = buildHelloTask("two", 2);
-        HelloTask task3 = buildHelloTask("three", 3);
-        HelloTask task4 = buildHelloTask("four", 4);
 
         processor.process(context, task1);
         processor.process(context, task2);
+        waitFlush.countDown();
+        assertEquals(Collections.emptyList(), processedTasks);
         Thread.sleep(lingerMs * 2); // doubling just to make sure flush completed in background
-        processor.process(context, task3);
         assertEquals(Arrays.asList(task1, task2), processedTasks);
-        Thread.sleep(lingerMs * 2); // doubling just to make sure flush completed in background
-        processor.process(context, task4);
-        assertEquals(Arrays.asList(task1, task2, task3), processedTasks);
 
-        verify(context, times(4)).deferCompletion();
+        verify(context, times(2)).deferCompletion();
         verify(completion, times(processedTasks.size())).complete();
     }
 
