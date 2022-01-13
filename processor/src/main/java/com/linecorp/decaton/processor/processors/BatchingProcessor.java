@@ -74,11 +74,11 @@ public abstract class BatchingProcessor<T> implements DecatonProcessor<T> {
         this.capacity = capacity;
 
         ScheduledThreadPoolExecutor scheduledExecutor = new ScheduledThreadPoolExecutor(1, r -> {
-                Thread th = new Thread(r);
-                th.setName("Decaton" + BatchingProcessor.class.getSimpleName()
-                           + '/' + System.identityHashCode(this));
-                return th;
-            });
+            Thread th = new Thread(r);
+            th.setName("Decaton" + BatchingProcessor.class.getSimpleName()
+                       + '/' + System.identityHashCode(this));
+            return th;
+        });
 
         // For faster shutdown cancel all pending flush on executor shutdown.
         // In fact for this purpose we have two options here:
