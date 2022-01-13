@@ -68,7 +68,7 @@ public abstract class BatchingProcessor<T> implements DecatonProcessor<T> {
      * @param capacity size limit for this processor. Every time tasks’size reaches capacity,
      * tasks in past before reaching capacity are pushed to {@link BatchingTask#processBatchingTasks(List)}.
      */
-    public BatchingProcessor(long lingerMillis, int capacity) {
+    protected BatchingProcessor(long lingerMillis, int capacity) {
         this.lingerMillis = lingerMillis;
         this.capacity = capacity;
 
