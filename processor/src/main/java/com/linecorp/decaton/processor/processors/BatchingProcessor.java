@@ -33,8 +33,8 @@ import lombok.Getter;
 import lombok.experimental.Accessors;
 
 /**
- * An Abstract {@link DecatonProcessor} to Batch several tasks of type T to List<T> and process them at once.
- * e.g. when downstream-DB supports batching I/O (which often very efficient).
+ * An Abstract {@link DecatonProcessor} to Batch several tasks of type {@code T} to {@code List<T>}
+ * and process them at once. e.g. when downstream-DB supports batching I/O (which often very efficient).
  * Batch-flushing should be done in time-based and size-based.
  * @param <T> type of task to batch
  */
