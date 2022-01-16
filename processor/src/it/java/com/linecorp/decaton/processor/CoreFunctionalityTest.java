@@ -181,7 +181,8 @@ public class CoreFunctionalityTest {
                     Thread.sleep(rand.nextInt(10));
                 }))
                 .propertySupplier(StaticPropertySupplier.of(
-                        Property.ofStatic(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY, 1)
+                        Property.ofStatic(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY, 1),
+                        Property.ofStatic(ProcessorProperties.CONFIG_MAX_PENDING_RECORDS, 100)
                 ))
                 .customSemantics(noDuplicates)
                 .build()
