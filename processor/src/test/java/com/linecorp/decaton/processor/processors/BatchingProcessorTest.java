@@ -61,7 +61,7 @@ public class BatchingProcessorTest {
     private BatchingProcessor<HelloTask> buildProcessor(long lingerMs, int capacity) {
         return new BatchingProcessor<HelloTask>(lingerMs, capacity) {
             @Override
-            void processBatchingTasks(List<BatchingTask<HelloTask>> batchingTasks) {
+            protected void processBatchingTasks(List<BatchingTask<HelloTask>> batchingTasks) {
                 batchingTasks.forEach(batchingTask -> {
                     processedTasks.add(batchingTask.task());
                     batchingTask.completion().complete();

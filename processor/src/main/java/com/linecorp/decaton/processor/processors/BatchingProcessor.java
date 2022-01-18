@@ -140,5 +140,5 @@ public abstract class BatchingProcessor<T> implements DecatonProcessor<T> {
      * *MUST* call {@link BatchingTask#completion}'s {@link DeferredCompletion#complete()} or
      * {@link BatchingTask#context}'s {@link ProcessingContext#retry()} method.
      */
-    abstract void processBatchingTasks(List<BatchingTask<T>> batchingTasks);
+    protected abstract void processBatchingTasks(List<BatchingTask<T>> batchingTasks);
 }
