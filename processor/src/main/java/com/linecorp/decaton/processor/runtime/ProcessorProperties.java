@@ -83,7 +83,7 @@ public class ProcessorProperties extends AbstractDecatonProperties {
      * Reloadable: no
      */
     public static final PropertyDefinition<Integer> CONFIG_MAX_PENDING_RECORDS =
-            PropertyDefinition.define("decaton.max.pending.records", Integer.class, 100,
+            PropertyDefinition.define("decaton.max.pending.records", Integer.class, 10_000,
                                       v -> v instanceof Integer && (Integer) v > 0);
     /**
      * Interval in milliseconds to put in between offset commits.
