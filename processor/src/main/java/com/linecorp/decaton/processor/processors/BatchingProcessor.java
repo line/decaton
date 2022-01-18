@@ -112,8 +112,7 @@ public abstract class BatchingProcessor<T> implements DecatonProcessor<T> {
         };
     }
 
-    // visible for testing
-    protected void scheduleFlush() {
+    private void scheduleFlush() {
         executor.schedule(periodicallyFlushTask(), lingerMillis, TimeUnit.MILLISECONDS);
     }
 
