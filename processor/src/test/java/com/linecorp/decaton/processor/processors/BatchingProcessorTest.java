@@ -25,6 +25,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
+
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -62,10 +64,10 @@ public class BatchingProcessorTest {
         return new BatchingProcessor<HelloTask>(lingerMs, capacity) {
             @Override
             protected void processBatchingTasks(List<BatchingTask<HelloTask>> batchingTasks) {
-                batchingTasks.forEach(batchingTask -> {
-                    processedTasks.add(batchingTask.task());
-                    batchingTask.completion().complete();
-                });
+                List<HelloTask> helloTasks =
+                    batchingTasks.stream().map(BatchingTask::task).collect(Collectors.toList());
+                processedTasks.addAll(helloTasks);
+                batchingTasks.forEach(batchingTask -> batchingTask.completion().complete());
             }
         };
     }
@@ -78,38 +80,40 @@ public class BatchingProcessorTest {
         HelloTask task1 = buildHelloTask("one", 1);
         processor.process(context, task1);
 
-        int maxLoopCount = 5;
-        for (int i = 0; i < maxLoopCount; i++) {
-            if (!processedTasks.isEmpty()) {
-                break;
-            }
-            Thread.sleep(lingerMs);
-        }
+        waitToProcessFirstBatch();
 
         assertEquals(Collections.singletonList(task1), processedTasks);
         verify(context, times(1)).deferCompletion();
         verify(completion, times(1)).complete();
     }
 
-    @Test(timeout = 5000)
+    @Test
     public void testCapacityLimit() throws InterruptedException {
         BatchingProcessor<HelloTask> processor = buildProcessor(Long.MAX_VALUE, 2);
 
         HelloTask task1 = buildHelloTask("one", 1);
         HelloTask task2 = buildHelloTask("two", 2);
         HelloTask task3 = buildHelloTask("three", 3);
-        HelloTask task4 = buildHelloTask("four", 4);
-        HelloTask task5 = buildHelloTask("five", 5);
 
         processor.process(context, task1);
         processor.process(context, task2);
         processor.process(context, task3);
-        assertEquals(Arrays.asList(task1, task2), processedTasks);
-        processor.process(context, task4);
-        processor.process(context, task5);
-        assertEquals(Arrays.asList(task1, task2, task3, task4), processedTasks);
 
-        verify(context, times(5)).deferCompletion();
+        waitToProcessFirstBatch();
+
+        assertEquals(new ArrayList<>(Arrays.asList(task1, task2)), processedTasks);
+        verify(context, times(3)).deferCompletion();
         verify(completion, times(processedTasks.size())).complete();
+    }
+
+    private void waitToProcessFirstBatch() throws InterruptedException {
+        int maxLoopCount = 5;
+        int sleepMillis = 1000;
+        for (int i = 0; i < maxLoopCount; i++) {
+            if (!processedTasks.isEmpty()) {
+                break;
+            }
+            Thread.sleep(sleepMillis);
+        }
     }
 }

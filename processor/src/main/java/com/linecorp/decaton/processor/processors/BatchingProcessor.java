@@ -17,7 +17,6 @@
 package com.linecorp.decaton.processor.processors;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
@@ -40,7 +39,7 @@ import lombok.experimental.Accessors;
 public abstract class BatchingProcessor<T> implements DecatonProcessor<T> {
 
     private final ScheduledExecutorService executor;
-    private final List<BatchingTask<T>> windowedTasks = Collections.synchronizedList(new ArrayList<>());
+    private List<BatchingTask<T>> currentBatch = new ArrayList<>();
     private final long lingerMillis;
     private final int capacity;
 
@@ -95,38 +94,36 @@ public abstract class BatchingProcessor<T> implements DecatonProcessor<T> {
         scheduleFlush();
     }
 
-    private void flush(List<BatchingTask<T>> batchingTasks) {
-        if (batchingTasks.isEmpty()) {
-            return;
-        }
-        processBatchingTasks(batchingTasks);
-    }
-
-    private Runnable periodicallyFlushTask() {
-        return () -> {
-            synchronized (windowedTasks) {
-                flush(new ArrayList<>(windowedTasks));
-                windowedTasks.clear();
+    private void periodicallyFlushTask() {
+        final List<BatchingTask<T>> batch;
+        synchronized (this) {
+            if (!currentBatch.isEmpty()) {
+                batch = currentBatch;
+                currentBatch = new ArrayList<>();
+            } else {
+                batch = null;
             }
-            scheduleFlush();
-        };
+        }
+        if (batch != null) {
+            processBatchingTasks(batch);
+        }
+        scheduleFlush();
     }
 
     private void scheduleFlush() {
-        executor.schedule(periodicallyFlushTask(), lingerMillis, TimeUnit.MILLISECONDS);
+        executor.schedule(this::periodicallyFlushTask, lingerMillis, TimeUnit.MILLISECONDS);
     }
 
     @Override
     public void process(ProcessingContext<T> context, T task) throws InterruptedException {
-        BatchingTask<T> newTask = new BatchingTask<>(context.deferCompletion(), context, task);
-        windowedTasks.add(newTask);
-        if (windowedTasks.size() >= this.capacity) {
-            synchronized (windowedTasks) {
-                List<BatchingTask<T>> currentBatchingTasks = new ArrayList<>(windowedTasks);
-                flush(currentBatchingTasks.subList(0, this.capacity));
-                windowedTasks.clear();
-                windowedTasks.addAll(currentBatchingTasks.subList(this.capacity, currentBatchingTasks.size()));
+        synchronized (this) {
+            if (currentBatch.size() >= this.capacity) {
+                final List<BatchingTask<T>> batch = currentBatch;
+                executor.submit(() -> processBatchingTasks(batch));
+                currentBatch = new ArrayList<>();
             }
+            BatchingTask<T> newTask = new BatchingTask<>(context.deferCompletion(), context, task);
+            currentBatch.add(newTask);
         }
     }
 
