@@ -17,6 +17,7 @@
 package com.linecorp.decaton.processor.processors;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
@@ -40,7 +41,7 @@ import lombok.experimental.Accessors;
 public abstract class BatchingProcessor<T> implements DecatonProcessor<T> {
 
     private final ScheduledExecutorService executor;
-    private List<BatchingTask<T>> currentBatch = new ArrayList<>();
+    private List<BatchingTask<T>> currentBatch = Collections.synchronizedList(new ArrayList<>());
     private final long lingerMillis;
     private final int capacity;
 
