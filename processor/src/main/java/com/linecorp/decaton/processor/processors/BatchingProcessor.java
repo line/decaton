@@ -27,6 +27,7 @@ import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.DeferredCompletion;
 import com.linecorp.decaton.processor.ProcessingContext;
 import com.linecorp.decaton.processor.Completion;
+import com.linecorp.decaton.processor.runtime.internal.Utils;
 
 import lombok.RequiredArgsConstructor;
 import lombok.Value;
@@ -66,12 +67,12 @@ public abstract class BatchingProcessor<T> implements DecatonProcessor<T> {
         this.lingerMillis = lingerMillis;
         this.capacity = capacity;
 
-        ScheduledThreadPoolExecutor scheduledExecutor = new ScheduledThreadPoolExecutor(1, r -> {
-            Thread th = new Thread(r);
-            th.setName("Decaton" + BatchingProcessor.class.getSimpleName()
-                       + '/' + System.identityHashCode(this));
-            return th;
-        });
+        ScheduledThreadPoolExecutor scheduledExecutor = new ScheduledThreadPoolExecutor(
+            1,
+            Utils.namedThreadFactory(
+                "Decaton" + BatchingProcessor.class.getSimpleName() + '/' + System.identityHashCode(this)
+            )
+        );
 
         // For faster shutdown cancel all pending flush on executor shutdown.
         // In fact for this purpose we have two options here:
