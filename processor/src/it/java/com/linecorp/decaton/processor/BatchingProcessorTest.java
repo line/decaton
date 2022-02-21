@@ -39,7 +39,7 @@ public class BatchingProcessorTest {
     public RandomRule randomRule = new RandomRule();
 
     @Test(timeout = 30000)
-    public void testBatchingProcessor_lingerMillis() {
+    public void testBatchingProcessor_lingerMillis() throws Exception {
         Random rand = randomRule.random();
         ProcessorTestSuite
             .builder(rule)
@@ -67,7 +67,7 @@ public class BatchingProcessorTest {
 
     // TODO: Fix test or test's target. This test does not succeed.
 //    @Test(timeout = 30000)
-//    public void testBatchingProcessor_capacity() {
+//    public void testBatchingProcessor_capacity() throws Exception {
 //        Random rand = randomRule.random();
 //        ProcessorTestSuite
 //            .builder(rule)
