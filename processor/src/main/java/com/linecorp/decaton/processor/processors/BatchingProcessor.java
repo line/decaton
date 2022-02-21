@@ -135,8 +135,7 @@ public abstract class BatchingProcessor<T> implements DecatonProcessor<T> {
      * so design it so that they are called finally by yourself. Otherwise, consumption will stick.
      * BatchingProcessor realizes its function by using {@link ProcessingContext#deferCompletion()}.
      * Reading {@link ProcessingContext#deferCompletion()}'s description will help you.
-     * This method runs in different thread
-     * from the {@link BatchingProcessor#process(ProcessingContext, Object) thread.
+     * This method runs in different thread from the {@link #process} thread.
      */
     protected abstract void processBatchingTasks(List<BatchingTask<T>> batchingTasks);
 }
