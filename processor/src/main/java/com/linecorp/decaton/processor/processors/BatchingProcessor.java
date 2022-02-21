@@ -27,7 +27,8 @@ import com.linecorp.decaton.processor.DeferredCompletion;
 import com.linecorp.decaton.processor.ProcessingContext;
 import com.linecorp.decaton.processor.Completion;
 
-import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+import lombok.Value;
 import lombok.experimental.Accessors;
 
 /**
@@ -43,21 +44,13 @@ public abstract class BatchingProcessor<T> implements DecatonProcessor<T> {
     private final long lingerMillis;
     private final int capacity;
 
-    @Getter
+    @Value
     @Accessors(fluent = true)
+    @RequiredArgsConstructor
     public static class BatchingTask<T> {
-        @Getter
-        private final Completion completion;
-        @Getter
-        private final ProcessingContext<T> context;
-        @Getter
-        private final T task;
-
-        private BatchingTask(Completion completion, ProcessingContext<T> context, T task) {
-            this.completion = completion;
-            this.context = context;
-            this.task = task;
-        }
+        Completion completion;
+        ProcessingContext<T> context;
+        T task;
     }
 
     /**
