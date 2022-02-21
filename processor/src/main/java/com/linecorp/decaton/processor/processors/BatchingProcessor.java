@@ -35,7 +35,7 @@ import lombok.experimental.Accessors;
 /**
  * An Abstract {@link DecatonProcessor} to Batch several tasks of type {@code T} to {@code List<T>}
  * and process them at once. e.g. when downstream-DB supports batching I/O (which often very efficient).
- * Batch-flushing should be done in time-based and size-based.
+ * Batch-flushing is done in time-based and size-based.
  * @param <T> type of task to batch
  */
 public abstract class BatchingProcessor<T> implements DecatonProcessor<T> {
@@ -128,8 +128,15 @@ public abstract class BatchingProcessor<T> implements DecatonProcessor<T> {
     }
 
     /**
+     * After complete processing batch of tasks,
      * *MUST* call {@link BatchingTask#completion}'s {@link DeferredCompletion#complete()} or
-     * {@link BatchingTask#context}'s {@link ProcessingContext#retry()} method.
+     * {@link BatchingTask#context}'s {@link ProcessingContext#retry()} method for each {@link BatchingTask}.
+     * The above methods is not called automatically even when an error occurs in this method,
+     * so design it so that they are called finally by yourself. Otherwise, consumption will stick.
+     * BatchingProcessor realizes its function by using {@link ProcessingContext#deferCompletion()}.
+     * Reading {@link ProcessingContext#deferCompletion()}'s description will help you.
+     * This method runs in different thread
+     * from the {@link BatchingProcessor#process(ProcessingContext, Object) thread.
      */
     protected abstract void processBatchingTasks(List<BatchingTask<T>> batchingTasks);
 }
