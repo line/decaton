@@ -64,32 +64,4 @@ public class BatchingProcessorTest {
             .build()
             .run();
     }
-
-    // TODO: Fix test or test's target. This test does not succeed.
-//    @Test(timeout = 30000)
-//    public void testBatchingProcessor_capacity() throws Exception {
-//        Random rand = randomRule.random();
-//        ProcessorTestSuite
-//            .builder(rule)
-//            .configureProcessorsBuilder(builder -> builder.thenProcess(
-//                new BatchingProcessor<TestTask>(Long.MAX_VALUE, 100) {
-//                    @Override
-//                    protected void processBatchingTasks(List<BatchingTask<TestTask>> batchingTasks) {
-//                        // adding some random delay to simulate realistic usage
-//                        try {
-//                            Thread.sleep(rand.nextInt(10));
-//                        } catch (InterruptedException e) {
-//                            Thread.currentThread().interrupt();
-//                            throw new RuntimeException(e);
-//                        }
-//                        batchingTasks.forEach(batchingTask -> batchingTask.completion().complete());
-//                    }
-//                }
-//            ))
-//            .propertySupplier(StaticPropertySupplier.of(
-//                Property.ofStatic(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY, 16)
-//            ))
-//            .build()
-//            .run();
-//    }
 }
