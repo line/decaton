@@ -48,7 +48,7 @@ public class BatchingProcessorTest {
     @Mock
     private Completion completion;
 
-    private final List<HelloTask> processedTasks = new ArrayList<>();
+    private final List<HelloTask> processedTasks = Collections.synchronizedList(new ArrayList<>());
 
     @Before
     public void before() {
