@@ -28,7 +28,6 @@ import com.linecorp.decaton.processor.ProcessingContext;
 import com.linecorp.decaton.processor.Completion;
 import com.linecorp.decaton.processor.runtime.internal.Utils;
 
-import lombok.RequiredArgsConstructor;
 import lombok.Value;
 import lombok.experimental.Accessors;
 
@@ -47,7 +46,6 @@ public abstract class BatchingProcessor<T> implements DecatonProcessor<T> {
 
     @Value
     @Accessors(fluent = true)
-    @RequiredArgsConstructor
     public static class BatchingTask<T> {
         Completion completion;
         ProcessingContext<T> context;
