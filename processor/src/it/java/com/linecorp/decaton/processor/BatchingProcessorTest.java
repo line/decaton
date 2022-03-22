@@ -39,12 +39,12 @@ public class BatchingProcessorTest {
     public RandomRule randomRule = new RandomRule();
 
     @Test(timeout = 30000)
-    public void testBatchingProcessor_lingerMillis() throws Exception {
+    public void testBatchingProcessor() throws Exception {
         Random rand = randomRule.random();
         ProcessorTestSuite
             .builder(rule)
             .configureProcessorsBuilder(builder -> builder.thenProcess(
-                new BatchingProcessor<TestTask>(1000, Integer.MAX_VALUE) {
+                new BatchingProcessor<TestTask>(1000, 100) {
                     @Override
                     protected void processBatchingTasks(List<BatchingTask<TestTask>> batchingTasks) {
                         // adding some random delay to simulate realistic usage
