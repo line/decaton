@@ -1,0 +1,97 @@
+= Task Batching
+:base_version: 4.0.0
+:modules: processor
+
+== Introduction
+Task Batching is a feature to batch several tasks of type `T` to `List<T>` and process them at once.
+
+Decaton provides a *time-based* way and *size-based* way to batch multiple tasks.
+The *time-based* means that tasks in past linger time are processed on every linger time.
+The *size-based* means that tasks in past before reaching capacity are processed every time tasks’size reaches capacity.
+
+== When to use (Example)
+When downstream-DB supports batching I/O (which often very efficient)
+
+== Usage
+To use `Task Batching`, you only need to instantiate `BatchingProcessor`.
+
+=== BatchingProcessor
+`BatchingProcessor` is an abstract `DecatonProcessor` to batch several tasks of type `T` to `List<T>`. To instantiate this class, pass two arguments to constructor and implement one abstract method:
+
+|===
+|parameter |Description
+
+|`lingerMillis`
+|Time limit for this processor. On every lingerMillis milliseconds, tasks in past lingerMillis milliseconds are pushed to `BatchingProcessor#processBatchingTasks(List)`.
+
+|`capacity`
+|Capacity size limit for this processor. Every time tasks’size reaches capacity, tasks in past before reaching capacity are pushed to `BatchingProcessor#processBatchingTasks(List)`.
+|===
+
+|===
+|abstract method |Description
+
+|`void processBatchingTasks(List<BatchingTask<T>> batchingTasks)`
+|When the size or time reach each limit, this method is called with stored `batchingTasks`. +
+After complete processing batch of tasks, *MUST* call `BatchingTask#completion` 's `DeferredCompletion#complete()` or `BatchingTask#context` 's `ProcessingContext#retry()` method for each `BatchingTask`. +
+The above methods is not called automatically even when an error occurs in this method, so design it so that they are called finally by yourself. Otherwise, consumption will stick. +
+`BatchingProcessor` realizes its function by using `ProcessingContext#deferCompletion()`. Reading `ProcessingContext#deferCompletion()` 's description will help you. +
+This method runs in different thread from the `process(ProcessingContext<T>, T)` thread.
+|===
+
+Before getting started with the example, let's create a `HelloTask` domain object which can be used to simulate the scenario we described:
+
+[source,java]
+.HelloTask.java
+----
+public class HelloTask {
+    private String name;
+    private int age;
+    private String text;
+
+    // ... (Getter and Setter)
+}
+----
+Instantiate `BatchingProcessor`, as shown in the following example `BathingProcessor`:
+
+[source,java]
+.TaskBatchingMain.java
+----
+public class TaskBatchingMain {
+    public static void main(String[] args) {
+        // ... (Set up other options like default DecatonProcessor)
+        long lingerMillis = 1000;
+        int capacity = 100;
+        ProcessorSubscription subscription =
+                SubscriptionBuilder.newBuilder("my-decaton-processor")
+                                   .processorsBuilder(
+                                           ProcessorsBuilder
+                                                   .consuming("my-decaton-topic", extractor)
+                                                   .thenProcess(TaskBatchingMain.createBatchingProcessor(lingerMillis, capacity),
+                                                                ProcessorScope.THREAD)
+                                   )
+    }
+
+    private static BatchingProcessor<HelloTask> createBatchingProcessor(long lingerMillis, int capacity) {
+        return new BatchingProcessor<HelloTask>(lingerMillis, capacity) { // <1>
+            @Override
+            protected void processBatchingTasks(List<BatchingTask<HelloTask>> batchingTasks) { // <2>
+                List<HelloTask> helloTasks =
+                    batchingTasks.stream().map(BatchingTask::task).collect(Collectors.toList());
+                // ... (Process helloTasks)
+                batchingTasks.forEach(batchingTask -> batchingTask.completion().complete()); // <3>
+            }
+        };
+    }
+}
+----
+<1> Pass `lingerMillis` and `capacity` to the constructor.
+<2> Implement `processBatchingTasks(List)`
+<3> Call `BatchingTask#completion` 's `DeferredCompletion#complete()`.
+
+== Implementation
+In this section, we will briefly explain how is Task Batching implemented.
+All the magic happened in `BatchingProcessor` when a task comes to this processor the following things happen:
+
+1. The task will be put into an in-memory window.
+2. When the size or time reach each limit, `processBatchingTasks(List)` is called with stored `batchingTasks`.
