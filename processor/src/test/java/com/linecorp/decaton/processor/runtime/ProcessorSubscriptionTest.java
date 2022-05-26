@@ -95,7 +95,7 @@ public class ProcessorSubscriptionTest {
         }
 
         @Override
-        public synchronized void close(long timeout, TimeUnit unit) {}
+        public void close(Duration timeout) {}
     }
 
     private static SubscriptionScope scope(String topic, long waitForProcessingOnClose) {
