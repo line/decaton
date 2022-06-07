@@ -27,6 +27,7 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
@@ -44,12 +45,12 @@ import org.mockito.Spy;
 import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
 
+import com.linecorp.decaton.processor.Completion;
 import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.ProcessingContext;
 import com.linecorp.decaton.processor.TaskMetadata;
 import com.linecorp.decaton.processor.processors.CompactionProcessor.CompactChoice;
 import com.linecorp.decaton.processor.processors.CompactionProcessor.CompactingTask;
-import com.linecorp.decaton.processor.Completion;
 import com.linecorp.decaton.processor.runtime.DecatonTask;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.internal.ProcessingContextImpl;
@@ -101,7 +102,7 @@ public class CompactionProcessorTest {
                 taskData,
                 taskData.toByteArray());
         TaskRequest request = new TaskRequest(
-                new TopicPartition("topic", 1), 1, null, name, null, NoopTrace.INSTANCE, null);
+                new TopicPartition("topic", 1), 1, null, name.getBytes(StandardCharsets.UTF_8), null, NoopTrace.INSTANCE, null);
         ProcessingContext<HelloTask> context =
                 spy(new ProcessingContextImpl<>("subscription", request, task,
                                                 Arrays.asList(processor, downstream), null,

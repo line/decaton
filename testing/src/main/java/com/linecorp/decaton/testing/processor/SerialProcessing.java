@@ -19,6 +19,7 @@ package com.linecorp.decaton.testing.processor;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.lessThan;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -29,7 +30,7 @@ import java.util.Map.Entry;
 import com.linecorp.decaton.processor.TaskMetadata;
 
 public class SerialProcessing implements ProcessingGuarantee {
-    private final Map<String, List<ProcessedRecord>> records = new HashMap<>();
+    private final Map<ByteBuffer, List<ProcessedRecord>> records = new HashMap<>();
 
     @Override
     public void onProduce(ProducedRecord record) {
@@ -38,14 +39,14 @@ public class SerialProcessing implements ProcessingGuarantee {
 
     @Override
     public synchronized void onProcess(TaskMetadata metadata, ProcessedRecord record) {
-        records.computeIfAbsent(record.key(),
+        records.computeIfAbsent(ByteBuffer.wrap(record.key()),
                                 key -> new ArrayList<>()).add(record);
     }
 
     @Override
     public void doAssert() {
         // Checks there's no overlap between two consecutive records' processing time
-        for (Entry<String, List<ProcessedRecord>> entry : records.entrySet()) {
+        for (Entry<ByteBuffer, List<ProcessedRecord>> entry : records.entrySet()) {
             List<ProcessedRecord> perKeyRecords = entry.getValue();
             perKeyRecords.sort(Comparator.comparingLong(ProcessedRecord::startTimeNanos));
 

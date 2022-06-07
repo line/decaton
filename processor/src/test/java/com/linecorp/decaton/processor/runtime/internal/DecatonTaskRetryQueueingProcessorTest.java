@@ -29,6 +29,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -76,13 +77,13 @@ public class DecatonTaskRetryQueueingProcessorTest {
         processor = new DecatonTaskRetryQueueingProcessor(scope, producer);
         doReturn(CompletableFuture.completedFuture(null)).when(producer).sendRequest(any(), any());
         doReturn(new CompletionImpl()).when(context).deferCompletion();
-        doReturn("key").when(context).key();
+        doReturn("key".getBytes(StandardCharsets.UTF_8)).when(context).key();
         doReturn(TaskMetadata.builder().build()).when(context).metadata();
     }
 
     @Test
     public void testRetryRequest() throws InterruptedException {
-        String key = "key";
+        byte[] key = "key".getBytes(StandardCharsets.UTF_8);
         TaskMetadata meta =
                 TaskMetadata.builder()
                             .sourceApplicationId("unit-test")

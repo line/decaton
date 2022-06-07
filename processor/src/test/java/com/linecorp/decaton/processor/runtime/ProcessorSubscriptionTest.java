@@ -25,6 +25,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -38,11 +39,11 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
@@ -61,7 +62,6 @@ import org.mockito.stubbing.Answer;
 
 import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.DeferredCompletion;
-import com.linecorp.decaton.processor.ProcessingContext;
 import com.linecorp.decaton.processor.TaskMetadata;
 import com.linecorp.decaton.processor.runtime.SubscriptionStateListener.State;
 import com.linecorp.decaton.processor.runtime.internal.ConsumerSupplier;
@@ -75,13 +75,13 @@ public class ProcessorSubscriptionTest {
     public MockitoRule rule = MockitoJUnit.rule();
 
     @Mock
-    Consumer<String, byte[]> consumer;
+    Consumer<byte[], byte[]> consumer;
 
     /**
      * A mock consumer which exposes rebalance listener so that can be triggered manually
      * ({@link MockConsumer} doesn't simulate rebalance listener invocation. refs: KAFKA-6968).
      */
-    private static class DecatonMockConsumer extends MockConsumer<String, byte[]> {
+    private static class DecatonMockConsumer extends MockConsumer<byte[], byte[]> {
         volatile ConsumerRebalanceListener rebalanceListener;
 
         private DecatonMockConsumer() {
@@ -109,7 +109,7 @@ public class ProcessorSubscriptionTest {
                 ConsumerSupplier.DEFAULT_MAX_POLL_RECORDS);
     }
 
-    private static ProcessorSubscription subscription(Consumer<String, byte[]> consumer,
+    private static ProcessorSubscription subscription(Consumer<byte[], byte[]> consumer,
                                                       SubscriptionStateListener listener,
                                                       TopicPartition tp,
                                                       DecatonProcessor<String> processor) {
@@ -172,7 +172,8 @@ public class ProcessorSubscriptionTest {
         feedOffsets.add(100L);
         feedOffsets.add(101L);
         CountDownLatch processLatch = new CountDownLatch(1);
-        ProcessorSubscription subscription = subscription(consumer, ignored -> {}, tp, (context, task) -> {
+        ProcessorSubscription subscription = subscription(consumer, ignored -> {
+        }, tp, (context, task) -> {
             if ("101".equals(task)) {
                 processLatch.countDown();
             }
@@ -195,7 +196,7 @@ public class ProcessorSubscriptionTest {
             if (offset != null) {
                 return new ConsumerRecords<>(singletonMap(tp, Collections.singletonList(
                         // Feed one record, then a subsequent record of the regressing offset.
-                        new ConsumerRecord<>(tp.topic(), tp.partition(), offset, "abc",
+                        new ConsumerRecord<>(tp.topic(), tp.partition(), offset, "abc".getBytes(StandardCharsets.UTF_8),
                                              String.valueOf(offset).getBytes()))));
             } else {
                 Thread.sleep(invocation.getArgument(0));
@@ -217,7 +218,7 @@ public class ProcessorSubscriptionTest {
         TopicPartition tp = new TopicPartition("topic", 0);
         DecatonMockConsumer consumer = new DecatonMockConsumer() {
             @Override
-            public synchronized ConsumerRecords<String, byte[]> poll(Duration timeout) {
+            public synchronized ConsumerRecords<byte[], byte[]> poll(Duration timeout) {
                 rebalanceListener.onPartitionsAssigned(assignment());
                 return super.poll(timeout);
             }
@@ -262,9 +263,9 @@ public class ProcessorSubscriptionTest {
         // First task finishes synchronous part of processing, starts async processing
         // Second task blocks during synchronous part of processing
         // Third task will be queued behind it
-        consumer.addRecord(new ConsumerRecord<>(tp.topic(), tp.partition(), 10, "", NO_DATA));
-        consumer.addRecord(new ConsumerRecord<>(tp.topic(), tp.partition(), 11, "", NO_DATA));
-        consumer.addRecord(new ConsumerRecord<>(tp.topic(), tp.partition(), 12, "", NO_DATA));
+        consumer.addRecord(new ConsumerRecord<>(tp.topic(), tp.partition(), 10, new byte[0], NO_DATA));
+        consumer.addRecord(new ConsumerRecord<>(tp.topic(), tp.partition(), 11, new byte[0], NO_DATA));
+        consumer.addRecord(new ConsumerRecord<>(tp.topic(), tp.partition(), 12, new byte[0], NO_DATA));
         asyncProcessingStarted.await();
         subscription.initiateShutdown();
         assertTrue(consumer.committed(singleton(tp)).isEmpty());
@@ -280,7 +281,8 @@ public class ProcessorSubscriptionTest {
     @Test(timeout = 5000)
     public void closeWithoutStart() throws Exception {
         TopicPartition tp = new TopicPartition("topic", 0);
-        ProcessorSubscription subscription = subscription(consumer, null, tp, (context, task) -> {});
+        ProcessorSubscription subscription = subscription(consumer, null, tp, (context, task) -> {
+        });
         // The main point is that the below close returns within timeout.
         subscription.close();
         verify(consumer).close();

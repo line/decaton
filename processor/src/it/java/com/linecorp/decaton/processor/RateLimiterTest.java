@@ -18,6 +18,8 @@ package com.linecorp.decaton.processor;
 
 import static org.junit.Assert.assertEquals;
 
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
@@ -57,12 +59,12 @@ public class RateLimiterTest {
 
     @Test(timeout = 30000)
     public void testPropertyDynamicSwitch() throws Exception {
-        Set<String> keys = new HashSet<>();
+        Set<ByteBuffer> keys = new HashSet<>();
 
         for (int i = 0; i < 10000; i++) {
-            keys.add("key" + i);
+            keys.add(ByteBuffer.wrap(("key" + i).getBytes(StandardCharsets.UTF_8)));
         }
-        Set<String> processedKeys = Collections.synchronizedSet(new HashSet<>());
+        Set<byte[]> processedKeys = Collections.synchronizedSet(new HashSet<>());
         CountDownLatch processLatch = new CountDownLatch(keys.size());
 
         DecatonProcessor<HelloTask> processor = (context, task) -> {
@@ -81,11 +83,11 @@ public class RateLimiterTest {
              DecatonClient<HelloTask> client = TestUtils.client(topicName, rule.bootstrapServers())) {
 
             int count = 0;
-            for (String key : keys) {
+            for (ByteBuffer key : keys) {
                 if (++count % 1000 == 0) {
                     rateProp.set((long) count / 10);
                 }
-                client.put(key, HelloTask.getDefaultInstance());
+                client.put(key.array(), HelloTask.getDefaultInstance());
             }
             processLatch.await();
         }

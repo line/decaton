@@ -30,6 +30,7 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.concurrent.CompletableFuture;
@@ -110,7 +111,7 @@ public class ProcessingContextImplTest {
     private static ProcessingContextImpl<HelloTask> context(RecordTraceHandle traceHandle,
                                                             DecatonProcessor<HelloTask>... processors) {
         TaskRequest request = new TaskRequest(
-                new TopicPartition("topic", 1), 1, null, "TEST",
+                new TopicPartition("topic", 1), 1, null, "TEST".getBytes(StandardCharsets.UTF_8),
                 null, traceHandle, REQUEST.toByteArray());
         DecatonTask<HelloTask> task = new DecatonTask<>(
                 TaskMetadata.fromProto(REQUEST.getMetadata()), TASK, TASK.toByteArray());
@@ -361,7 +362,7 @@ public class ProcessingContextImplTest {
                     }
                 });
         TaskRequest request = new TaskRequest(
-                new TopicPartition("topic", 1), 1, null, "TEST", null, null, REQUEST.toByteArray());
+                new TopicPartition("topic", 1), 1, null, "TEST".getBytes(StandardCharsets.UTF_8), null, null, REQUEST.toByteArray());
         DecatonTask<byte[]> task = new DecatonTask<>(
                 TaskMetadata.fromProto(REQUEST.getMetadata()), TASK.toByteArray(), TASK.toByteArray());
 
@@ -405,7 +406,7 @@ public class ProcessingContextImplTest {
                     }
                 });
         TaskRequest request = new TaskRequest(
-                new TopicPartition("topic", 1), 1, null, "TEST", null, null, REQUEST.toByteArray());
+                new TopicPartition("topic", 1), 1, null, "TEST".getBytes(StandardCharsets.UTF_8), null, null, REQUEST.toByteArray());
         DecatonTask<byte[]> task = new DecatonTask<>(
                 TaskMetadata.fromProto(REQUEST.getMetadata()), TASK.toByteArray(), TASK.toByteArray());
 

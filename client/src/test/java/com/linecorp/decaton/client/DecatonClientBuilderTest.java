@@ -44,12 +44,12 @@ public class DecatonClientBuilderTest {
     public MockitoRule rule = MockitoJUnit.rule();
 
     @Mock
-    private Producer<String, DecatonTaskRequest> producer;
+    private Producer<byte[], DecatonTaskRequest> producer;
 
     @Captor
-    private ArgumentCaptor<ProducerRecord<String, DecatonTaskRequest>> recordCaptor;
+    private ArgumentCaptor<ProducerRecord<byte[], DecatonTaskRequest>> recordCaptor;
 
-    private ProducerRecord<String, DecatonTaskRequest> doProduce(DecatonClient<HelloTask> dclient) {
+    private ProducerRecord<byte[], DecatonTaskRequest> doProduce(DecatonClient<HelloTask> dclient) {
         dclient.put(null, HelloTask.getDefaultInstance());
         verify(producer, times(1)).send(recordCaptor.capture(), any(Callback.class));
         return recordCaptor.getValue();
@@ -69,7 +69,7 @@ public class DecatonClientBuilderTest {
                              .producerSupplier(config -> producer)
                              .build();
 
-        ProducerRecord<String, DecatonTaskRequest> record = doProduce(dclient);
+        ProducerRecord<byte[], DecatonTaskRequest> record = doProduce(dclient);
         assertEquals(topic, record.topic());
 
         TaskMetadataProto metadata = record.value().getMetadata();

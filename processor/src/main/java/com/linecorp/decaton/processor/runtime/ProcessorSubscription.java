@@ -93,7 +93,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
         }
 
         @Override
-        public void receive(ConsumerRecord<String, byte[]> record) {
+        public void receive(ConsumerRecord<byte[], byte[]> record) {
             TopicPartition tp = new TopicPartition(record.topic(), record.partition());
             PartitionContext context = contexts.get(tp);
 
@@ -130,7 +130,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
     }
 
     ProcessorSubscription(SubscriptionScope scope,
-                          Supplier<Consumer<String, byte[]>> consumerSupplier,
+                          Supplier<Consumer<byte[], byte[]>> consumerSupplier,
                           Processors<?> processors,
                           ProcessorProperties props,
                           SubscriptionStateListener stateListener,
@@ -141,7 +141,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
         this.contexts = contexts;
         metrics = Metrics.withTags("subscription", scope.subscriptionId()).new SubscriptionMetrics();
 
-        Consumer<String, byte[]> consumer = consumerSupplier.get();
+        Consumer<byte[], byte[]> consumer = consumerSupplier.get();
         if (props.get(CONFIG_BIND_CLIENT_METRICS).value()) {
             metrics.bindClientMetrics(consumer);
         }
@@ -159,7 +159,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
     }
 
     public ProcessorSubscription(SubscriptionScope scope,
-                                 Supplier<Consumer<String, byte[]>> consumerSupplier,
+                                 Supplier<Consumer<byte[], byte[]>> consumerSupplier,
                                  Processors<?> processors,
                                  ProcessorProperties props,
                                  SubscriptionStateListener stateListener) {

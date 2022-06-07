@@ -31,7 +31,7 @@ public class ProducedRecord {
     /**
      * Key of the task
      */
-    String key;
+    byte[] key;
     /**
      * Topic partition the record was sent to
      */

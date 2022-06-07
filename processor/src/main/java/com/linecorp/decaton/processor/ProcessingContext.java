@@ -40,7 +40,7 @@ public interface ProcessingContext<T> {
      * @return the key associated to the task now being processed. can be null if key isn't supplied for the
      * task.
      */
-    String key();
+    byte[] key();
 
     /**
      * Returns the {@link Headers} which is associated to the source {@link ConsumerRecord} of the task.

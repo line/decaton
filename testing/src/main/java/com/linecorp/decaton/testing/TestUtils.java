@@ -29,27 +29,24 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
-import java.util.function.Supplier;
 
-import com.linecorp.decaton.processor.runtime.ProcessorProperties;
-import com.linecorp.decaton.processor.runtime.Property;
-import com.linecorp.decaton.processor.runtime.PropertySupplier;
-import com.linecorp.decaton.processor.runtime.StaticPropertySupplier;
-import com.linecorp.decaton.processor.runtime.SubscriptionStateListener;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
 
 import com.google.protobuf.MessageLite;
 
 import com.linecorp.decaton.client.DecatonClient;
-import com.linecorp.decaton.client.kafka.PrintableAsciiStringSerializer;
 import com.linecorp.decaton.client.kafka.ProtocolBuffersKafkaSerializer;
 import com.linecorp.decaton.common.Serializer;
-import com.linecorp.decaton.processor.runtime.SubscriptionStateListener.State;
 import com.linecorp.decaton.processor.runtime.ProcessorSubscription;
+import com.linecorp.decaton.processor.runtime.Property;
+import com.linecorp.decaton.processor.runtime.StaticPropertySupplier;
 import com.linecorp.decaton.processor.runtime.SubscriptionBuilder;
+import com.linecorp.decaton.processor.runtime.SubscriptionStateListener;
+import com.linecorp.decaton.processor.runtime.SubscriptionStateListener.State;
 import com.linecorp.decaton.protobuf.ProtocolBuffersSerializer;
 import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
 
@@ -112,9 +109,9 @@ public class TestUtils {
      * @param bootstrapServers bootstrap servers to connect
      * @return {@link Producer} instance with preset configurations
      */
-    public static Producer<String, DecatonTaskRequest> producer(String bootstrapServers) {
+    public static Producer<byte[], DecatonTaskRequest> producer(String bootstrapServers) {
         return new KafkaProducer<>(defaultProducerProps(bootstrapServers),
-                                   new PrintableAsciiStringSerializer(),
+                                   new ByteArraySerializer(),
                                    new ProtocolBuffersKafkaSerializer<>());
     }
 

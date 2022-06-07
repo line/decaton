@@ -38,7 +38,7 @@ public interface DecatonClient<T> extends AutoCloseable {
      *
      * @return a {@link CompletableFuture} which represents the result of task put.
      */
-    CompletableFuture<PutTaskResult> put(String key, T task);
+    CompletableFuture<PutTaskResult> put(byte[] key, T task);
 
     /**
      * Put a task onto associated decaton queue with specifying arbitrary timestamp.
@@ -47,7 +47,7 @@ public interface DecatonClient<T> extends AutoCloseable {
      * @param timestamp milliseconds precision timestamp which is to be used to set timestamp of task metadata.
      * @return a {@link CompletableFuture} which represents the result of task put.
      */
-    CompletableFuture<PutTaskResult> put(String key, T task, long timestamp);
+    CompletableFuture<PutTaskResult> put(byte[] key, T task, long timestamp);
 
     /**
      * Put a task onto associated decaton queue with specifying some fields of task metadata.
@@ -56,7 +56,7 @@ public interface DecatonClient<T> extends AutoCloseable {
      * @param overrideTaskMetadata taskMetaData which can be set by users and used for event publish.
      * @return a {@link CompletableFuture} which represents the result of task put.
      */
-    CompletableFuture<PutTaskResult> put(String key, T task, TaskMetadata overrideTaskMetadata);
+    CompletableFuture<PutTaskResult> put(byte[] key, T task, TaskMetadata overrideTaskMetadata);
 
     /**
      * Put a task onto associated decaton queue.
@@ -77,7 +77,7 @@ public interface DecatonClient<T> extends AutoCloseable {
      *
      * @return a {@link CompletableFuture} which represents the result of task put.
      */
-    CompletableFuture<PutTaskResult> put(String key, T task, Consumer<Throwable> errorCallback);
+    CompletableFuture<PutTaskResult> put(byte[] key, T task, Consumer<Throwable> errorCallback);
 
     /**
      * Put a task onto associated decaton queue with specifying arbitrary timestamp.
@@ -100,7 +100,7 @@ public interface DecatonClient<T> extends AutoCloseable {
      *
      * @return a {@link CompletableFuture} which represents the result of task put.
      */
-    default CompletableFuture<PutTaskResult> put(String key, T task, long timestamp,
+    default CompletableFuture<PutTaskResult> put(byte[] key, T task, long timestamp,
                                                  Consumer<Throwable> errorCallback) {
         CompletableFuture<PutTaskResult> result = put(key, task, timestamp);
         result.exceptionally(e -> {

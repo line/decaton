@@ -104,7 +104,7 @@ public class Metrics {
     public class SubscriptionMetrics extends AbstractMetrics {
         volatile KafkaClientMetrics kafkaClientMetrics;
 
-        public void bindClientMetrics(Consumer<String, byte[]> consumer) {
+        public void bindClientMetrics(Consumer<byte[], byte[]> consumer) {
             kafkaClientMetrics = new KafkaClientMetrics(consumer, availableTags.subscriptionScope());
             kafkaClientMetrics.bindTo(registry);
         }

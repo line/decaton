@@ -30,7 +30,7 @@ public class ProcessedRecord {
     /**
      * Key of the task
      */
-    String key;
+    byte[] key;
     /**
      * Processed task
      */

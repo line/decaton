@@ -18,6 +18,7 @@ package com.linecorp.decaton.processor.runtime.internal;
 
 import static com.linecorp.decaton.processor.runtime.ProcessorProperties.CONFIG_IGNORE_KEYS;
 
+import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -37,11 +38,18 @@ public class BlacklistedKeysFilter {
              .listen((oldValue, newValue) -> ignoreKeys = new HashSet<>(newValue));
     }
 
-    public boolean shouldTake(ConsumerRecord<String, byte[]> record) {
+    public boolean shouldTake(ConsumerRecord<byte[], byte[]> record) {
+        final byte[] key = record.key();
+        if (key == null) {
+            return true;
+        }
+
+        final String stringKey = new String(key, StandardCharsets.UTF_8);
+
         // Preceding isEmpty() check is for reducing tiny overhead applied for each contains() by calling
         // Object#hashCode. Since ignoreKeys should be empty for most cases..
-        if (!ignoreKeys.isEmpty() && ignoreKeys.contains(record.key())) {
-            logger.debug("Ignore task which has key configured to ignore: {}", record.key());
+        if (!ignoreKeys.isEmpty() && ignoreKeys.contains(stringKey)) {
+            logger.debug("Ignore task which has key configured to ignore: {}", stringKey);
             return false;
         }
 

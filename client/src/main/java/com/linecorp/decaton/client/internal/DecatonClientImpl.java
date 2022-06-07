@@ -62,7 +62,7 @@ public class DecatonClientImpl<T> implements DecatonClient<T> {
     }
 
     @Override
-    public CompletableFuture<PutTaskResult> put(String key, T task, long timestamp) {
+    public CompletableFuture<PutTaskResult> put(byte[] key, T task, long timestamp) {
         TaskMetadataProto taskMetadata = TaskMetadataProto.newBuilder()
                                                           .setTimestampMillis(timestamp)
                                                           .setSourceApplicationId(applicationId)
@@ -73,17 +73,17 @@ public class DecatonClientImpl<T> implements DecatonClient<T> {
     }
 
     @Override
-    public CompletableFuture<PutTaskResult> put(String key, T task, TaskMetadata overrideTaskMetadata) {
+    public CompletableFuture<PutTaskResult> put(byte[] key, T task, TaskMetadata overrideTaskMetadata) {
         return put(key, task, convertToTaskMetadataProto(overrideTaskMetadata));
     }
 
     @Override
-    public CompletableFuture<PutTaskResult> put(String key, T task) {
+    public CompletableFuture<PutTaskResult> put(byte[] key, T task) {
         return put(key, task, timestampSupplier.get());
     }
 
     @Override
-    public CompletableFuture<PutTaskResult> put(String key, T task, Consumer<Throwable> errorCallback) {
+    public CompletableFuture<PutTaskResult> put(byte[] key, T task, Consumer<Throwable> errorCallback) {
         return put(key, task, timestampSupplier.get(), errorCallback);
     }
 
@@ -92,7 +92,7 @@ public class DecatonClientImpl<T> implements DecatonClient<T> {
         producer.close();
     }
 
-    private CompletableFuture<PutTaskResult> put(String key, T task, TaskMetadataProto taskMetadataProto) {
+    private CompletableFuture<PutTaskResult> put(byte[] key, T task, TaskMetadataProto taskMetadataProto) {
         byte[] serializedTask = serializer.serialize(task);
 
         DecatonTaskRequest request =
