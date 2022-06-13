@@ -45,22 +45,22 @@ public class DecatonClientTest {
     @Spy
     private final DecatonClient<HelloTask> decaton = new DecatonClient<HelloTask>() {
         @Override
-        public CompletableFuture<PutTaskResult> put(byte[] key, HelloTask task) {
+        public CompletableFuture<PutTaskResult> put(String key, HelloTask task) {
             return null;
         }
 
         @Override
-        public CompletableFuture<PutTaskResult> put(byte[] key, HelloTask task, long timestamp) {
+        public CompletableFuture<PutTaskResult> put(String key, HelloTask task, long timestamp) {
             return null;
         }
 
         @Override
-        public CompletableFuture<PutTaskResult> put(byte[] key, HelloTask task, TaskMetadata overrideTaskMetadata) {
+        public CompletableFuture<PutTaskResult> put(String key, HelloTask task, TaskMetadata overrideTaskMetadata) {
             return null;
         }
 
         @Override
-        public CompletableFuture<PutTaskResult> put(byte[] key, HelloTask task,
+        public CompletableFuture<PutTaskResult> put(String key, HelloTask task,
                                                     Consumer<Throwable> errorCallback) {
             return null;
         }

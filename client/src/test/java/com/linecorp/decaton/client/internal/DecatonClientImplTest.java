@@ -25,7 +25,6 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
-import java.nio.charset.StandardCharsets;
 import java.util.Properties;
 import java.util.function.Supplier;
 
@@ -76,7 +75,7 @@ public class DecatonClientImplTest {
     public void testTimestampFieldSetInternally() {
         doReturn(1234L).when(timestampSupplier).get();
 
-        client.put("key".getBytes(StandardCharsets.UTF_8), HelloTask.getDefaultInstance());
+        client.put("key", HelloTask.getDefaultInstance());
 
         verify(producer, times(1)).send(captor.capture(), any(Callback.class));
         ProducerRecord<byte[], DecatonTaskRequest> record = captor.getValue();
@@ -88,7 +87,7 @@ public class DecatonClientImplTest {
     public void testTimestampFieldSetInternallyWithCallback() {
         doReturn(1234L).when(timestampSupplier).get();
 
-        client.put("key".getBytes(StandardCharsets.UTF_8), HelloTask.getDefaultInstance(), ignored -> {});
+        client.put("key", HelloTask.getDefaultInstance(), ignored -> {});
 
         verify(producer, times(1)).send(captor.capture(), any(Callback.class));
         ProducerRecord<byte[], DecatonTaskRequest> record = captor.getValue();
@@ -100,7 +99,7 @@ public class DecatonClientImplTest {
     public void testTimestampFieldSetExternally() {
         doReturn(1234L).when(timestampSupplier).get();
 
-        client.put("key".getBytes(StandardCharsets.UTF_8), HelloTask.getDefaultInstance(), 5678);
+        client.put("key", HelloTask.getDefaultInstance(), 5678);
 
         verify(producer, times(1)).send(captor.capture(), any(Callback.class));
         ProducerRecord<byte[], DecatonTaskRequest> record = captor.getValue();
@@ -112,7 +111,7 @@ public class DecatonClientImplTest {
     public void testTimestampFieldSetExternallyWithCallback() {
         doReturn(1234L).when(timestampSupplier).get();
 
-        client.put("key".getBytes(StandardCharsets.UTF_8), HelloTask.getDefaultInstance(), 5678, ignored -> {});
+        client.put("key", HelloTask.getDefaultInstance(), 5678, ignored -> {});
 
         verify(producer, times(1)).send(captor.capture(), any(Callback.class));
         ProducerRecord<byte[], DecatonTaskRequest> record = captor.getValue();
@@ -124,10 +123,10 @@ public class DecatonClientImplTest {
     public void testTaskMetaDataSetExternally() {
         doReturn(1234L).when(timestampSupplier).get();
 
-        client.put("key".getBytes(StandardCharsets.UTF_8), HelloTask.getDefaultInstance(), TaskMetadata.builder()
-                                                                                                       .timestamp(5678L)
-                                                                                                       .scheduledTime(6912L)
-                                                                                                       .build());
+        client.put("key", HelloTask.getDefaultInstance(), TaskMetadata.builder()
+                                                                      .timestamp(5678L)
+                                                                      .scheduledTime(6912L)
+                                                                      .build());
 
         verifyAndAssertTaskMetadata(5678L, 6912L);
     }
@@ -136,9 +135,9 @@ public class DecatonClientImplTest {
     public void testWithScheduledTimeSetExternally() {
         doReturn(1234L).when(timestampSupplier).get();
 
-        client.put("key".getBytes(StandardCharsets.UTF_8), HelloTask.getDefaultInstance(), TaskMetadata.builder()
-                                                                                                       .scheduledTime(181234L)
-                                                                                                       .build());
+        client.put("key", HelloTask.getDefaultInstance(), TaskMetadata.builder()
+                                                                      .scheduledTime(181234L)
+                                                                      .build());
 
         verifyAndAssertTaskMetadata(1234L, 181234L);
     }
@@ -147,7 +146,7 @@ public class DecatonClientImplTest {
     public void testWithEmptyTaskMetaDataSetExternally() {
         doReturn(1234L).when(timestampSupplier).get();
 
-        client.put("key".getBytes(StandardCharsets.UTF_8), HelloTask.getDefaultInstance(), TaskMetadata.builder().build());
+        client.put("key", HelloTask.getDefaultInstance(), TaskMetadata.builder().build());
 
         verify(producer, times(1)).send(captor.capture(), any(Callback.class));
         ProducerRecord<byte[], DecatonTaskRequest> record = captor.getValue();
