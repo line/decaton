@@ -41,7 +41,6 @@ class SubPartitioner {
             // Here just by adding few bytes to the key we can "shift" hashing of the key and
             // can get back better distribution again in murmur2 result to evenly distribute keys
             // for subpartitions.
-            // TODO: Eliminate array copy here
             final ByteBuffer bb = ByteBuffer.allocate(key.length + 2);
             bb.put((byte) 's');
             bb.put((byte) ':');
