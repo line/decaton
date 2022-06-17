@@ -17,14 +17,11 @@
 package com.linecorp.decaton.processor;
 
 import java.time.Duration;
-import java.util.Properties;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.function.Consumer;
 
-import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
@@ -68,38 +65,6 @@ public class ArbitraryTopicTypeTest {
         rule.admin().deleteTopics(true, topic, retryTopic);
     }
 
-    private static final class TestProducer<K, V> implements AutoCloseable {
-        private final KafkaProducer<K, V> producer;
-        private final String topic;
-
-        private TestProducer(String bootstrapServers, String topic, Serializer<K> keySerializer, Serializer<V> valueSerializer) {
-            final Properties properties = TestUtils.defaultProducerProps(bootstrapServers);
-
-            this.topic = topic;
-            producer = new KafkaProducer<>(properties, keySerializer, valueSerializer);
-        }
-
-        public CompletableFuture<RecordMetadata> put(K key, V value) {
-            final ProducerRecord<K, V> record = new ProducerRecord<>(topic, key, value);
-
-            final CompletableFuture<RecordMetadata> result = new CompletableFuture<>();
-            producer.send(record, (metadata, exception) -> {
-                if (exception == null) {
-                    result.complete(metadata);
-                } else {
-                    result.completeExceptionally(exception);
-                }
-            });
-
-            return result;
-        }
-
-        @Override
-        public void close() throws Exception {
-            producer.close();
-        }
-    }
-
     private static final class TestTaskExtractor<T> implements TaskExtractor<T> {
         private final String topic;
         private final Deserializer<T> deserializer;
@@ -136,8 +101,8 @@ public class ArbitraryTopicTypeTest {
                 })).enableRetry(retryConfig);
 
         try (ProcessorSubscription subscription = TestUtils.subscription(rule.bootstrapServers(), builderConfigurer);
-             TestProducer<K, V> producer = new TestProducer<>(rule.bootstrapServers(), topic, keySerializer, valueSerializer)) {
-            producer.put(key, value);
+             Producer<K, V> producer = TestUtils.producer(rule.bootstrapServers(), keySerializer, valueSerializer)) {
+            producer.send(new ProducerRecord<>(topic, key, value));
             processLatch.await();
         }
     }

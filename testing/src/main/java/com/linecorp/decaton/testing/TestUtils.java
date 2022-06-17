@@ -105,14 +105,32 @@ public class TestUtils {
 
     /**
      * A helper to instantiate {@link Producer} with preset configurations
+     * and default serializers
      *
      * @param bootstrapServers bootstrap servers to connect
      * @return {@link Producer} instance with preset configurations
      */
     public static Producer<byte[], DecatonTaskRequest> producer(String bootstrapServers) {
+        return producer(bootstrapServers,
+                        new ByteArraySerializer(),
+                        new ProtocolBuffersKafkaSerializer<>());
+    }
+
+    /**
+     * A helper to instantiate {@link Producer} with preset configurations
+     * and custom key/value serializers
+     *
+     * @param bootstrapServers bootstrap servers to connect
+     * @param keySerializer serializer to serialize key into bytes
+     * @param valueSerializer serializer to serialize value into bytes
+     * @return {@link Producer} instance with preset configurations
+     */
+    public static <K, V> Producer<K, V> producer(String bootstrapServers,
+                                                 org.apache.kafka.common.serialization.Serializer<K> keySerializer,
+                                                 org.apache.kafka.common.serialization.Serializer<V> valueSerializer) {
         return new KafkaProducer<>(defaultProducerProps(bootstrapServers),
-                                   new ByteArraySerializer(),
-                                   new ProtocolBuffersKafkaSerializer<>());
+                                   keySerializer,
+                                   valueSerializer);
     }
 
     /**
