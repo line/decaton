@@ -56,6 +56,7 @@ import com.linecorp.decaton.processor.ProcessingContext;
 import com.linecorp.decaton.processor.TaskMetadata;
 import com.linecorp.decaton.processor.Completion;
 import com.linecorp.decaton.processor.Completion.TimeoutChoice;
+import com.linecorp.decaton.processor.formatter.KeyFormatter;
 import com.linecorp.decaton.processor.runtime.DecatonTask;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.tracing.TestTraceHandle;
@@ -116,7 +117,7 @@ public class ProcessingContextImplTest {
         DecatonTask<HelloTask> task = new DecatonTask<>(
                 TaskMetadata.fromProto(REQUEST.getMetadata()), TASK, TASK.toByteArray());
         return new ProcessingContextImpl<>("subscription", request, task, Arrays.asList(processors),
-                                           null, ProcessorProperties.builder().build());
+                                           null, KeyFormatter.DEFAULT, ProcessorProperties.builder().build());
     }
 
     private static void safeAwait(CountDownLatch latch) {
@@ -368,7 +369,7 @@ public class ProcessingContextImplTest {
 
         ProcessingContextImpl<byte[]> context =
                 spy(new ProcessingContextImpl<>("subscription", request, task,
-                                                Collections.emptyList(), retryProcessor,
+                                                Collections.emptyList(), retryProcessor, KeyFormatter.DEFAULT,
                                                 ProcessorProperties.builder().build()));
 
         Completion retryComp = context.retry();
@@ -421,7 +422,7 @@ public class ProcessingContextImplTest {
 
         ProcessingContextImpl<byte[]> context =
                 spy(new ProcessingContextImpl<>("subscription", request, task,
-                                                Arrays.asList(processor), retryProcessor,
+                                                Arrays.asList(processor), retryProcessor, KeyFormatter.DEFAULT,
                                                 ProcessorProperties.builder().build()));
 
         Completion comp = context.push(new byte[0]);

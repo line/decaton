@@ -22,6 +22,7 @@ import java.util.function.Supplier;
 
 import com.linecorp.decaton.common.Deserializer;
 import com.linecorp.decaton.processor.DecatonProcessor;
+import com.linecorp.decaton.processor.formatter.KeyFormatter;
 import com.linecorp.decaton.processor.runtime.internal.DecatonProcessorSupplierImpl;
 import com.linecorp.decaton.processor.runtime.internal.DefaultTaskExtractor;
 import com.linecorp.decaton.processor.runtime.internal.Processors;
@@ -42,6 +43,7 @@ public class ProcessorsBuilder<T> {
     private final TaskExtractor<T> retryTaskExtractor;
 
     private final List<DecatonProcessorSupplier<T>> suppliers;
+    private KeyFormatter keyFormatter = KeyFormatter.DEFAULT;
 
     public ProcessorsBuilder(String topic, TaskExtractor<T> taskExtractor, TaskExtractor<T> retryTaskExtractor) {
         this.topic = topic;
@@ -130,7 +132,17 @@ public class ProcessorsBuilder<T> {
         return thenProcess(new DecatonProcessorSupplierImpl<>(() -> processor, ProcessorScope.PROVIDED));
     }
 
+    /**
+     * Configure a key formatter that translates record keys from bytes into String for logging purpose.
+     * @param keyFormatter a {@link KeyFormatter}, function that maps bytes into String
+     * @return updated instance of {@link ProcessorsBuilder}.
+     */
+    public ProcessorsBuilder<T> setKeyFormatter(KeyFormatter keyFormatter) {
+        this.keyFormatter = keyFormatter;
+        return this;
+    }
+
     public Processors<T> build(DecatonProcessorSupplier<byte[]> retryProcessorSupplier) {
-        return new Processors<>(suppliers, retryProcessorSupplier, taskExtractor, retryTaskExtractor);
+        return new Processors<>(suppliers, retryProcessorSupplier, taskExtractor, retryTaskExtractor, keyFormatter);
     }
 }

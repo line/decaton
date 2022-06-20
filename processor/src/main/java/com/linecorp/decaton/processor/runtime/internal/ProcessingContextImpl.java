@@ -23,12 +23,13 @@ import java.util.function.Function;
 
 import org.apache.kafka.common.header.Headers;
 
+import com.linecorp.decaton.processor.Completion;
+import com.linecorp.decaton.processor.Completion.TimeoutChoice;
 import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.LoggingContext;
 import com.linecorp.decaton.processor.ProcessingContext;
 import com.linecorp.decaton.processor.TaskMetadata;
-import com.linecorp.decaton.processor.Completion;
-import com.linecorp.decaton.processor.Completion.TimeoutChoice;
+import com.linecorp.decaton.processor.formatter.KeyFormatter;
 import com.linecorp.decaton.processor.runtime.DecatonTask;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.tracing.TracingProvider.ProcessorTraceHandle;
@@ -44,6 +45,7 @@ public class ProcessingContextImpl<T> implements ProcessingContext<T> {
     private final DecatonTask<T> task;
     private final List<DecatonProcessor<T>> downstreams;
     private final DecatonProcessor<byte[]> retryQueueingProcessor;
+    private final KeyFormatter keyFormatter;
     private final ProcessorProperties props;
     private final AtomicReference<CompletionImpl> deferredCompletion;
 
@@ -52,12 +54,14 @@ public class ProcessingContextImpl<T> implements ProcessingContext<T> {
                                  DecatonTask<T> task,
                                  List<DecatonProcessor<T>> downstreams,
                                  DecatonProcessor<byte[]> retryQueueingProcessor,
+                                 KeyFormatter keyFormatter,
                                  ProcessorProperties props) {
         this.subscriptionId = subscriptionId;
         this.request = request;
         this.task = task;
         this.downstreams = Collections.unmodifiableList(downstreams);
         this.retryQueueingProcessor = retryQueueingProcessor;
+        this.keyFormatter = keyFormatter;
         this.props = props;
         deferredCompletion = new AtomicReference<>();
     }
@@ -80,7 +84,7 @@ public class ProcessingContextImpl<T> implements ProcessingContext<T> {
     @Override
     public LoggingContext loggingContext() {
         boolean enabled = props.get(ProcessorProperties.CONFIG_LOGGING_MDC_ENABLED).value();
-        return new LoggingContext(enabled, subscriptionId, request, task.metadata());
+        return new LoggingContext(enabled, subscriptionId, request, task.metadata(), keyFormatter);
     }
 
     @Override
@@ -114,7 +118,7 @@ public class ProcessingContextImpl<T> implements ProcessingContext<T> {
                 "Exception from tracing", NoopTrace.INSTANCE);
         ProcessingContextImpl<P> nextContext = new ProcessingContextImpl<>(
                 subscriptionId, request, task, downstreams.subList(1, downstreams.size()),
-                retryQueueingProcessor, props);
+                retryQueueingProcessor, keyFormatter, props);
 
         CompletionImpl completion;
         try {

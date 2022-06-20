@@ -49,6 +49,7 @@ import com.linecorp.decaton.processor.Completion;
 import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.ProcessingContext;
 import com.linecorp.decaton.processor.TaskMetadata;
+import com.linecorp.decaton.processor.formatter.KeyFormatter;
 import com.linecorp.decaton.processor.processors.CompactionProcessor.CompactChoice;
 import com.linecorp.decaton.processor.processors.CompactionProcessor.CompactingTask;
 import com.linecorp.decaton.processor.runtime.DecatonTask;
@@ -106,7 +107,7 @@ public class CompactionProcessorTest {
         ProcessingContext<HelloTask> context =
                 spy(new ProcessingContextImpl<>("subscription", request, task,
                                                 Arrays.asList(processor, downstream), null,
-                                                ProcessorProperties.builder().build()));
+                                                KeyFormatter.DEFAULT, ProcessorProperties.builder().build()));
 
         if (beforeProcess != null) {
             beforeProcess.accept(taskData, context);

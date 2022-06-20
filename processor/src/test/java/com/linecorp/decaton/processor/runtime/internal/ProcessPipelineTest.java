@@ -53,6 +53,7 @@ import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.DeferredCompletion;
 import com.linecorp.decaton.processor.ProcessingContext;
 import com.linecorp.decaton.processor.TaskMetadata;
+import com.linecorp.decaton.processor.formatter.KeyFormatter;
 import com.linecorp.decaton.processor.metrics.Metrics;
 import com.linecorp.decaton.processor.runtime.DecatonTask;
 import com.linecorp.decaton.processor.runtime.DynamicProperty;
@@ -118,7 +119,8 @@ public class ProcessPipelineTest {
         completionTimeoutMsProp.set(100L);
         doReturn(10L).when(clock).millis();
         pipeline = spy(new ProcessPipeline<>(
-                scope, Collections.singletonList(processorMock), null, extractorMock, schedulerMock, METRICS, clock));
+                scope, Collections.singletonList(processorMock), null, extractorMock, KeyFormatter.DEFAULT,
+                schedulerMock, METRICS, clock));
     }
 
     @Test
