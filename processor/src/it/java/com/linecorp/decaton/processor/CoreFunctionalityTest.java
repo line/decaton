@@ -18,7 +18,6 @@ package com.linecorp.decaton.processor;
 
 import static org.junit.Assert.assertTrue;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -35,6 +34,7 @@ import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.ProcessorScope;
 import com.linecorp.decaton.processor.runtime.Property;
 import com.linecorp.decaton.processor.runtime.StaticPropertySupplier;
+import com.linecorp.decaton.processor.runtime.internal.TaskKey;
 import com.linecorp.decaton.testing.KafkaClusterRule;
 import com.linecorp.decaton.testing.RandomRule;
 import com.linecorp.decaton.testing.processor.ProcessedRecord;
@@ -154,17 +154,17 @@ public class CoreFunctionalityTest {
         // Note that this processing semantics is not be considered as Decaton specification which users can rely on.
         // Rather, this is just a expected behavior based on current implementation when we set concurrency to 1.
         ProcessingGuarantee noDuplicates = new ProcessingGuarantee() {
-            private final Map<ByteBuffer, List<TestTask>> produced = new HashMap<>();
-            private final Map<ByteBuffer, List<TestTask>> processed = new HashMap<>();
+            private final Map<TaskKey, List<TestTask>> produced = new HashMap<>();
+            private final Map<TaskKey, List<TestTask>> processed = new HashMap<>();
 
             @Override
             public synchronized void onProduce(ProducedRecord record) {
-                produced.computeIfAbsent(ByteBuffer.wrap(record.key()), key -> new ArrayList<>()).add(record.task());
+                produced.computeIfAbsent(record.key(), key -> new ArrayList<>()).add(record.task());
             }
 
             @Override
             public synchronized void onProcess(TaskMetadata metadata, ProcessedRecord record) {
-                processed.computeIfAbsent(ByteBuffer.wrap(record.key()), key -> new ArrayList<>()).add(record.task());
+                processed.computeIfAbsent(record.key(), key -> new ArrayList<>()).add(record.task());
             }
 
             @Override

@@ -19,6 +19,8 @@ package com.linecorp.decaton.testing.processor;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Headers;
 
+import com.linecorp.decaton.processor.runtime.internal.TaskKey;
+
 import lombok.Value;
 import lombok.experimental.Accessors;
 
@@ -31,7 +33,7 @@ public class ProducedRecord {
     /**
      * Key of the task
      */
-    byte[] key;
+    TaskKey key;
     /**
      * Topic partition the record was sent to
      */

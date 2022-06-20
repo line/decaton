@@ -47,6 +47,7 @@ import com.linecorp.decaton.processor.runtime.internal.PartitionContext;
 import com.linecorp.decaton.processor.runtime.internal.PartitionContexts;
 import com.linecorp.decaton.processor.runtime.internal.Processors;
 import com.linecorp.decaton.processor.runtime.internal.SubscriptionScope;
+import com.linecorp.decaton.processor.runtime.internal.TaskKey;
 import com.linecorp.decaton.processor.runtime.internal.TaskRequest;
 import com.linecorp.decaton.processor.runtime.internal.Utils;
 import com.linecorp.decaton.processor.runtime.internal.Utils.Timer;
@@ -120,7 +121,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
 
             if (blacklistedKeysFilter.shouldTake(record)) {
                 TaskRequest taskRequest =
-                        new TaskRequest(tp, record.offset(), offsetState, record.key(),
+                        new TaskRequest(tp, record.offset(), offsetState, new TaskKey(record.key()),
                                         record.headers(), trace, record.value());
                 context.addRequest(taskRequest);
             } else {

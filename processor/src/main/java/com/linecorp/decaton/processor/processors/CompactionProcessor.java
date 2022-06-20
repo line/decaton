@@ -16,7 +16,6 @@
 
 package com.linecorp.decaton.processor.processors;
 
-import java.nio.ByteBuffer;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ScheduledExecutorService;
@@ -27,10 +26,11 @@ import java.util.function.BiFunction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.linecorp.decaton.processor.Completion;
 import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.ProcessingContext;
 import com.linecorp.decaton.processor.metrics.Metrics;
-import com.linecorp.decaton.processor.Completion;
+import com.linecorp.decaton.processor.runtime.internal.TaskKey;
 
 import io.micrometer.core.instrument.Counter;
 import lombok.AccessLevel;
@@ -85,7 +85,7 @@ public class CompactionProcessor<T> implements DecatonProcessor<T> {
     }
 
     private final ScheduledExecutorService executor;
-    private final ConcurrentMap<ByteBuffer, CompactingTask<T>> windowedTasks = new ConcurrentHashMap<>();
+    private final ConcurrentMap<TaskKey, CompactingTask<T>> windowedTasks = new ConcurrentHashMap<>();
     private final BiFunction<CompactingTask<T>, CompactingTask<T>, CompactChoice> compactor;
     private final long lingerMillis;
 
@@ -146,8 +146,8 @@ public class CompactionProcessor<T> implements DecatonProcessor<T> {
         this(lingerMillis, compactor, null);
     }
 
-    private void flush(byte[] key) throws InterruptedException {
-        CompactingTask<T> task = windowedTasks.remove(ByteBuffer.wrap(key));
+    private void flush(TaskKey key) throws InterruptedException {
+        CompactingTask<T> task = windowedTasks.remove(key);
         if (task == null) {
             return;
         }
@@ -156,10 +156,9 @@ public class CompactionProcessor<T> implements DecatonProcessor<T> {
 
     // visible for testing
     Runnable flushTask(ProcessingContext<T> context) {
-        byte[] key = context.key();
         return () -> {
             try {
-                flush(key);
+                flush(context.key());
             } catch (InterruptedException e) {
                 logger.error("interrupted while flushing compacted task result", e);
             } catch (RuntimeException e) {
@@ -183,15 +182,15 @@ public class CompactionProcessor<T> implements DecatonProcessor<T> {
 
     @Override
     public void process(ProcessingContext<T> context, T task) throws InterruptedException {
-        byte[] key = context.key();
         CompactingTask<T> newTask = new CompactingTask<>(context.deferCompletion(), context, task);
+        TaskKey key = context.key();
 
         // Even though we do this read and following updates in separate operation, race condition can't be
         // happened because tasks are guaranteed to be serialized by it's key, so simultaneous processing
         // of tasks sharing the same key won't be happen.
-        CompactingTask<T> prevTask = windowedTasks.get(ByteBuffer.wrap(key));
+        CompactingTask<T> prevTask = windowedTasks.get(key);
         if (prevTask == null) {
-            windowedTasks.put(ByteBuffer.wrap(key), newTask);
+            windowedTasks.put(key, newTask);
             scheduleFlush(context);
             return;
         }
@@ -206,7 +205,7 @@ public class CompactionProcessor<T> implements DecatonProcessor<T> {
             case PICK_RIGHT:
             case PICK_EITHER: // Newer task has larger offset. We want to forward consumed offset.
                 // Update the last task with new one.
-                Object oldEntry = windowedTasks.put(ByteBuffer.wrap(key), newTask);
+                Object oldEntry = windowedTasks.put(key, newTask);
                 if (oldEntry == null) {
                     // By race condition, there is a chance that the scheduled flush for preceding task just
                     // got fired right after this method checked the key's existence at the beginning of this

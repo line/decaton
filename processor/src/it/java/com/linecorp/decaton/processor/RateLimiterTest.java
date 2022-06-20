@@ -18,7 +18,6 @@ package com.linecorp.decaton.processor;
 
 import static org.junit.Assert.assertEquals;
 
-import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
@@ -35,6 +34,7 @@ import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.ProcessorSubscription;
 import com.linecorp.decaton.processor.runtime.ProcessorsBuilder;
 import com.linecorp.decaton.processor.runtime.StaticPropertySupplier;
+import com.linecorp.decaton.processor.runtime.internal.TaskKey;
 import com.linecorp.decaton.protobuf.ProtocolBuffersDeserializer;
 import com.linecorp.decaton.protocol.Sample.HelloTask;
 import com.linecorp.decaton.testing.KafkaClusterRule;
@@ -63,11 +63,11 @@ public class RateLimiterTest {
         for (int i = 0; i < 10000; i++) {
             keys.add("key" + i);
         }
-        Set<ByteBuffer> processedKeys = Collections.synchronizedSet(new HashSet<>());
+        Set<TaskKey> processedKeys = Collections.synchronizedSet(new HashSet<>());
         CountDownLatch processLatch = new CountDownLatch(keys.size());
 
         DecatonProcessor<HelloTask> processor = (context, task) -> {
-            processedKeys.add(ByteBuffer.wrap(context.key()));
+            processedKeys.add(context.key());
             processLatch.countDown();
         };
 

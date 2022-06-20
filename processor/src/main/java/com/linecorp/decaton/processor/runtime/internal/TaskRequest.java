@@ -32,8 +32,7 @@ public class TaskRequest {
     private final TopicPartition topicPartition;
     private final long recordOffset;
     private final OffsetState offsetState;
-    @ToString.Exclude
-    private final byte[] key;
+    private final TaskKey key;
     @ToString.Exclude
     private final Headers headers;
     @ToString.Exclude
@@ -44,7 +43,7 @@ public class TaskRequest {
     public TaskRequest(TopicPartition topicPartition,
                        long recordOffset,
                        OffsetState offsetState,
-                       byte[] key,
+                       TaskKey key,
                        Headers headers,
                        RecordTraceHandle trace,
                        byte[] rawRequestBytes) {

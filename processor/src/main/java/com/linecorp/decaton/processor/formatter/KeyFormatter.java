@@ -18,9 +18,11 @@ package com.linecorp.decaton.processor.formatter;
 
 import java.nio.charset.StandardCharsets;
 
+import com.linecorp.decaton.processor.runtime.internal.TaskKey;
+
 @FunctionalInterface
 public interface KeyFormatter {
-    KeyFormatter DEFAULT = key -> new String(key, StandardCharsets.UTF_8);
+    KeyFormatter DEFAULT = key -> new String(key.array(), StandardCharsets.UTF_8);
 
-    String format(byte[] key);
+    String format(TaskKey key);
 }

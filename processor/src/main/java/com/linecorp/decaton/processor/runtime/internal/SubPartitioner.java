@@ -32,7 +32,7 @@ class SubPartitioner {
         return number & 2147483647;
     }
 
-    public int partitionFor(byte[] key) {
+    public int partitionFor(TaskKey key) {
         if (key == null) {
             return toPositive((int) monotonicValueSupplier.getAndIncrement()) % bound;
         } else {
@@ -41,10 +41,11 @@ class SubPartitioner {
             // Here just by adding few bytes to the key we can "shift" hashing of the key and
             // can get back better distribution again in murmur2 result to evenly distribute keys
             // for subpartitions.
-            final ByteBuffer bb = ByteBuffer.allocate(key.length + 2);
+            final byte[] keyArray = key.array();
+            final ByteBuffer bb = ByteBuffer.allocate(keyArray.length + 2);
             bb.put((byte) 's');
             bb.put((byte) ':');
-            bb.put(key);
+            bb.put(keyArray);
 
             int hash = org.apache.kafka.common.utils.Utils.murmur2(bb.array());
             return toPositive(hash) % bound;
