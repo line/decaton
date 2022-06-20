@@ -50,7 +50,7 @@ import com.linecorp.decaton.testing.TestUtils;
  */
 public class ArbitraryTopicTypeTest {
     @ClassRule
-    public static KafkaClusterRule rule = new KafkaClusterRule();
+    public static final KafkaClusterRule rule = new KafkaClusterRule();
 
     private String topic;
     private String retryTopic;
