@@ -25,6 +25,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 import java.util.stream.Collectors;
 
 import org.junit.Before;
@@ -60,14 +61,15 @@ public class BatchingProcessorTest {
         return HelloTask.newBuilder().setName(name).setAge(age).build();
     }
 
-    private BatchingProcessor<HelloTask> buildProcessor(long lingerMs, int capacity) {
+    private BatchingProcessor<HelloTask> buildProcessor(CountDownLatch processLatch, long lingerMs, int capacity) {
         return new BatchingProcessor<HelloTask>(lingerMs, capacity) {
             @Override
             protected void processBatchingTasks(List<BatchingTask<HelloTask>> batchingTasks) {
                 List<HelloTask> helloTasks =
-                    batchingTasks.stream().map(BatchingTask::task).collect(Collectors.toList());
+                        batchingTasks.stream().map(BatchingTask::task).collect(Collectors.toList());
                 processedTasks.addAll(helloTasks);
                 batchingTasks.forEach(batchingTask -> batchingTask.completion().complete());
+                processLatch.countDown();
             }
         };
     }
@@ -75,12 +77,13 @@ public class BatchingProcessorTest {
     @Test(timeout = 5000)
     public void testLingerLimit() throws InterruptedException {
         long lingerMs = 1000;
-        BatchingProcessor<HelloTask> processor = buildProcessor(lingerMs, Integer.MAX_VALUE);
+        CountDownLatch processLatch = new CountDownLatch(1);
+        BatchingProcessor<HelloTask> processor = buildProcessor(processLatch, lingerMs, Integer.MAX_VALUE);
 
         HelloTask task1 = buildHelloTask("one", 1);
         processor.process(context, task1);
 
-        waitToProcessFirstBatch();
+        processLatch.await();
 
         assertEquals(Collections.singletonList(task1), processedTasks);
         verify(context, times(1)).deferCompletion();
@@ -89,7 +92,8 @@ public class BatchingProcessorTest {
 
     @Test
     public void testCapacityLimit() throws InterruptedException {
-        BatchingProcessor<HelloTask> processor = buildProcessor(Long.MAX_VALUE, 2);
+        CountDownLatch processLatch = new CountDownLatch(1);
+        BatchingProcessor<HelloTask> processor = buildProcessor(processLatch, Long.MAX_VALUE, 2);
 
         HelloTask task1 = buildHelloTask("one", 1);
         HelloTask task2 = buildHelloTask("two", 2);
@@ -99,21 +103,11 @@ public class BatchingProcessorTest {
         processor.process(context, task2);
         processor.process(context, task3);
 
-        waitToProcessFirstBatch();
+        processLatch.await();
 
+        // linger-based flush is disabled, so we can expect second batch never be processed here
         assertEquals(new ArrayList<>(Arrays.asList(task1, task2)), processedTasks);
         verify(context, times(3)).deferCompletion();
         verify(completion, times(processedTasks.size())).complete();
-    }
-
-    private void waitToProcessFirstBatch() throws InterruptedException {
-        int maxLoopCount = 5;
-        int sleepMillis = 1000;
-        for (int i = 0; i < maxLoopCount; i++) {
-            if (!processedTasks.isEmpty()) {
-                break;
-            }
-            Thread.sleep(sleepMillis);
-        }
     }
 }
