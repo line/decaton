@@ -18,7 +18,6 @@ package com.linecorp.decaton.processor.runtime.internal;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import org.apache.kafka.common.TopicPartition;
@@ -26,7 +25,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.linecorp.decaton.processor.DecatonProcessor;
-import com.linecorp.decaton.processor.formatter.KeyFormatter;
 import com.linecorp.decaton.processor.runtime.TaskExtractor;
 import com.linecorp.decaton.processor.metrics.Metrics;
 import com.linecorp.decaton.processor.runtime.DecatonProcessorSupplier;
@@ -38,18 +36,15 @@ public class Processors<T> {
     private final DecatonProcessorSupplier<byte[]> retryProcessorSupplier;
     private final TaskExtractor<T> taskExtractor;
     private final TaskExtractor<T> retryTaskExtractor;
-    private final KeyFormatter keyFormatter;
 
     public Processors(List<DecatonProcessorSupplier<T>> suppliers,
                       DecatonProcessorSupplier<byte[]> retryProcessorSupplier,
                       TaskExtractor<T> taskExtractor,
-                      TaskExtractor<T> retryTaskExtractor,
-                      KeyFormatter keyFormatter) {
+                      TaskExtractor<T> retryTaskExtractor) {
         this.suppliers = Collections.unmodifiableList(suppliers);
         this.retryProcessorSupplier = retryProcessorSupplier;
         this.taskExtractor = taskExtractor;
         this.retryTaskExtractor = retryTaskExtractor;
-        this.keyFormatter = keyFormatter;
     }
 
     private DecatonProcessor<byte[]> retryProcessor(ThreadScope scope) {
@@ -83,7 +78,7 @@ public class Processors<T> {
                                                       scope.threadId()))
                              .collect(Collectors.toList());
             logger.info("Creating partition processor core: {}", scope);
-            return new ProcessPipeline<>(scope, processors, retryProcessor, taskExtractor, keyFormatter, scheduler, metrics);
+            return new ProcessPipeline<>(scope, processors, retryProcessor, taskExtractor, scheduler, metrics);
         } catch (RuntimeException e) {
             // If exception occurred in the middle of instantiating processors, we have to make sure
             // all the previously created processors are destroyed before bubbling up the exception.

@@ -20,7 +20,6 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.lessThan;
 
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -55,8 +54,7 @@ public class SerialProcessing implements ProcessingGuarantee {
                 ProcessedRecord prev = perKeyRecords.get(i - 1);
                 ProcessedRecord current = perKeyRecords.get(i);
 
-                String key = StandardCharsets.UTF_8.decode(entry.getKey()).toString();
-                assertThat("Process time shouldn't overlap. key: " + key,
+                assertThat("Process time shouldn't overlap. key: " + entry.getKey(),
                            prev.endTimeNanos(), lessThan(current.startTimeNanos()));
             }
         }

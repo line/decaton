@@ -18,7 +18,6 @@ package com.linecorp.decaton.processor;
 
 import org.slf4j.MDC;
 
-import com.linecorp.decaton.processor.formatter.KeyFormatter;
 import com.linecorp.decaton.processor.runtime.internal.TaskRequest;
 
 /**
@@ -41,11 +40,11 @@ public class LoggingContext implements AutoCloseable {
 
     private final boolean enabled;
 
-    public LoggingContext(boolean enabled, String subscriptionId, TaskRequest request, TaskMetadata metadata, KeyFormatter keyFormatter) {
+    public LoggingContext(boolean enabled, String subscriptionId, TaskRequest request, TaskMetadata metadata) {
         this.enabled = enabled;
         if (enabled) {
             MDC.put(METADATA_KEY, metadata.toString());
-            MDC.put(TASK_KEY, keyFormatter.format(request.key()));
+            MDC.put(TASK_KEY, String.valueOf(request.key()));
             MDC.put(SUBSCRIPTION_ID_KEY, subscriptionId);
             MDC.put(OFFSET_KEY, String.valueOf(request.recordOffset()));
             MDC.put(TOPIC_KEY, request.topicPartition().topic());
@@ -53,8 +52,8 @@ public class LoggingContext implements AutoCloseable {
         }
     }
 
-    public LoggingContext(String subscriptionId, TaskRequest request, TaskMetadata metadata, KeyFormatter keyFormatter) {
-        this(true, subscriptionId, request, metadata, keyFormatter);
+    public LoggingContext(String subscriptionId, TaskRequest request, TaskMetadata metadata) {
+        this(true, subscriptionId, request, metadata);
     }
 
     @Override

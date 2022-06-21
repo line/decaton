@@ -21,17 +21,16 @@ import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
 
-import com.linecorp.decaton.processor.Completion;
 import com.linecorp.decaton.processor.DecatonProcessor;
-import com.linecorp.decaton.processor.LoggingContext;
+import com.linecorp.decaton.processor.Completion;
+import com.linecorp.decaton.processor.runtime.DecatonTask;
 import com.linecorp.decaton.processor.ProcessingContext;
-import com.linecorp.decaton.processor.formatter.KeyFormatter;
+import com.linecorp.decaton.processor.runtime.ProcessorProperties;
+import com.linecorp.decaton.processor.runtime.TaskExtractor;
 import com.linecorp.decaton.processor.metrics.Metrics;
 import com.linecorp.decaton.processor.metrics.Metrics.ProcessMetrics;
 import com.linecorp.decaton.processor.metrics.Metrics.TaskMetrics;
-import com.linecorp.decaton.processor.runtime.DecatonTask;
-import com.linecorp.decaton.processor.runtime.ProcessorProperties;
-import com.linecorp.decaton.processor.runtime.TaskExtractor;
+import com.linecorp.decaton.processor.LoggingContext;
 import com.linecorp.decaton.processor.runtime.internal.Utils.Timer;
 
 import lombok.extern.slf4j.Slf4j;
@@ -42,7 +41,6 @@ public class ProcessPipeline<T> implements AutoCloseable {
     private final List<DecatonProcessor<T>> processors;
     private final DecatonProcessor<byte[]> retryProcessor;
     private final TaskExtractor<T> taskExtractor;
-    private final KeyFormatter keyFormatter;
     private final ExecutionScheduler scheduler;
     private final TaskMetrics taskMetrics;
     private final ProcessMetrics processMetrics;
@@ -53,7 +51,6 @@ public class ProcessPipeline<T> implements AutoCloseable {
                     List<DecatonProcessor<T>> processors,
                     DecatonProcessor<byte[]> retryProcessor,
                     TaskExtractor<T> taskExtractor,
-                    KeyFormatter keyFormatter,
                     ExecutionScheduler scheduler,
                     Metrics metrics,
                     Clock clock) {
@@ -61,7 +58,6 @@ public class ProcessPipeline<T> implements AutoCloseable {
         this.processors = Collections.unmodifiableList(processors);
         this.retryProcessor = retryProcessor;
         this.taskExtractor = taskExtractor;
-        this.keyFormatter = keyFormatter;
         this.scheduler = scheduler;
         this.clock = clock;
 
@@ -73,10 +69,9 @@ public class ProcessPipeline<T> implements AutoCloseable {
                            List<DecatonProcessor<T>> processors,
                            DecatonProcessor<byte[]> retryProcessor,
                            TaskExtractor<T> taskExtractor,
-                           KeyFormatter keyFormatter,
                            ExecutionScheduler scheduler,
                            Metrics metrics) {
-        this(scope, processors, retryProcessor, taskExtractor, keyFormatter, scheduler, metrics, Clock.systemDefaultZone());
+        this(scope, processors, retryProcessor, taskExtractor, scheduler, metrics, Clock.systemDefaultZone());
     }
 
     public void scheduleThenProcess(TaskRequest request) throws InterruptedException {
@@ -124,7 +119,7 @@ public class ProcessPipeline<T> implements AutoCloseable {
     Completion process(TaskRequest request, DecatonTask<T> task) throws InterruptedException {
         ProcessingContext<T> context =
                 new ProcessingContextImpl<>(scope.subscriptionId(), request, task, processors, retryProcessor,
-                                            keyFormatter, scope.props());
+                                            scope.props());
 
         Timer timer = Utils.timer();
         Completion processResult;

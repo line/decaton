@@ -32,7 +32,6 @@ public class TaskRequest {
     private final TopicPartition topicPartition;
     private final long recordOffset;
     private final OffsetState offsetState;
-    @ToString.Exclude
     private final byte[] key;
     @ToString.Exclude
     private final Headers headers;

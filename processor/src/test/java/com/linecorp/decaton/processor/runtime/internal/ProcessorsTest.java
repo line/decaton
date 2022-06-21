@@ -35,7 +35,6 @@ import org.junit.Test;
 import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
 
-import com.linecorp.decaton.processor.formatter.KeyFormatter;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.DecatonProcessorSupplier;
 import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider;
@@ -70,7 +69,7 @@ public class ProcessorsTest {
         Processors<HelloTask> processors = new Processors<>(
                 suppliers, null,
                 new DefaultTaskExtractor<>(bytes -> HelloTask.getDefaultInstance()),
-                null, KeyFormatter.DEFAULT);
+                null);
 
         doThrow(new RuntimeException("exception")).when(suppliers.get(2)).getProcessor(any(), any(), anyInt());
 
