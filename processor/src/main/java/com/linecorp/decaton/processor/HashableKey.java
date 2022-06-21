@@ -49,7 +49,7 @@ public class HashableKey {
 
     @Override
     public int hashCode() {
-        if (hash == 0 && key.length > 0) {
+        if (hash == 0 && key != null && key.length > 0) {
             hash = Arrays.hashCode(key);
         }
         return hash;
@@ -57,6 +57,8 @@ public class HashableKey {
 
     @Override
     public String toString() {
-        return "HashableKey{key=" + new String(key, StandardCharsets.UTF_8) + '}';
+        final String keyStr = key == null ? "null"
+                                          : '\"' + new String(key, StandardCharsets.UTF_8) + '\"';
+        return "HashableKey{key=" + keyStr + '}';
     }
 }
