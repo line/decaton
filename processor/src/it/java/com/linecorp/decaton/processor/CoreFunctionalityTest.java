@@ -18,7 +18,6 @@ package com.linecorp.decaton.processor;
 
 import static org.junit.Assert.assertTrue;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -154,17 +153,17 @@ public class CoreFunctionalityTest {
         // Note that this processing semantics is not be considered as Decaton specification which users can rely on.
         // Rather, this is just a expected behavior based on current implementation when we set concurrency to 1.
         ProcessingGuarantee noDuplicates = new ProcessingGuarantee() {
-            private final Map<ByteBuffer, List<TestTask>> produced = new HashMap<>();
-            private final Map<ByteBuffer, List<TestTask>> processed = new HashMap<>();
+            private final Map<HashableKey, List<TestTask>> produced = new HashMap<>();
+            private final Map<HashableKey, List<TestTask>> processed = new HashMap<>();
 
             @Override
             public synchronized void onProduce(ProducedRecord record) {
-                produced.computeIfAbsent(ByteBuffer.wrap(record.key()), key -> new ArrayList<>()).add(record.task());
+                produced.computeIfAbsent(new HashableKey(record.key()), key -> new ArrayList<>()).add(record.task());
             }
 
             @Override
             public synchronized void onProcess(TaskMetadata metadata, ProcessedRecord record) {
-                processed.computeIfAbsent(ByteBuffer.wrap(record.key()), key -> new ArrayList<>()).add(record.task());
+                processed.computeIfAbsent(new HashableKey(record.key()), key -> new ArrayList<>()).add(record.task());
             }
 
             @Override
