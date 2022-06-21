@@ -119,10 +119,9 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
                 }
             });
 
-            TaskKey key = new TaskKey(record.key());
-            if (blacklistedKeysFilter.shouldTake(key)) {
+            if (blacklistedKeysFilter.shouldTake(record)) {
                 TaskRequest taskRequest =
-                        new TaskRequest(tp, record.offset(), offsetState, key,
+                        new TaskRequest(tp, record.offset(), offsetState, new TaskKey(record.key()),
                                         record.headers(), trace, record.value());
                 context.addRequest(taskRequest);
             } else {
