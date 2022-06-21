@@ -17,8 +17,8 @@
 package com.linecorp.decaton.testing.processor;
 
 import com.linecorp.decaton.processor.DecatonProcessor;
-import com.linecorp.decaton.processor.runtime.internal.TaskKey;
 
+import lombok.ToString;
 import lombok.Value;
 import lombok.experimental.Accessors;
 
@@ -31,7 +31,8 @@ public class ProcessedRecord {
     /**
      * Key of the task
      */
-    TaskKey key;
+    @ToString.Exclude
+    byte[] key;
     /**
      * Processed task
      */

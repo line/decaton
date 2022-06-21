@@ -64,7 +64,7 @@ public class DecatonTaskRetryQueueingProcessor implements DecatonProcessor<byte[
                                   .setSerializedTask(ByteString.copyFrom(serializedTask))
                                   .build();
 
-        CompletableFuture<PutTaskResult> future = producer.sendRequest(context.key().array(), request);
+        CompletableFuture<PutTaskResult> future = producer.sendRequest(context.key(), request);
         future.whenComplete((r, e) -> {
             if (e == null) {
                 metrics.retryQueuedTasks.increment();

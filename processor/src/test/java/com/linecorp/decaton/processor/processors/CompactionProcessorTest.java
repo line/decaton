@@ -55,7 +55,6 @@ import com.linecorp.decaton.processor.processors.CompactionProcessor.CompactingT
 import com.linecorp.decaton.processor.runtime.DecatonTask;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.internal.ProcessingContextImpl;
-import com.linecorp.decaton.processor.runtime.internal.TaskKey;
 import com.linecorp.decaton.processor.runtime.internal.TaskRequest;
 import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider.NoopTrace;
 import com.linecorp.decaton.protocol.Sample.HelloTask;
@@ -104,7 +103,7 @@ public class CompactionProcessorTest {
                 taskData,
                 taskData.toByteArray());
         TaskRequest request = new TaskRequest(
-                new TopicPartition("topic", 1), 1, null, new TaskKey(name.getBytes(StandardCharsets.UTF_8)), null, NoopTrace.INSTANCE, null);
+                new TopicPartition("topic", 1), 1, null, name.getBytes(StandardCharsets.UTF_8), null, NoopTrace.INSTANCE, null);
         ProcessingContext<HelloTask> context =
                 spy(new ProcessingContextImpl<>("subscription", request, task,
                                                 Arrays.asList(processor, downstream), null,

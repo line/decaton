@@ -58,7 +58,6 @@ import com.linecorp.decaton.processor.runtime.RetryConfig;
 import com.linecorp.decaton.processor.runtime.RetryConfig.RetryConfigBuilder;
 import com.linecorp.decaton.processor.runtime.SubscriptionStateListener;
 import com.linecorp.decaton.processor.runtime.TaskExtractor;
-import com.linecorp.decaton.processor.runtime.internal.TaskKey;
 import com.linecorp.decaton.processor.tracing.TracingProvider;
 import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
 import com.linecorp.decaton.protocol.Decaton.TaskMetadataProto;
@@ -171,7 +170,6 @@ public class ProcessorTestSuite {
             }
             return this;
         }
-
         /**
          * Include additional semantics in assertion.
          * Feature-specific processing guarantee will be injected through this method
@@ -193,8 +191,7 @@ public class ProcessorTestSuite {
             semantics.addAll(customSemantics);
 
             if (statesListener == null) {
-                statesListener = (id, state) -> {
-                };
+                statesListener = (id, state) -> {};
             }
 
             return new ProcessorTestSuite(rule,
@@ -384,7 +381,7 @@ public class ProcessorTestSuite {
             producer.send(record, (metadata, exception) -> {
                 if (exception == null) {
                     future.complete(metadata);
-                    onProduce.accept(new ProducedRecord(new TaskKey(key),
+                    onProduce.accept(new ProducedRecord(key,
                                                         new TopicPartition(metadata.topic(),
                                                                            metadata.partition()),
                                                         metadata.offset(),

@@ -77,13 +77,13 @@ public class DecatonTaskRetryQueueingProcessorTest {
         processor = new DecatonTaskRetryQueueingProcessor(scope, producer);
         doReturn(CompletableFuture.completedFuture(null)).when(producer).sendRequest(any(), any());
         doReturn(new CompletionImpl()).when(context).deferCompletion();
-        doReturn(new TaskKey("key".getBytes(StandardCharsets.UTF_8))).when(context).key();
+        doReturn("key".getBytes(StandardCharsets.UTF_8)).when(context).key();
         doReturn(TaskMetadata.builder().build()).when(context).metadata();
     }
 
     @Test
     public void testRetryRequest() throws InterruptedException {
-        TaskKey key = new TaskKey("key".getBytes(StandardCharsets.UTF_8));
+        byte[] key = "key".getBytes(StandardCharsets.UTF_8);
         TaskMetadata meta =
                 TaskMetadata.builder()
                             .sourceApplicationId("unit-test")
@@ -101,7 +101,7 @@ public class DecatonTaskRetryQueueingProcessorTest {
         processor.process(context, task.toByteArray());
 
         ArgumentCaptor<DecatonTaskRequest> captor = ArgumentCaptor.forClass(DecatonTaskRequest.class);
-        verify(producer, times(1)).sendRequest(eq(key.array()), captor.capture());
+        verify(producer, times(1)).sendRequest(eq(key), captor.capture());
 
         DecatonTaskRequest request = captor.getValue();
         assertEquals(task.toByteString(), request.getSerializedTask());

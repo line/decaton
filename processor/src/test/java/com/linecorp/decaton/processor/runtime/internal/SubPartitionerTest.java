@@ -28,18 +28,20 @@ import org.apache.kafka.common.utils.Utils;
 import org.junit.Before;
 import org.junit.Test;
 
+import com.linecorp.decaton.processor.runtime.internal.SubPartitioner;
+
 public class SubPartitionerTest {
     static final int DIST_KEYS_COUNT = 10000;
     static final int[] PARTITION_COUNTS = { 1, 8, 16, 32, 64, 96 };
     static final int[] SUBPARTITION_COUNTS = { 10, 17, 32, 64 };
     static final double TARGET_STDDEV_RATIO = 0.05;
 
-    static final TaskKey[] keys = new TaskKey[DIST_KEYS_COUNT];
+    static final byte[][] keys = new byte[DIST_KEYS_COUNT][];
 
     @Before
     public void setUp() {
         for (int i = 0; i < keys.length; i++) {
-            keys[i] = new TaskKey(String.valueOf(i).getBytes(StandardCharsets.UTF_8));
+            keys[i] = String.valueOf(i).getBytes(StandardCharsets.UTF_8);
         }
     }
 
@@ -53,14 +55,14 @@ public class SubPartitionerTest {
     @Test
     public void testEvenlyDistributedSelection() {
         for (int partitionCount : PARTITION_COUNTS) {
-            List<List<TaskKey>> partitions = new ArrayList<>(partitionCount);
+            List<List<byte[]>> partitions = new ArrayList<>(partitionCount);
             for (int i = 0; i < partitionCount; i++) {
                 partitions.add(new ArrayList<>());
             }
 
-            for (TaskKey key : keys) {
+            for (byte[] key : keys) {
                 // This is the way used to determine partition in Kafka's DefaultPartitioner
-                int partition = (Utils.murmur2(key.array()) & 2147483647) % partitionCount;
+                int partition = (Utils.murmur2(key) & 2147483647) % partitionCount;
                 partitions.get(partition).add(key);
             }
 
@@ -70,10 +72,10 @@ public class SubPartitionerTest {
                               partitionCount, partStddev, Arrays.toString(partCounts));
 
             for (int subpartitionCount : SUBPARTITION_COUNTS) {
-                for (List<TaskKey> partition : partitions) {
+                for (List<byte[]> partition : partitions) {
                     int[] counts = new int[subpartitionCount];
                     SubPartitioner subPartitioner = new SubPartitioner(counts.length);
-                    for (TaskKey key : partition) {
+                    for (byte[] key : partition) {
                         int subPartition = subPartitioner.partitionFor(key);
                         counts[subPartition]++;
                     }
@@ -95,7 +97,7 @@ public class SubPartitionerTest {
     public void testConsistentSelectionForSameKeys() {
         for (int subpartitionCount : SUBPARTITION_COUNTS) {
             SubPartitioner subPartitioner = new SubPartitioner(subpartitionCount);
-            for (TaskKey key : keys) {
+            for (byte[] key : keys) {
                 int assign1 = subPartitioner.partitionFor(key);
                 int assign2 = subPartitioner.partitionFor(key);
                 assertEquals(String.format("[%d] assign of %s", subpartitionCount, key),

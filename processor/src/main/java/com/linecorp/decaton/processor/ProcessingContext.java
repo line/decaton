@@ -26,7 +26,6 @@ import com.linecorp.decaton.processor.Completion.TimeoutChoice;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.RetryConfig;
 import com.linecorp.decaton.processor.runtime.SubscriptionBuilder;
-import com.linecorp.decaton.processor.runtime.internal.TaskKey;
 
 public interface ProcessingContext<T> {
     /**
@@ -41,7 +40,7 @@ public interface ProcessingContext<T> {
      * @return the key associated to the task now being processed. can be null if key isn't supplied for the
      * task.
      */
-    TaskKey key();
+    byte[] key();
 
     /**
      * Returns the {@link Headers} which is associated to the source {@link ConsumerRecord} of the task.
