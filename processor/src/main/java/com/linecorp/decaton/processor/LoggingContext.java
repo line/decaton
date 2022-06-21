@@ -16,6 +16,8 @@
 
 package com.linecorp.decaton.processor;
 
+import java.nio.charset.StandardCharsets;
+
 import org.slf4j.MDC;
 
 import com.linecorp.decaton.processor.runtime.internal.TaskRequest;
@@ -43,8 +45,10 @@ public class LoggingContext implements AutoCloseable {
     public LoggingContext(boolean enabled, String subscriptionId, TaskRequest request, TaskMetadata metadata) {
         this.enabled = enabled;
         if (enabled) {
+            final String taskKey = request.key() == null ? "" : new String(request.key(), StandardCharsets.UTF_8);
+
             MDC.put(METADATA_KEY, metadata.toString());
-            MDC.put(TASK_KEY, String.valueOf(request.key()));
+            MDC.put(TASK_KEY, taskKey);
             MDC.put(SUBSCRIPTION_ID_KEY, subscriptionId);
             MDC.put(OFFSET_KEY, String.valueOf(request.recordOffset()));
             MDC.put(TOPIC_KEY, request.topicPartition().topic());
