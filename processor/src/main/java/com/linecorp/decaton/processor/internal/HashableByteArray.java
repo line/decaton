@@ -14,7 +14,7 @@
  * under the License.
  */
 
-package com.linecorp.decaton.processor.runtime.internal;
+package com.linecorp.decaton.processor.internal;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;

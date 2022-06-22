@@ -26,6 +26,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.linecorp.decaton.processor.internal.HashableByteArray;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 
 public class BlacklistedKeysFilter {

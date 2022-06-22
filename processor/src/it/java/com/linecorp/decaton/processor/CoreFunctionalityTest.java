@@ -34,7 +34,7 @@ import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.ProcessorScope;
 import com.linecorp.decaton.processor.runtime.Property;
 import com.linecorp.decaton.processor.runtime.StaticPropertySupplier;
-import com.linecorp.decaton.processor.runtime.internal.HashableByteArray;
+import com.linecorp.decaton.processor.internal.HashableByteArray;
 import com.linecorp.decaton.testing.KafkaClusterRule;
 import com.linecorp.decaton.testing.RandomRule;
 import com.linecorp.decaton.testing.processor.ProcessedRecord;

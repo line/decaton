@@ -28,7 +28,7 @@ import org.slf4j.LoggerFactory;
 
 import com.linecorp.decaton.processor.Completion;
 import com.linecorp.decaton.processor.DecatonProcessor;
-import com.linecorp.decaton.processor.runtime.internal.HashableByteArray;
+import com.linecorp.decaton.processor.internal.HashableByteArray;
 import com.linecorp.decaton.processor.ProcessingContext;
 import com.linecorp.decaton.processor.metrics.Metrics;
 

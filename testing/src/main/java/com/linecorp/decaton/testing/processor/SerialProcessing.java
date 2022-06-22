@@ -26,7 +26,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
-import com.linecorp.decaton.processor.runtime.internal.HashableByteArray;
+import com.linecorp.decaton.processor.internal.HashableByteArray;
 import com.linecorp.decaton.processor.TaskMetadata;
 
 public class SerialProcessing implements ProcessingGuarantee {
