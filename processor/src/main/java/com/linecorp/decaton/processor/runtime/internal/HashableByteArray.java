@@ -27,10 +27,11 @@ import java.util.Arrays;
  */
 public final class HashableByteArray {
     private final byte[] array;
-    private int hash;
+    private final int hash;
 
     public HashableByteArray(byte[] array) {
         this.array = array;
+        hash = Arrays.hashCode(array);
     }
 
     public byte[] getArray() {
@@ -49,9 +50,6 @@ public final class HashableByteArray {
 
     @Override
     public int hashCode() {
-        if (hash == 0 && array != null && array.length > 0) {
-            hash = Arrays.hashCode(array);
-        }
         return hash;
     }
 
