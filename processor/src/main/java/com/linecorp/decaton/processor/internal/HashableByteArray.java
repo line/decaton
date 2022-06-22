@@ -16,7 +16,6 @@
 
 package com.linecorp.decaton.processor.internal;
 
-import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
 /**
@@ -55,8 +54,6 @@ public final class HashableByteArray {
 
     @Override
     public String toString() {
-        final String keyStr = array == null ? "null"
-                                            : '\"' + new String(array, StandardCharsets.UTF_8) + '\"';
-        return "HashableKey{key=" + keyStr + '}';
+        return "HashableKey{key=" + ByteArrays.toString(array) + '}';
     }
 }
