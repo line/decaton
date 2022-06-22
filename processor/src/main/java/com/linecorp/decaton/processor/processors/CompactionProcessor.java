@@ -28,7 +28,7 @@ import org.slf4j.LoggerFactory;
 
 import com.linecorp.decaton.processor.Completion;
 import com.linecorp.decaton.processor.DecatonProcessor;
-import com.linecorp.decaton.processor.HashableKey;
+import com.linecorp.decaton.processor.runtime.internal.HashableByteArray;
 import com.linecorp.decaton.processor.ProcessingContext;
 import com.linecorp.decaton.processor.metrics.Metrics;
 
@@ -85,7 +85,7 @@ public class CompactionProcessor<T> implements DecatonProcessor<T> {
     }
 
     private final ScheduledExecutorService executor;
-    private final ConcurrentMap<HashableKey, CompactingTask<T>> windowedTasks = new ConcurrentHashMap<>();
+    private final ConcurrentMap<HashableByteArray, CompactingTask<T>> windowedTasks = new ConcurrentHashMap<>();
     private final BiFunction<CompactingTask<T>, CompactingTask<T>, CompactChoice> compactor;
     private final long lingerMillis;
 
@@ -147,7 +147,7 @@ public class CompactionProcessor<T> implements DecatonProcessor<T> {
     }
 
     private void flush(byte[] key) throws InterruptedException {
-        CompactingTask<T> task = windowedTasks.remove(new HashableKey(key));
+        CompactingTask<T> task = windowedTasks.remove(new HashableByteArray(key));
         if (task == null) {
             return;
         }
@@ -188,7 +188,7 @@ public class CompactionProcessor<T> implements DecatonProcessor<T> {
         // Even though we do this read and following updates in separate operation, race condition can't be
         // happened because tasks are guaranteed to be serialized by it's key, so simultaneous processing
         // of tasks sharing the same key won't be happen.
-        final HashableKey key = new HashableKey(context.key());
+        final HashableByteArray key = new HashableByteArray(context.key());
         CompactingTask<T> prevTask = windowedTasks.get(key);
         if (prevTask == null) {
             windowedTasks.put(key, newTask);

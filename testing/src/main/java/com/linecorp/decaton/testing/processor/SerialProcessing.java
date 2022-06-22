@@ -26,11 +26,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
-import com.linecorp.decaton.processor.HashableKey;
+import com.linecorp.decaton.processor.runtime.internal.HashableByteArray;
 import com.linecorp.decaton.processor.TaskMetadata;
 
 public class SerialProcessing implements ProcessingGuarantee {
-    private final Map<HashableKey, List<ProcessedRecord>> records = new HashMap<>();
+    private final Map<HashableByteArray, List<ProcessedRecord>> records = new HashMap<>();
 
     @Override
     public void onProduce(ProducedRecord record) {
@@ -39,14 +39,14 @@ public class SerialProcessing implements ProcessingGuarantee {
 
     @Override
     public synchronized void onProcess(TaskMetadata metadata, ProcessedRecord record) {
-        records.computeIfAbsent(new HashableKey(record.key()),
+        records.computeIfAbsent(new HashableByteArray(record.key()),
                                 key -> new ArrayList<>()).add(record);
     }
 
     @Override
     public void doAssert() {
         // Checks there's no overlap between two consecutive records' processing time
-        for (Entry<HashableKey, List<ProcessedRecord>> entry : records.entrySet()) {
+        for (Entry<HashableByteArray, List<ProcessedRecord>> entry : records.entrySet()) {
             List<ProcessedRecord> perKeyRecords = entry.getValue();
             perKeyRecords.sort(Comparator.comparingLong(ProcessedRecord::startTimeNanos));
 

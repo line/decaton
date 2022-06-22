@@ -26,18 +26,17 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.linecorp.decaton.processor.HashableKey;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 
 public class BlacklistedKeysFilter {
     private static final Logger logger = LoggerFactory.getLogger(BlacklistedKeysFilter.class);
 
-    private volatile Set<HashableKey> ignoreKeys;
+    private volatile Set<HashableByteArray> ignoreKeys;
 
     public BlacklistedKeysFilter(ProcessorProperties props) {
         props.get(CONFIG_IGNORE_KEYS)
              .listen((oldValue, newValue) -> ignoreKeys =
-                     newValue.stream().map(key -> new HashableKey(key.getBytes(StandardCharsets.UTF_8))).collect(Collectors.toSet())
+                     newValue.stream().map(key -> new HashableByteArray(key.getBytes(StandardCharsets.UTF_8))).collect(Collectors.toSet())
              );
     }
 
@@ -46,7 +45,7 @@ public class BlacklistedKeysFilter {
             return true;
         }
 
-        final HashableKey key = new HashableKey(record.key());
+        final HashableByteArray key = new HashableByteArray(record.key());
         // Preceding isEmpty() check is for reducing tiny overhead applied for each contains() by calling
         // Object#hashCode. Since ignoreKeys should be empty for most cases..
         if (!ignoreKeys.isEmpty() && ignoreKeys.contains(key)) {

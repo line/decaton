@@ -14,27 +14,27 @@
  * under the License.
  */
 
-package com.linecorp.decaton.processor;
+package com.linecorp.decaton.processor.runtime.internal;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
 /**
- * This is a wrapper for record keys in {@code byte[]} to support {@link #equals(Object)} and {@link #hashCode()},
+ * This is a wrapper for {@code byte[]} to support {@link #equals(Object)} and {@link #hashCode()},
  * so that they can be stored as a key or item of HashMap or HashSet.
  *
  * It also supports caching the computed hash code like {@link String}.
  */
-public class HashableKey {
-    private final byte[] key;
+public final class HashableByteArray {
+    private final byte[] array;
     private int hash;
 
-    public HashableKey(byte[] key) {
-        this.key = key;
+    public HashableByteArray(byte[] array) {
+        this.array = array;
     }
 
-    public byte[] getKey() {
-        return key;
+    public byte[] getArray() {
+        return array;
     }
 
     @Override
@@ -42,23 +42,23 @@ public class HashableKey {
         if (this == o) {return true;}
         if (o == null || getClass() != o.getClass()) {return false;}
 
-        final HashableKey that = (HashableKey) o;
+        final HashableByteArray that = (HashableByteArray) o;
 
-        return Arrays.equals(key, that.key);
+        return Arrays.equals(array, that.array);
     }
 
     @Override
     public int hashCode() {
-        if (hash == 0 && key != null && key.length > 0) {
-            hash = Arrays.hashCode(key);
+        if (hash == 0 && array != null && array.length > 0) {
+            hash = Arrays.hashCode(array);
         }
         return hash;
     }
 
     @Override
     public String toString() {
-        final String keyStr = key == null ? "null"
-                                          : '\"' + new String(key, StandardCharsets.UTF_8) + '\"';
+        final String keyStr = array == null ? "null"
+                                            : '\"' + new String(array, StandardCharsets.UTF_8) + '\"';
         return "HashableKey{key=" + keyStr + '}';
     }
 }

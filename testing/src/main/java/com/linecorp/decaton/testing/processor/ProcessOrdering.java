@@ -29,31 +29,31 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
-import com.linecorp.decaton.processor.HashableKey;
+import com.linecorp.decaton.processor.runtime.internal.HashableByteArray;
 import com.linecorp.decaton.processor.TaskMetadata;
 
 public class ProcessOrdering implements ProcessingGuarantee {
     private final Map<TestTask, Long> taskToOffset = new HashMap<>();
-    private final Map<HashableKey, List<TestTask>> producedRecords = new HashMap<>();
-    private final Map<HashableKey, List<TestTask>> processedRecords = new HashMap<>();
+    private final Map<HashableByteArray, List<TestTask>> producedRecords = new HashMap<>();
+    private final Map<HashableByteArray, List<TestTask>> processedRecords = new HashMap<>();
 
     @Override
     public synchronized void onProduce(ProducedRecord record) {
         taskToOffset.put(record.task(), record.offset());
-        producedRecords.computeIfAbsent(new HashableKey(record.key()),
+        producedRecords.computeIfAbsent(new HashableByteArray(record.key()),
                                         key -> new ArrayList<>()).add(record.task());
     }
 
     @Override
     public synchronized void onProcess(TaskMetadata metadata, ProcessedRecord record) {
-        processedRecords.computeIfAbsent(new HashableKey(record.key()),
+        processedRecords.computeIfAbsent(new HashableByteArray(record.key()),
                                          key -> new ArrayList<>()).add(record.task());
     }
 
     @Override
     public void doAssert() {
-        for (Entry<HashableKey, List<TestTask>> entry : producedRecords.entrySet()) {
-            final HashableKey key = entry.getKey();
+        for (Entry<HashableByteArray, List<TestTask>> entry : producedRecords.entrySet()) {
+            final HashableByteArray key = entry.getKey();
             List<TestTask> produced = entry.getValue();
             List<TestTask> processed = processedRecords.get(key);
 
