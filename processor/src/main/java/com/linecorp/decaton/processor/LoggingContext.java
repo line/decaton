@@ -45,7 +45,7 @@ public class LoggingContext implements AutoCloseable {
     public LoggingContext(boolean enabled, String subscriptionId, TaskRequest request, TaskMetadata metadata) {
         this.enabled = enabled;
         if (enabled) {
-            final String taskKey = request.key() == null ? "" : new String(request.key(), StandardCharsets.UTF_8);
+            final String taskKey = request.key() == null ? "null" : new String(request.key(), StandardCharsets.UTF_8);
 
             MDC.put(METADATA_KEY, metadata.toString());
             MDC.put(TASK_KEY, taskKey);
