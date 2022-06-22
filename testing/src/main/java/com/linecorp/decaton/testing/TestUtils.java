@@ -58,7 +58,7 @@ public class TestUtils {
         return sequence.getAndIncrement();
     }
 
-    public static Properties defaultProducerProps(String bootstrapServers) {
+    private static Properties defaultProducerProps(String bootstrapServers) {
         Properties props = new Properties();
         props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         props.setProperty(ProducerConfig.CLIENT_ID_CONFIG, "test-client-" + sequence());
