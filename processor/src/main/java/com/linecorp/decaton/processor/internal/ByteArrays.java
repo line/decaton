@@ -26,8 +26,7 @@ public final class ByteArrays {
         if (array == null) {
             return "null";
         }
-        // Quote here to differentiate null vs array of {'n', 'u', 'l', 'l'}
-        return '"' + new String(array, StandardCharsets.UTF_8) + '"';
+        return new String(array, StandardCharsets.UTF_8);
     }
 
     private ByteArrays() {}
