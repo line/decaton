@@ -33,10 +33,6 @@ public final class HashableByteArray {
         hash = Arrays.hashCode(array);
     }
 
-    public byte[] getArray() {
-        return array;
-    }
-
     @Override
     public boolean equals(Object o) {
         if (this == o) {return true;}
