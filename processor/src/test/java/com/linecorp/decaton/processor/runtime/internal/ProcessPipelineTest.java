@@ -32,6 +32,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.util.Collections;
 import java.util.Optional;
@@ -92,7 +93,7 @@ public class ProcessPipelineTest {
 
     private static TaskRequest taskRequest() {
         return new TaskRequest(
-                new TopicPartition("topic", 1), 1, new OffsetState(1234), "TEST", null, NoopTrace.INSTANCE, REQUEST.toByteArray());
+                new TopicPartition("topic", 1), 1, new OffsetState(1234), "TEST".getBytes(StandardCharsets.UTF_8), null, NoopTrace.INSTANCE, REQUEST.toByteArray());
     }
 
     @Rule
@@ -252,4 +253,3 @@ public class ProcessPipelineTest {
         assertFalse(request.offsetState().completion().isComplete());
     }
 }
-

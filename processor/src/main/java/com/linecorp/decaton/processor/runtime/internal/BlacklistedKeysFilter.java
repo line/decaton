@@ -18,30 +18,39 @@ package com.linecorp.decaton.processor.runtime.internal;
 
 import static com.linecorp.decaton.processor.runtime.ProcessorProperties.CONFIG_IGNORE_KEYS;
 
-import java.util.HashSet;
+import java.nio.charset.StandardCharsets;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.linecorp.decaton.processor.internal.HashableByteArray;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 
 public class BlacklistedKeysFilter {
     private static final Logger logger = LoggerFactory.getLogger(BlacklistedKeysFilter.class);
 
-    private volatile Set<String> ignoreKeys;
+    private volatile Set<HashableByteArray> ignoreKeys;
 
     public BlacklistedKeysFilter(ProcessorProperties props) {
         props.get(CONFIG_IGNORE_KEYS)
-             .listen((oldValue, newValue) -> ignoreKeys = new HashSet<>(newValue));
+             .listen((oldValue, newValue) -> ignoreKeys =
+                     newValue.stream().map(key -> new HashableByteArray(key.getBytes(StandardCharsets.UTF_8))).collect(Collectors.toSet())
+             );
     }
 
-    public boolean shouldTake(ConsumerRecord<String, byte[]> record) {
+    public boolean shouldTake(ConsumerRecord<byte[], byte[]> record) {
+        if (record.key() == null) {
+            return true;
+        }
+
+        final HashableByteArray key = new HashableByteArray(record.key());
         // Preceding isEmpty() check is for reducing tiny overhead applied for each contains() by calling
         // Object#hashCode. Since ignoreKeys should be empty for most cases..
-        if (!ignoreKeys.isEmpty() && ignoreKeys.contains(record.key())) {
-            logger.debug("Ignore task which has key configured to ignore: {}", record.key());
+        if (!ignoreKeys.isEmpty() && ignoreKeys.contains(key)) {
+            logger.debug("Ignore task which has key configured to ignore: {}", key);
             return false;
         }
 

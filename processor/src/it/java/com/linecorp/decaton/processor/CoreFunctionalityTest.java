@@ -34,6 +34,7 @@ import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.ProcessorScope;
 import com.linecorp.decaton.processor.runtime.Property;
 import com.linecorp.decaton.processor.runtime.StaticPropertySupplier;
+import com.linecorp.decaton.processor.internal.HashableByteArray;
 import com.linecorp.decaton.testing.KafkaClusterRule;
 import com.linecorp.decaton.testing.RandomRule;
 import com.linecorp.decaton.testing.processor.ProcessedRecord;
@@ -153,17 +154,17 @@ public class CoreFunctionalityTest {
         // Note that this processing semantics is not be considered as Decaton specification which users can rely on.
         // Rather, this is just a expected behavior based on current implementation when we set concurrency to 1.
         ProcessingGuarantee noDuplicates = new ProcessingGuarantee() {
-            private final Map<String, List<TestTask>> produced = new HashMap<>();
-            private final Map<String, List<TestTask>> processed = new HashMap<>();
+            private final Map<HashableByteArray, List<TestTask>> produced = new HashMap<>();
+            private final Map<HashableByteArray, List<TestTask>> processed = new HashMap<>();
 
             @Override
             public synchronized void onProduce(ProducedRecord record) {
-                produced.computeIfAbsent(record.key(), key -> new ArrayList<>()).add(record.task());
+                produced.computeIfAbsent(new HashableByteArray(record.key()), key -> new ArrayList<>()).add(record.task());
             }
 
             @Override
             public synchronized void onProcess(TaskMetadata metadata, ProcessedRecord record) {
-                processed.computeIfAbsent(record.key(), key -> new ArrayList<>()).add(record.task());
+                processed.computeIfAbsent(new HashableByteArray(record.key()), key -> new ArrayList<>()).add(record.task());
             }
 
             @Override

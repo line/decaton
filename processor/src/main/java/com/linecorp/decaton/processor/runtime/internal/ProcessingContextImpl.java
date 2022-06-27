@@ -68,7 +68,7 @@ public class ProcessingContextImpl<T> implements ProcessingContext<T> {
     }
 
     @Override
-    public String key() {
+    public byte[] key() {
         return request.key();
     }
 

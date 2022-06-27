@@ -54,7 +54,7 @@ public class DecatonClientImplTest {
     public MockitoRule rule = MockitoJUnit.rule();
 
     @Mock
-    private Producer<String, DecatonTaskRequest> producer;
+    private Producer<byte[], DecatonTaskRequest> producer;
 
     @Mock
     private Supplier<Long> timestampSupplier;
@@ -62,7 +62,7 @@ public class DecatonClientImplTest {
     private DecatonClientImpl<HelloTask> client;
 
     @Captor
-    private ArgumentCaptor<ProducerRecord<String, DecatonTaskRequest>> captor;
+    private ArgumentCaptor<ProducerRecord<byte[], DecatonTaskRequest>> captor;
 
     @Before
     public void setUp() {
@@ -78,7 +78,7 @@ public class DecatonClientImplTest {
         client.put("key", HelloTask.getDefaultInstance());
 
         verify(producer, times(1)).send(captor.capture(), any(Callback.class));
-        ProducerRecord<String, DecatonTaskRequest> record = captor.getValue();
+        ProducerRecord<byte[], DecatonTaskRequest> record = captor.getValue();
         assertNull(record.timestamp());
         assertEquals(1234, record.value().getMetadata().getTimestampMillis());
     }
@@ -90,7 +90,7 @@ public class DecatonClientImplTest {
         client.put("key", HelloTask.getDefaultInstance(), ignored -> {});
 
         verify(producer, times(1)).send(captor.capture(), any(Callback.class));
-        ProducerRecord<String, DecatonTaskRequest> record = captor.getValue();
+        ProducerRecord<byte[], DecatonTaskRequest> record = captor.getValue();
         assertNull(record.timestamp());
         assertEquals(1234, record.value().getMetadata().getTimestampMillis());
     }
@@ -102,7 +102,7 @@ public class DecatonClientImplTest {
         client.put("key", HelloTask.getDefaultInstance(), 5678);
 
         verify(producer, times(1)).send(captor.capture(), any(Callback.class));
-        ProducerRecord<String, DecatonTaskRequest> record = captor.getValue();
+        ProducerRecord<byte[], DecatonTaskRequest> record = captor.getValue();
         assertNull(record.timestamp());
         assertEquals(5678, record.value().getMetadata().getTimestampMillis());
     }
@@ -114,7 +114,7 @@ public class DecatonClientImplTest {
         client.put("key", HelloTask.getDefaultInstance(), 5678, ignored -> {});
 
         verify(producer, times(1)).send(captor.capture(), any(Callback.class));
-        ProducerRecord<String, DecatonTaskRequest> record = captor.getValue();
+        ProducerRecord<byte[], DecatonTaskRequest> record = captor.getValue();
         assertNull(record.timestamp());
         assertEquals(5678, record.value().getMetadata().getTimestampMillis());
     }
@@ -149,7 +149,7 @@ public class DecatonClientImplTest {
         client.put("key", HelloTask.getDefaultInstance(), TaskMetadata.builder().build());
 
         verify(producer, times(1)).send(captor.capture(), any(Callback.class));
-        ProducerRecord<String, DecatonTaskRequest> record = captor.getValue();
+        ProducerRecord<byte[], DecatonTaskRequest> record = captor.getValue();
         assertTrue(record.value().getMetadata().getTimestampMillis() > 0);
         assertNotNull(record.value().getMetadata().getSourceApplicationId());
         assertNotNull(record.value().getMetadata().getSourceInstanceId());
@@ -157,7 +157,7 @@ public class DecatonClientImplTest {
 
     private void verifyAndAssertTaskMetadata(long timestamp, long scheduledTime) {
         verify(producer, times(1)).send(captor.capture(), any(Callback.class));
-        ProducerRecord<String, DecatonTaskRequest> record = captor.getValue();
+        ProducerRecord<byte[], DecatonTaskRequest> record = captor.getValue();
         assertNull(record.timestamp());
         assertEquals(timestamp, record.value().getMetadata().getTimestampMillis());
         assertEquals(scheduledTime, record.value().getMetadata().getScheduledTimeMillis());

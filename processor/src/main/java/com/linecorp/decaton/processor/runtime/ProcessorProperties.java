@@ -43,6 +43,10 @@ public class ProcessorProperties extends AbstractDecatonProperties {
     /**
      * List of keys of task to skip processing.
      *
+     * Note that this property accepts only String keys, while Decaton consumer supports consuming
+     * keys of arbitrary type. This means that records with non-String keys may just pass through
+     * this filter.
+     *
      * Reloadable: yes
      */
     public static final PropertyDefinition<List<String>> CONFIG_IGNORE_KEYS =

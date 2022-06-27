@@ -18,6 +18,7 @@ package com.linecorp.decaton.testing.processor;
 
 import static com.linecorp.decaton.testing.TestUtils.DEFINITELY_TOO_SLOW;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -95,7 +96,7 @@ public class ProcessorTestSuite {
     private final Set<ProcessingGuarantee> semantics;
     private final SubscriptionStatesListener statesListener;
     private final TracingProvider tracingProvider;
-    private final Function<String, Producer<String, DecatonTaskRequest>> producerSupplier;
+    private final Function<String, Producer<byte[], DecatonTaskRequest>> producerSupplier;
     private final TaskExtractor<TestTask> customTaskExtractor;
 
     private static final int DEFAULT_NUM_TASKS = 10000;
@@ -153,7 +154,7 @@ public class ProcessorTestSuite {
          * Expected use case:
          *   supply a producer which adds tracing id to each message to test tracing-functionality in e2e
          */
-        private Function<String, Producer<String, DecatonTaskRequest>> producerSupplier = TestUtils::producer;
+        private Function<String, Producer<byte[], DecatonTaskRequest>> producerSupplier = TestUtils::producer;
         /**
          * Supply custom {@link TaskExtractor} to be used to extract a task.
          */
@@ -221,7 +222,7 @@ public class ProcessorTestSuite {
         CountDownLatch rollingRestartLatch = new CountDownLatch(numTasks / 2);
         ProcessorSubscription[] subscriptions = new ProcessorSubscription[NUM_SUBSCRIPTION_INSTANCES];
 
-        try (Producer<String, DecatonTaskRequest> producer = producerSupplier.apply(rule.bootstrapServers())) {
+        try (Producer<byte[], DecatonTaskRequest> producer = producerSupplier.apply(rule.bootstrapServers())) {
             ConcurrentMap<TopicPartition, Long> retryOffsets = new ConcurrentHashMap<>();
             for (int i = 0; i < subscriptions.length; i++) {
                 subscriptions[i] = newSubscription(i, topic, Optional.of(rollingRestartLatch), retryOffsets);
@@ -351,7 +352,7 @@ public class ProcessorTestSuite {
      * @return A CompletableFuture of Map, which holds partition as the key and max offset as the value
      */
     private CompletableFuture<Map<TopicPartition, Long>> produceTasks(
-            Producer<String, DecatonTaskRequest> producer,
+            Producer<byte[], DecatonTaskRequest> producer,
             String topic,
             Consumer<ProducedRecord> onProduce) {
         @SuppressWarnings("unchecked")
@@ -360,7 +361,7 @@ public class ProcessorTestSuite {
         TestTaskSerializer serializer = new TestTaskSerializer();
         for (int i = 0; i < produceFutures.length; i++) {
             TestTask task = new TestTask(String.valueOf(i));
-            String key = String.valueOf(i % NUM_KEYS);
+            byte[] key = String.valueOf(i % NUM_KEYS).getBytes(StandardCharsets.UTF_8);
             TaskMetadataProto taskMetadata =
                     TaskMetadataProto.newBuilder()
                                      .setTimestampMillis(System.currentTimeMillis())
@@ -372,7 +373,7 @@ public class ProcessorTestSuite {
                                       .setMetadata(taskMetadata)
                                       .setSerializedTask(ByteString.copyFrom(serializer.serialize(task)))
                                       .build();
-            ProducerRecord<String, DecatonTaskRequest> record =
+            ProducerRecord<byte[], DecatonTaskRequest> record =
                     new ProducerRecord<>(topic, null, taskMetadata.getTimestampMillis(), key, request);
             CompletableFuture<RecordMetadata> future = new CompletableFuture<>();
             produceFutures[i] = future;
@@ -403,17 +404,17 @@ public class ProcessorTestSuite {
         });
     }
 
-    private static class InterceptingProducer extends ProducerAdaptor<String, DecatonTaskRequest> {
+    private static class InterceptingProducer extends ProducerAdaptor<byte[], DecatonTaskRequest> {
         private final Consumer<RecordMetadata> interceptor;
 
-        InterceptingProducer(Producer<String, DecatonTaskRequest> delegate,
+        InterceptingProducer(Producer<byte[], DecatonTaskRequest> delegate,
                              Consumer<RecordMetadata> interceptor) {
             super(delegate);
             this.interceptor = interceptor;
         }
 
         @Override
-        public Future<RecordMetadata> send(ProducerRecord<String, DecatonTaskRequest> record,
+        public Future<RecordMetadata> send(ProducerRecord<byte[], DecatonTaskRequest> record,
                                            Callback callback) {
             return super.send(record, (meta, e) -> {
                 if (meta != null) {

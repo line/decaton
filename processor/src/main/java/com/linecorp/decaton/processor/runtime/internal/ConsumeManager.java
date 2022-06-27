@@ -93,16 +93,16 @@ public class ConsumeManager implements AutoCloseable {
          * Process a {@link ConsumerRecord} that has been consumed from the topic.
          * @param record a record that has been fetched from the target topic.
          */
-        void receive(ConsumerRecord<String, byte[]> record);
+        void receive(ConsumerRecord<byte[], byte[]> record);
     }
 
-    private final Consumer<String, byte[]> consumer;
+    private final Consumer<byte[], byte[]> consumer;
     private final PartitionStates states;
     private final ConsumerHandler handler;
     private final SubscriptionMetrics metrics;
     private final AtomicBoolean consumerClosing;
 
-    public ConsumeManager(Consumer<String, byte[]> consumer,
+    public ConsumeManager(Consumer<byte[], byte[]> consumer,
                           PartitionStates states,
                           ConsumerHandler handler,
                           SubscriptionMetrics metrics) {
@@ -162,7 +162,7 @@ public class ConsumeManager implements AutoCloseable {
      */
     public void poll() {
         Timer timer = Utils.timer();
-        ConsumerRecords<String, byte[]> records = consumer.poll(POLL_TIMEOUT_MILLIS);
+        ConsumerRecords<byte[], byte[]> records = consumer.poll(POLL_TIMEOUT_MILLIS);
         metrics.consumerPollTime.record(timer.duration());
 
         timer = Utils.timer();

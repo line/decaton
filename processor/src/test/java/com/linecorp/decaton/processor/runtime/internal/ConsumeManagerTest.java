@@ -62,10 +62,10 @@ public class ConsumeManagerTest {
     static final String TOPIC = "topic";
 
     @Mock
-    Consumer<String, byte[]> consumer;
+    Consumer<byte[], byte[]> consumer;
 
     @Captor
-    ArgumentCaptor<ConsumerRecord<String, byte[]>> recordsCaptor;
+    ArgumentCaptor<ConsumerRecord<byte[], byte[]>> recordsCaptor;
 
     @Mock
     PartitionStates states;

@@ -26,10 +26,11 @@ import java.util.function.BiFunction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.linecorp.decaton.processor.Completion;
 import com.linecorp.decaton.processor.DecatonProcessor;
+import com.linecorp.decaton.processor.internal.HashableByteArray;
 import com.linecorp.decaton.processor.ProcessingContext;
 import com.linecorp.decaton.processor.metrics.Metrics;
-import com.linecorp.decaton.processor.Completion;
 
 import io.micrometer.core.instrument.Counter;
 import lombok.AccessLevel;
@@ -84,7 +85,7 @@ public class CompactionProcessor<T> implements DecatonProcessor<T> {
     }
 
     private final ScheduledExecutorService executor;
-    private final ConcurrentMap<String, CompactingTask<T>> windowedTasks = new ConcurrentHashMap<>();
+    private final ConcurrentMap<HashableByteArray, CompactingTask<T>> windowedTasks = new ConcurrentHashMap<>();
     private final BiFunction<CompactingTask<T>, CompactingTask<T>, CompactChoice> compactor;
     private final long lingerMillis;
 
@@ -145,8 +146,8 @@ public class CompactionProcessor<T> implements DecatonProcessor<T> {
         this(lingerMillis, compactor, null);
     }
 
-    private void flush(String key) throws InterruptedException {
-        CompactingTask<T> task = windowedTasks.remove(key);
+    private void flush(byte[] key) throws InterruptedException {
+        CompactingTask<T> task = windowedTasks.remove(new HashableByteArray(key));
         if (task == null) {
             return;
         }
@@ -155,7 +156,7 @@ public class CompactionProcessor<T> implements DecatonProcessor<T> {
 
     // visible for testing
     Runnable flushTask(ProcessingContext<T> context) {
-        String key = context.key();
+        byte[] key = context.key();
         return () -> {
             try {
                 flush(key);
@@ -182,12 +183,12 @@ public class CompactionProcessor<T> implements DecatonProcessor<T> {
 
     @Override
     public void process(ProcessingContext<T> context, T task) throws InterruptedException {
-        String key = context.key();
         CompactingTask<T> newTask = new CompactingTask<>(context.deferCompletion(), context, task);
 
         // Even though we do this read and following updates in separate operation, race condition can't be
         // happened because tasks are guaranteed to be serialized by it's key, so simultaneous processing
         // of tasks sharing the same key won't be happen.
+        final HashableByteArray key = new HashableByteArray(context.key());
         CompactingTask<T> prevTask = windowedTasks.get(key);
         if (prevTask == null) {
             windowedTasks.put(key, newTask);

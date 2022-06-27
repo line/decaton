@@ -44,7 +44,7 @@ public class DecatonTaskProducer implements AutoCloseable {
         presetProducerConfig.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "1");
     }
 
-    private final Producer<String, DecatonTaskRequest> producer;
+    private final Producer<byte[], DecatonTaskRequest> producer;
     private final String topic;
 
     private static Properties completeProducerConfig(Properties producerConfig) {
@@ -61,8 +61,8 @@ public class DecatonTaskProducer implements AutoCloseable {
         this.topic = topic;
     }
 
-    public CompletableFuture<PutTaskResult> sendRequest(String key, DecatonTaskRequest request) {
-        ProducerRecord<String, DecatonTaskRequest> record = new ProducerRecord<>(topic, key, request);
+    public CompletableFuture<PutTaskResult> sendRequest(byte[] key, DecatonTaskRequest request) {
+        ProducerRecord<byte[], DecatonTaskRequest> record = new ProducerRecord<>(topic, key, request);
 
         CompletableFuture<PutTaskResult> result = new CompletableFuture<>();
         producer.send(record, (metadata, exception) -> {
