@@ -128,6 +128,8 @@ public class ProcessPipeline<T> implements AutoCloseable {
         } catch (Exception e) {
             if (e instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
+            } else {
+                taskMetrics.tasksError.increment();
             }
             processResult = CompletionImpl.completedCompletion();
 
