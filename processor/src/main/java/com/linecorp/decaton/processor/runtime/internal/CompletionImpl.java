@@ -41,6 +41,12 @@ public class CompletionImpl implements Completion {
         return comp;
     }
 
+    static CompletionImpl failedCompletion(Throwable ex) {
+        CompletionImpl comp = new CompletionImpl();
+        comp.completeExceptionally(ex);
+        return comp;
+    }
+
     public CompletionImpl() {
         future = new CompletableFuture<>();
     }
@@ -91,5 +97,10 @@ public class CompletionImpl implements Completion {
     @Override
     public void complete() {
         future.complete(null);
+    }
+
+    // package private for now, since decaton ignores exception in almost every place.
+    void completeExceptionally(Throwable ex) {
+        future.completeExceptionally(ex);
     }
 }

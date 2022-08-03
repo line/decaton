@@ -128,13 +128,9 @@ public class ProcessPipeline<T> implements AutoCloseable {
         } catch (Exception e) {
             if (e instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
-            } else {
-                taskMetrics.tasksError.increment();
             }
-            processResult = CompletionImpl.completedCompletion();
+            processResult = CompletionImpl.failedCompletion(e);
 
-            log.error("Uncaught exception thrown by processor {} for task {}",
-                      scope, request, e);
         } finally {
             Duration elapsed = timer.duration();
             if (log.isTraceEnabled()) {
@@ -154,6 +150,7 @@ public class ProcessPipeline<T> implements AutoCloseable {
             processMetrics.tasksCompleteDuration.record(completeDuration);
 
             if (e != null) {
+                log.error("Uncaught exception thrown by processor {} for task {}", scope, request, e);
                 taskMetrics.tasksError.increment();
             }
         });
