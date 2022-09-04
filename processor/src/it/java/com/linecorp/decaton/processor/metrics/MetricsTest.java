@@ -18,9 +18,11 @@ package com.linecorp.decaton.processor.metrics;
 
 import static java.util.Collections.emptyList;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
 
 import java.util.List;
 import java.util.Properties;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -138,6 +140,55 @@ public class MetricsTest {
                                                          .tags("topic", topicName)
                                                          .gauges().stream()
                                                          .mapToDouble(Gauge::value).sum() == PARTITIONS);
+        }
+    }
+
+    @Test(timeout = 30000)
+    public void testTasksMetrics() throws Exception {
+        Metrics.register(new PrometheusMeterRegistry(PrometheusConfig.DEFAULT));
+        CountDownLatch processLatch = new CountDownLatch(4);
+        try (ProcessorSubscription subscription = TestUtils.subscription(
+                rule.bootstrapServers(),
+                builder -> builder.processorsBuilder(
+                        ProcessorsBuilder.consuming(topicName, new ProtocolBuffersDeserializer<>(HelloTask.parser()))
+                                .thenProcess((context, task) -> {
+                                    processLatch.countDown();
+                                    switch (new String(context.key())) {
+                                        case "sync-success":
+                                            break;
+                                        case "sync-fail":
+                                            throw new RuntimeException("exception!");
+                                        case "async-success":
+                                            context.deferCompletion().complete();
+                                            break;
+                                        case "async-fail":
+                                            CompletableFuture<Void> future = new CompletableFuture<>();
+                                            future.completeExceptionally(new RuntimeException("fail"));
+                                            context.deferCompletion().completeWith(future);
+                                            break;
+                                        default:
+                                            fail("unexpected key");
+                                    }
+                                })));
+             DecatonClient<HelloTask> client = TestUtils.client(topicName, rule.bootstrapServers())) {
+            client.put("sync-success", HelloTask.getDefaultInstance());
+            client.put("sync-fail", HelloTask.getDefaultInstance());
+            client.put("async-success", HelloTask.getDefaultInstance());
+            client.put("async-fail", HelloTask.getDefaultInstance());
+            processLatch.await();
+
+            // count all tasks regardless of the result
+            TestUtils.awaitCondition("total processed task count should becomes 4",
+                    () -> Metrics.registry()
+                                .find("decaton.tasks.processed")
+                                .tags("topic", topicName)
+                                .counters().stream().mapToDouble(cn -> cn.count()).sum() == 4.0);
+            // count synchronous failure only
+            TestUtils.awaitCondition("total error task count should becomes 1",
+                    () -> Metrics.registry()
+                            .find("decaton.tasks.error")
+                            .tags("topic", topicName)
+                            .counters().stream().mapToDouble(cn -> cn.count()).sum() == 1.0);
         }
     }
 }
