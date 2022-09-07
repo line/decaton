@@ -41,6 +41,12 @@ public class CompletionImpl implements Completion {
         return comp;
     }
 
+    static CompletionImpl failedCompletion(Throwable ex) {
+        CompletionImpl comp = new CompletionImpl();
+        comp.future.completeExceptionally(ex);
+        return comp;
+    }
+
     public CompletionImpl() {
         future = new CompletableFuture<>();
     }
