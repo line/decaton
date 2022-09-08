@@ -16,7 +16,6 @@
 
 package com.linecorp.decaton.centraldogma;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -33,10 +32,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import com.linecorp.centraldogma.client.CentralDogma;
+import com.linecorp.centraldogma.client.CentralDogmaRepository;
 import com.linecorp.centraldogma.client.Watcher;
 import com.linecorp.centraldogma.common.Change;
 import com.linecorp.centraldogma.common.ChangeConflictException;
 import com.linecorp.centraldogma.common.EntryType;
+import com.linecorp.centraldogma.common.PathPattern;
 import com.linecorp.centraldogma.common.Query;
 import com.linecorp.centraldogma.common.Revision;
 import com.linecorp.decaton.processor.runtime.DynamicProperty;
@@ -82,7 +83,16 @@ public class CentralDogmaPropertySupplier implements PropertySupplier, AutoClose
      */
     public CentralDogmaPropertySupplier(CentralDogma centralDogma, String projectName,
                                         String repositoryName, String fileName) {
-        rootWatcher = centralDogma.fileWatcher(projectName, repositoryName, Query.ofJsonPath(fileName));
+        this(centralDogma.forRepo(projectName, repositoryName), fileName);
+    }
+
+    /**
+     * Creates a new {@link CentralDogmaPropertySupplier}.
+     * @param centralDogmaRepository {@link CentralDogmaRepository} instance that points to a particular Central Dogma repository.
+     * @param fileName the name of the file containing properties as top-level fields.
+     */
+    public CentralDogmaPropertySupplier(CentralDogmaRepository centralDogmaRepository, String fileName) {
+        rootWatcher = centralDogmaRepository.watcher(Query.ofJsonPath(fileName)).start();
         try {
             rootWatcher.awaitInitialValue(INITIAL_VALUE_TIMEOUT_SECS, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
@@ -144,8 +154,20 @@ public class CentralDogmaPropertySupplier implements PropertySupplier, AutoClose
      */
     public static CentralDogmaPropertySupplier register(CentralDogma centralDogma, String project,
                                                         String repository, String filename) {
-        createPropertyFile(centralDogma, project, repository, filename, ProcessorProperties.defaultProperties());
-        return new CentralDogmaPropertySupplier(centralDogma, project, repository, filename);
+        final CentralDogmaRepository centralDogmaRepository = centralDogma.forRepo(project, repository);
+        createPropertyFile(centralDogmaRepository, filename, ProcessorProperties.defaultProperties());
+        return new CentralDogmaPropertySupplier(centralDogmaRepository, filename);
+    }
+
+    /**
+     * Create a default property file if it doesn't exist on Central Dogma and
+     * return a {@link CentralDogmaPropertySupplier}.
+     * @param centralDogmaRepository a {@link CentralDogmaRepository} instance that points to a particular Central Dogma repository.
+     * @param filename the name of the file containing properties as top-level fields.
+     */
+    public static CentralDogmaPropertySupplier register(CentralDogmaRepository centralDogmaRepository, String filename) {
+        createPropertyFile(centralDogmaRepository, filename, ProcessorProperties.defaultProperties());
+        return new CentralDogmaPropertySupplier(centralDogmaRepository, filename);
     }
 
     /**
@@ -160,6 +182,19 @@ public class CentralDogmaPropertySupplier implements PropertySupplier, AutoClose
     public static CentralDogmaPropertySupplier register(CentralDogma centralDogma, String project,
                                                         String repository, String filename,
                                                         PropertySupplier supplier) {
+        return register(centralDogma.forRepo(project, repository), filename, supplier);
+    }
+
+    /**
+     * Create a default property file if it doesn't exist on Central Dogma and
+     * return a {@link CentralDogmaPropertySupplier}.
+     * @param centralDogmaRepository a {@link CentralDogmaRepository} instance that points to a particular Central Dogma repository.
+     * @param filename the name of the file containing properties as top-level fields.
+     * @param supplier a {@link PropertySupplier} which provides a set of properties with customized initial values.
+     */
+    public static CentralDogmaPropertySupplier register(CentralDogmaRepository centralDogmaRepository,
+                                                        String filename,
+                                                        PropertySupplier supplier) {
         List<Property<?>> properties = ProcessorProperties.defaultProperties().stream().map(defaultProperty -> {
             Optional<? extends Property<?>> prop = supplier.getProperty(defaultProperty.definition());
             if (prop.isPresent()) {
@@ -169,15 +204,14 @@ public class CentralDogmaPropertySupplier implements PropertySupplier, AutoClose
             }
         }).collect(Collectors.toList());
 
-        createPropertyFile(centralDogma, project, repository, filename, properties);
-        return new CentralDogmaPropertySupplier(centralDogma, project, repository, filename);
+        createPropertyFile(centralDogmaRepository, filename, properties);
+        return new CentralDogmaPropertySupplier(centralDogmaRepository, filename);
     }
 
-    private static void createPropertyFile(CentralDogma centralDogma, String project,
-                                           String repository, String fileName,
+    private static void createPropertyFile(CentralDogmaRepository centralDogmaRepository, String fileName,
                                            List<Property<?>> properties) {
-        Revision baseRevision = normalizeRevision(centralDogma, project, repository, Revision.HEAD);
-        boolean fileExists = fileExists(centralDogma, project, repository, fileName, baseRevision);
+        Revision baseRevision = normalizeRevision(centralDogmaRepository, Revision.HEAD);
+        boolean fileExists = fileExists(centralDogmaRepository, fileName, baseRevision);
         long startedTime = System.currentTimeMillis();
         long remainingTime = remainingTime(PROPERTY_CREATION_TIMEOUT_MILLIS, startedTime);
 
@@ -185,21 +219,20 @@ public class CentralDogmaPropertySupplier implements PropertySupplier, AutoClose
 
         while (!fileExists && remainingTime > 0) {
             try {
-                centralDogma.push(project, repository, baseRevision,
-                                  String.format("[CentralDogmaPropertySupplier] Property file created: %s",
-                                                fileName),
-                                  Change.ofJsonUpsert(fileName, jsonNodeProperties))
-                            .get(remainingTime, TimeUnit.MILLISECONDS);
-                logger.info("New property file registered on Central Dogma: {}/{}/{}",
-                            project, repository, fileName);
+                centralDogmaRepository
+                        .commit(String.format("[CentralDogmaPropertySupplier] Property file created: %s", fileName),
+                                Change.ofJsonUpsert(fileName, jsonNodeProperties))
+                        .push(baseRevision)
+                        .get(remainingTime, TimeUnit.MILLISECONDS);
+                logger.info("New property file {} registered on Central Dogma", fileName);
                 fileExists = true;
             } catch (ExecutionException e) {
                 if (e.getCause() instanceof ChangeConflictException) {
                     logger.warn(
                             "Failed to push to {}. Someone pushed a commit against current revision. Try again",
                             baseRevision);
-                    baseRevision = normalizeRevision(centralDogma, project, repository, Revision.HEAD);
-                    fileExists = fileExists(centralDogma, project, repository, fileName, baseRevision);
+                    baseRevision = normalizeRevision(centralDogmaRepository, Revision.HEAD);
+                    fileExists = fileExists(centralDogmaRepository, fileName, baseRevision);
                 } else {
                     logger.error("Failed to push to {}. Unexpected exception happened", baseRevision, e);
                     break;
@@ -222,11 +255,10 @@ public class CentralDogmaPropertySupplier implements PropertySupplier, AutoClose
         }
     }
 
-    private static Revision normalizeRevision(CentralDogma centralDogma, String project,
-                                              String repository, Revision revision) {
+    private static Revision normalizeRevision(CentralDogmaRepository centralDogmaRepository, Revision revision) {
         try {
-            return centralDogma.normalizeRevision(project, repository, revision)
-                               .get(PROPERTY_CREATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
+            return centralDogmaRepository.normalize(revision)
+                                         .get(PROPERTY_CREATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new RuntimeException(e);
@@ -236,13 +268,13 @@ public class CentralDogmaPropertySupplier implements PropertySupplier, AutoClose
     }
 
     // visible for testing
-    static boolean fileExists(CentralDogma centralDogma, String project,
-                              String repository, String filename, Revision revision) {
+    static boolean fileExists(CentralDogmaRepository centralDogmaRepository, String filename, Revision revision) {
         try {
-            Map<String, EntryType> files = centralDogma
-                    .listFiles(project, repository, revision, filename)
-                    .get(PROPERTY_CREATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
-            return files.containsKey(filename);
+            return centralDogmaRepository
+                    .file(PathPattern.of(filename))
+                    .list(revision)
+                    .get(PROPERTY_CREATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
+                    .containsKey(filename);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new RuntimeException(e);
