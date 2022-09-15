@@ -21,10 +21,10 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -48,9 +48,13 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 
-import com.linecorp.centraldogma.client.CentralDogma;
+import com.linecorp.centraldogma.client.CentralDogmaRepository;
+import com.linecorp.centraldogma.client.CommitRequest;
+import com.linecorp.centraldogma.client.FilesRequest;
 import com.linecorp.centraldogma.client.Watcher;
+import com.linecorp.centraldogma.client.WatcherRequest;
 import com.linecorp.centraldogma.common.Change;
+import com.linecorp.centraldogma.common.PathPattern;
 import com.linecorp.centraldogma.common.PushResult;
 import com.linecorp.centraldogma.common.Query;
 import com.linecorp.centraldogma.common.Revision;
@@ -67,8 +71,6 @@ public class CentralDogmaPropertySupplierTest {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    private static final String PROJECT_NAME = "unit-test";
-    private static final String REPOSITORY_NAME = "repo";
     private static final String FILENAME = "/subscription.json";
 
     private static final PropertyDefinition<Long> LONG_PROPERTY =
@@ -80,7 +82,10 @@ public class CentralDogmaPropertySupplierTest {
                                       PropertyDefinition.checkListElement(String.class));
 
     @Mock
-    private CentralDogma centralDogma;
+    private CentralDogmaRepository centralDogmaRepository;
+
+    @Mock
+    WatcherRequest<JsonNode> watcherRequest;
 
     @Mock
     Watcher<JsonNode> rootWatcher;
@@ -89,10 +94,9 @@ public class CentralDogmaPropertySupplierTest {
 
     @Before
     public void setUp() {
-        when(centralDogma.fileWatcher(PROJECT_NAME, REPOSITORY_NAME, Query.ofJsonPath(FILENAME)))
-                .thenReturn(rootWatcher);
-
-        supplier = new CentralDogmaPropertySupplier(centralDogma, PROJECT_NAME, REPOSITORY_NAME, FILENAME);
+        when(centralDogmaRepository.watcher(Query.ofJsonPath(FILENAME))).thenReturn(watcherRequest);
+        when(watcherRequest.start()).thenReturn(rootWatcher);
+        supplier = new CentralDogmaPropertySupplier(centralDogmaRepository, FILENAME);
     }
 
     @Test
@@ -149,33 +153,23 @@ public class CentralDogmaPropertySupplierTest {
 
     @Test
     public void testRegisterWithDefaultSettings() {
-        when(centralDogma.normalizeRevision(PROJECT_NAME, REPOSITORY_NAME, Revision.HEAD)).thenReturn(
-                CompletableFuture.completedFuture(Revision.HEAD)
-        );
-        when(centralDogma.listFiles(PROJECT_NAME, REPOSITORY_NAME, Revision.HEAD, FILENAME)).thenReturn(
-                CompletableFuture.completedFuture(Collections.emptyMap())
-        );
-        when(centralDogma.push(
-                eq(PROJECT_NAME),
-                eq(REPOSITORY_NAME),
-                eq(Revision.HEAD),
-                any(String.class),
-                eq(Change.ofJsonUpsert(FILENAME, defaultPropertiesAsJsonNode())))
-        ).thenReturn(
-                CompletableFuture.completedFuture(
-                        new PushResult(Revision.HEAD, 1)
-                )
-        );
+        when(centralDogmaRepository.normalize(Revision.HEAD))
+                .thenReturn(CompletableFuture.completedFuture(Revision.HEAD));
 
-        CentralDogmaPropertySupplier.register(centralDogma, PROJECT_NAME, REPOSITORY_NAME, FILENAME);
-        verify(centralDogma, times(1)).push(
-                eq(PROJECT_NAME),
-                eq(REPOSITORY_NAME),
-                eq(Revision.HEAD),
+        final FilesRequest filesRequest = mock(FilesRequest.class);
+        when(centralDogmaRepository.file(any(PathPattern.class))).thenReturn(filesRequest);
+        when(filesRequest.list(Revision.HEAD)).thenReturn(CompletableFuture.completedFuture(Collections.emptyMap()));
+
+        final CommitRequest commitRequest = mock(CommitRequest.class);
+        when(centralDogmaRepository.commit(anyString(), eq(Change.ofJsonUpsert(FILENAME, defaultPropertiesAsJsonNode())))).thenReturn(commitRequest);
+        when(commitRequest.push(Revision.HEAD)).thenReturn(CompletableFuture.completedFuture(new PushResult(Revision.HEAD, 1)));
+
+
+        CentralDogmaPropertySupplier.register(centralDogmaRepository, FILENAME);
+        verify(centralDogmaRepository).commit(
                 any(String.class),
                 eq(Change.ofJsonUpsert(FILENAME, defaultPropertiesAsJsonNode()))
         );
-
     }
 
     @Test
@@ -210,31 +204,20 @@ public class CentralDogmaPropertySupplierTest {
         final JsonNode jsonNodeProperties = CentralDogmaPropertySupplier
                 .convertPropertyListToJsonNode(listPropertiesForVerifyingMock);
 
-        when(centralDogma.normalizeRevision(PROJECT_NAME, REPOSITORY_NAME, Revision.HEAD)).thenReturn(
-                CompletableFuture.completedFuture(Revision.HEAD)
-        );
-        when(centralDogma.listFiles(PROJECT_NAME, REPOSITORY_NAME, Revision.HEAD, FILENAME)).thenReturn(
-                CompletableFuture.completedFuture(Collections.emptyMap())
-        );
+        when(centralDogmaRepository.normalize(Revision.HEAD))
+                .thenReturn(CompletableFuture.completedFuture(Revision.HEAD));
 
-        when(centralDogma.push(
-                eq(PROJECT_NAME),
-                eq(REPOSITORY_NAME),
-                eq(Revision.HEAD),
-                any(String.class),
-                eq(Change.ofJsonUpsert(FILENAME, jsonNodeProperties)))
-        ).thenReturn(
-                CompletableFuture.completedFuture(
-                        new PushResult(Revision.HEAD, whenCentralDogmaPushed)
-                )
-        );
+        final FilesRequest filesRequest = mock(FilesRequest.class);
+        when(centralDogmaRepository.file(any(PathPattern.class))).thenReturn(filesRequest);
+        when(filesRequest.list(Revision.HEAD)).thenReturn(CompletableFuture.completedFuture(Collections.emptyMap()));
 
-        CentralDogmaPropertySupplier.register(centralDogma, PROJECT_NAME, REPOSITORY_NAME, FILENAME, supplier);
+        final CommitRequest commitRequest = mock(CommitRequest.class);
+        when(centralDogmaRepository.commit(any(String.class), eq(Change.ofJsonUpsert(FILENAME, jsonNodeProperties)))).thenReturn(commitRequest);
+        when(commitRequest.push(Revision.HEAD)).thenReturn(CompletableFuture.completedFuture(new PushResult(Revision.HEAD, whenCentralDogmaPushed)));
 
-        verify(centralDogma, times(1)).push(
-                eq(PROJECT_NAME),
-                eq(REPOSITORY_NAME),
-                eq(Revision.HEAD),
+        CentralDogmaPropertySupplier.register(centralDogmaRepository, FILENAME, supplier);
+
+        verify(centralDogmaRepository).commit(
                 any(String.class),
                 eq(Change.ofJsonUpsert(FILENAME, jsonNodeProperties))
         );

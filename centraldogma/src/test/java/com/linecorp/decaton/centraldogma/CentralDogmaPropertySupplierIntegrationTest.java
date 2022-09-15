@@ -38,6 +38,7 @@ import org.junit.Test;
 import com.fasterxml.jackson.databind.JsonNode;
 
 import com.linecorp.centraldogma.client.CentralDogma;
+import com.linecorp.centraldogma.client.CentralDogmaRepository;
 import com.linecorp.centraldogma.common.Change;
 import com.linecorp.centraldogma.common.Entry;
 import com.linecorp.centraldogma.common.Query;
@@ -76,12 +77,13 @@ public class CentralDogmaPropertySupplierIntegrationTest {
                 + "}\n";
 
         client.createProject(PROJECT_NAME).join();
-        client.createRepository(PROJECT_NAME, REPOSITORY_NAME).join();
-        client.push(PROJECT_NAME, REPOSITORY_NAME, Revision.HEAD, "summary",
-                    Change.ofJsonUpsert(FILENAME, ORIGINAL)).join();
+        CentralDogmaRepository centralDogmaRepository = client.createRepository(PROJECT_NAME, REPOSITORY_NAME).join();
+        centralDogmaRepository
+              .commit("summary", Change.ofJsonUpsert(FILENAME, ORIGINAL))
+              .push()
+              .join();
 
-        CentralDogmaPropertySupplier supplier = new CentralDogmaPropertySupplier(
-                client, PROJECT_NAME, REPOSITORY_NAME, FILENAME);
+        CentralDogmaPropertySupplier supplier = new CentralDogmaPropertySupplier(centralDogmaRepository, FILENAME);
 
         Property<Integer> prop = supplier.getProperty(CONFIG_PARTITION_CONCURRENCY).get();
 
@@ -100,8 +102,10 @@ public class CentralDogmaPropertySupplierIntegrationTest {
         CountDownLatch latch = new CountDownLatch(2);
         prop.listen((o, n) -> latch.countDown());
 
-        client.push(PROJECT_NAME, REPOSITORY_NAME, Revision.HEAD, "summary",
-                    Change.ofJsonPatch(FILENAME, ORIGINAL, UPDATED)).join();
+        centralDogmaRepository
+              .commit("summary", Change.ofJsonPatch(FILENAME, ORIGINAL, UPDATED))
+              .push()
+              .join();
 
         latch.await();
         assertEquals(20, prop.value().intValue());
@@ -111,31 +115,34 @@ public class CentralDogmaPropertySupplierIntegrationTest {
     public void testFileExist() {
         CentralDogma client = centralDogmaRule.client();
         client.createProject(PROJECT_NAME).join();
-        client.createRepository(PROJECT_NAME, REPOSITORY_NAME).join();
-        client.push(PROJECT_NAME, REPOSITORY_NAME, Revision.HEAD, "test",
-                    Change.ofJsonUpsert(FILENAME, "{}")).join();
+        CentralDogmaRepository centralDogmaRepository = client.createRepository(PROJECT_NAME, REPOSITORY_NAME)
+                                                              .join();
+
+        centralDogmaRepository
+                .commit("test", Change.ofJsonUpsert(FILENAME, "{}"))
+                .push()
+                .join();
         assertTrue(CentralDogmaPropertySupplier
-                           .fileExists(client, PROJECT_NAME, REPOSITORY_NAME, FILENAME, Revision.HEAD));
+                           .fileExists(centralDogmaRepository, FILENAME, Revision.HEAD));
     }
 
     @Test
     public void testFileNonExistent() {
         CentralDogma client = centralDogmaRule.client();
         client.createProject(PROJECT_NAME).join();
-        client.createRepository(PROJECT_NAME, REPOSITORY_NAME).join();
+        CentralDogmaRepository centralDogmaRepository = client.createRepository(PROJECT_NAME, REPOSITORY_NAME).join();
         assertFalse(CentralDogmaPropertySupplier
-                            .fileExists(client, PROJECT_NAME, REPOSITORY_NAME, FILENAME, Revision.HEAD));
+                            .fileExists(centralDogmaRepository, FILENAME, Revision.HEAD));
     }
 
     @Test(timeout = 10000)
     public void testCDRegisterSuccess() {
         CentralDogma client = centralDogmaRule.client();
         client.createProject(PROJECT_NAME).join();
-        client.createRepository(PROJECT_NAME, REPOSITORY_NAME).join();
+        CentralDogmaRepository centralDogmaRepository = client.createRepository(PROJECT_NAME, REPOSITORY_NAME).join();
 
-        CentralDogmaPropertySupplier.register(client, PROJECT_NAME, REPOSITORY_NAME, FILENAME);
-        Entry<JsonNode> prop = client.getFile(PROJECT_NAME, REPOSITORY_NAME,
-                                              Revision.HEAD, Query.ofJson(FILENAME)).join();
+        CentralDogmaPropertySupplier.register(centralDogmaRepository, FILENAME);
+        Entry<JsonNode> prop = centralDogmaRepository.file(Query.ofJson(FILENAME)).get().join();
 
         assertEquals(defaultProperties().asText(),
                      prop.content().asText());
@@ -149,17 +156,17 @@ public class CentralDogmaPropertySupplierIntegrationTest {
 
     @Test(timeout = 15000, expected = RuntimeException.class)
     public void testCDRegisterTimeout() {
-        CentralDogma client = spy(centralDogmaRule.client());
+        CentralDogma client = centralDogmaRule.client();
         client.createProject(PROJECT_NAME).join();
-        client.createRepository(PROJECT_NAME, REPOSITORY_NAME).join();
+        CentralDogmaRepository centralDogmaRepository = spy(client.createRepository(PROJECT_NAME, REPOSITORY_NAME).join());
 
         doReturn(CompletableFuture.completedFuture(new Revision(1)))
-                .when(client)
-                .normalizeRevision(eq(PROJECT_NAME), eq(REPOSITORY_NAME), any());
+                .when(centralDogmaRepository)
+                .normalize(any());
 
-        CentralDogmaPropertySupplier.register(client, PROJECT_NAME, REPOSITORY_NAME, FILENAME);
+        CentralDogmaPropertySupplier.register(centralDogmaRepository, FILENAME);
 
-        CentralDogmaPropertySupplier.register(client, PROJECT_NAME, REPOSITORY_NAME, FILENAME);
+        CentralDogmaPropertySupplier.register(centralDogmaRepository, FILENAME);
     }
 
     @Test(timeout = 15000)
@@ -167,29 +174,27 @@ public class CentralDogmaPropertySupplierIntegrationTest {
         CountDownLatch userAIsRunning = new CountDownLatch(1);
         CountDownLatch userBIsRunning = new CountDownLatch(1);
 
-        CentralDogma userA = spy(centralDogmaRule.client());
-        CentralDogma userB = centralDogmaRule.client();
+        CentralDogma client = centralDogmaRule.client();
+        client.createProject(PROJECT_NAME).join();
+        CentralDogmaRepository userB = client.createRepository(PROJECT_NAME, REPOSITORY_NAME).join();
+        CentralDogmaRepository userA = spy(client.forRepo(PROJECT_NAME, REPOSITORY_NAME));
         JsonNode userBPush = Jackson.readTree("{\"foo\": \"bar\"}");
-
-        userA.createProject(PROJECT_NAME).join();
-        userA.createRepository(PROJECT_NAME, REPOSITORY_NAME).join();
 
         doAnswer(i -> {
             userAIsRunning.countDown();
             userBIsRunning.await();
             return i.callRealMethod();
         }).when(userA)
-          .push(eq(PROJECT_NAME), eq(REPOSITORY_NAME), any(), any(),
-                eq(Change.ofJsonUpsert(FILENAME, defaultProperties())));
+          .commit(any(), eq(Change.ofJsonUpsert(FILENAME, defaultProperties())));
 
         ExecutorService service = Executors.newFixedThreadPool(2);
-        service.submit(() -> CentralDogmaPropertySupplier
-                .register(userA, PROJECT_NAME, REPOSITORY_NAME, FILENAME));
+        service.submit(() -> CentralDogmaPropertySupplier.register(userA, FILENAME));
         service.submit(() -> {
             try {
                 userAIsRunning.await();
-                userB.push(PROJECT_NAME, REPOSITORY_NAME, Revision.HEAD, "test",
-                           Change.ofJsonUpsert(FILENAME, userBPush)).join();
+                userB.commit("test", Change.ofJsonUpsert(FILENAME, userBPush))
+                     .push()
+                     .join();
                 userBIsRunning.countDown();
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
@@ -199,8 +204,9 @@ public class CentralDogmaPropertySupplierIntegrationTest {
         service.shutdown();
         service.awaitTermination(Long.MAX_VALUE, TimeUnit.SECONDS);
 
-        Entry<JsonNode> prop = userA.getFile(PROJECT_NAME, REPOSITORY_NAME,
-                                             Revision.HEAD, Query.ofJson(FILENAME)).join();
+        Entry<JsonNode> prop = userA.file(Query.ofJson(FILENAME))
+                                    .get()
+                                    .join();
 
         assertEquals(userBPush, prop.content());
     }
