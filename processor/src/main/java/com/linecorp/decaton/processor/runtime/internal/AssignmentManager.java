@@ -52,9 +52,22 @@ public class AssignmentManager {
     interface AssignmentStore {
         /**
          * Return set of {@link TopicPartition}s that are currently assigned.
+         * Note that this have to include all partitions including revoking ones.
          * @return set of assigned topic-partitions.
          */
         Set<TopicPartition> assignedPartitions();
+
+        /**
+         * Mark the partitions as revoking
+         * @param partitions target partition to mark
+         */
+        void markRevoking(Collection<TopicPartition> partitions);
+
+        /**
+         * Set the partitions as not revoking
+         * @param partitions target partition to unmark
+         */
+        void unmarkRevoking(Collection<TopicPartition> partitions);
 
         /**
          * Add new topic-partitions with associated configurations.
@@ -90,6 +103,7 @@ public class AssignmentManager {
 
         partitionsRevoked(removed);
         partitionsAssigned(added);
+        store.unmarkRevoking(newSet);
     }
 
     /**

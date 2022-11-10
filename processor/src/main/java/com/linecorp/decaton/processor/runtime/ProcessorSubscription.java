@@ -32,6 +32,7 @@ import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.TimeoutException;
 
 import com.linecorp.decaton.processor.metrics.Metrics;
@@ -74,7 +75,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
 
     class Handler implements ConsumerHandler {
         @Override
-        public void prepareForRebalance() {
+        public void prepareForRebalance(Collection<TopicPartition> revokingPartitions) {
             updateState(SubscriptionStateListener.State.REBALANCING);
 
             waitForRemainingTasksCompletion(rebalanceTimeoutMillis.value());
@@ -83,6 +84,8 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
             } catch (CommitFailedException | TimeoutException e) {
                 log.warn("Offset commit failed at group rebalance", e);
             }
+
+            contexts.markRevoking(revokingPartitions);
         }
 
         @Override
@@ -263,6 +266,13 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
             contexts.updateHighWatermarks();
             try {
                 commitManager.commitSync();
+            } catch (RebalanceInProgressException e) {
+                // At this point, Decaton already stopped processing though, from KafkaConsumer perspective,
+                // it's not closed yet (i.e. rebalance due to member-leave is not initiated), so another rebalance might be
+                // initiated (likely by other consumer instances), and then, this commitSync may fail due to
+                // RebalanceInProgressException.
+                // So, since it's not a fatal situation and kind of expected failure, we just log at WARN level.
+                log.warn("Offset commit failed because rebalance is ongoing when closing consumer", e);
             } catch (RuntimeException e) {
                 log.error("Offset commit failed before closing consumer", e);
             }

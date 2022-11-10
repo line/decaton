@@ -18,11 +18,13 @@ package com.linecorp.decaton.processor.runtime.internal;
 
 import static com.linecorp.decaton.processor.runtime.ProcessorProperties.CONFIG_PARTITION_CONCURRENCY;
 import static com.linecorp.decaton.processor.runtime.ProcessorProperties.CONFIG_PROCESSING_RATE;
+import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
@@ -88,13 +90,17 @@ public class PartitionContextsTest {
     private List<PartitionContext> putContexts(int count) {
         List<PartitionContext> cts = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
-            TopicPartition tp = new TopicPartition("topic", i);
+            TopicPartition tp = tp(i);
             PartitionContext context = mock(PartitionContext.class);
             doReturn(tp).when(context).topicPartition();
             doReturn(context).when(contexts).instantiateContext(tp);
             cts.add(contexts.initContext(tp, false));
         }
         return cts;
+    }
+
+    private static TopicPartition tp(int partition) {
+        return new TopicPartition("topic", partition);
     }
 
     @Before
@@ -282,5 +288,59 @@ public class PartitionContextsTest {
         contexts.maybeHandlePropertyReload();
 
         verify(contexts, times(12)).instantiateContext(any());
+    }
+
+    @Test
+    public void testMarkRevoking() {
+        putContexts(2);
+        contexts.markRevoking(asList(tp(0)));
+        verify(contexts.get(tp(0)), times(1)).revoking(true);
+        verify(contexts.get(tp(1)), never()).revoking(anyBoolean());
+
+        contexts.unmarkRevoking(asList(tp(0)));
+        verify(contexts.get(tp(0)), times(1)).revoking(false);
+        verify(contexts.get(tp(1)), never()).revoking(anyBoolean());
+    }
+
+    @Test
+    public void testPauseResumeOnlyNonRevoking() {
+        List<PartitionContext> cts = putContexts(3);
+        // mark revoking
+        doReturn(true).when(cts.get(0)).revoking();
+
+        // pausing all partitions, but revoking partition should be excluded
+        doReturn(true).when(contexts).pausingAllProcessing();
+        List<TopicPartition> partitions = contexts.partitionsNeedsPause();
+        assertEquals(new HashSet<>(asList(tp(1), tp(2))), new HashSet<>(partitions));
+
+        for (PartitionContext c : cts) {
+            doReturn(true).when(c).paused();
+        }
+        // resuming all partitions, but revoking partition should be excluded
+        doReturn(false).when(contexts).pausingAllProcessing();
+        partitions = contexts.partitionsNeedsResume();
+        assertEquals(new HashSet<>(asList(tp(1), tp(2))), new HashSet<>(partitions));
+    }
+
+    @Test
+    public void testCommitReadyOnlyNonRevoking() {
+        List<PartitionContext> cts = putContexts(3);
+        // mark revoking
+        doReturn(true).when(cts.get(0)).revoking();
+
+        doReturn(OptionalLong.of(0)).when(cts.get(0)).offsetWaitingCommit();
+        doReturn(OptionalLong.of(1)).when(cts.get(1)).offsetWaitingCommit();
+        doReturn(OptionalLong.empty()).when(cts.get(2)).offsetWaitingCommit();
+        Map<TopicPartition, OffsetAndMetadata> readyOffsets = contexts.commitReadyOffsets();
+
+        assertEquals(1, readyOffsets.size());
+        assertEquals(2, readyOffsets.get(tp(1)).offset());
+
+        // unmark revoking
+        doReturn(false).when(cts.get(0)).revoking();
+        doReturn(OptionalLong.empty()).when(cts.get(1)).offsetWaitingCommit();
+        readyOffsets = contexts.commitReadyOffsets();
+        assertEquals(1, readyOffsets.size());
+        assertEquals(1, readyOffsets.get(tp(0)).offset());
     }
 }

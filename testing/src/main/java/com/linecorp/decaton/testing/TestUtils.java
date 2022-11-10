@@ -146,7 +146,8 @@ public class TestUtils {
             throws InterruptedException, TimeoutException {
         return subscription("subscription-" + sequence(),
                             bootstrapServers,
-                            builderConfigurer);
+                            builderConfigurer,
+                            null);
     }
 
     /**
@@ -156,11 +157,13 @@ public class TestUtils {
      * @param subscriptionId subscription id of the instance
      * @param bootstrapServers bootstrap servers to connect
      * @param builderConfigurer configure subscription builder to fit test requirements
+     * @param additionalConsumerConfig additional configs to be passed when instantiating consumer
      * @return {@link ProcessorSubscription} instance which is already running
      */
     public static ProcessorSubscription subscription(String subscriptionId,
                                                      String bootstrapServers,
-                                                     Consumer<SubscriptionBuilder> builderConfigurer)
+                                                     Consumer<SubscriptionBuilder> builderConfigurer,
+                                                     Properties additionalConsumerConfig)
             throws InterruptedException, TimeoutException {
         AtomicReference<SubscriptionStateListener> stateListenerRef = new AtomicReference<>();
         CountDownLatch initializationLatch = new CountDownLatch(1);
@@ -185,6 +188,10 @@ public class TestUtils {
         props.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, "test-" + subscriptionId);
         props.setProperty(ConsumerConfig.GROUP_ID_CONFIG, DEFAULT_GROUP_ID);
         props.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+
+        if (additionalConsumerConfig != null) {
+            props.putAll(additionalConsumerConfig);
+        }
 
         builderConfigurer.accept(builder);
         builder.consumerConfig(props)

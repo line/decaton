@@ -16,6 +16,7 @@
 
 package com.linecorp.decaton.processor.runtime.internal;
 
+import java.time.Duration;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
@@ -38,7 +39,7 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 public class ConsumeManager implements AutoCloseable {
-    private static final long POLL_TIMEOUT_MILLIS = 100;
+    private static final Duration POLL_TIMEOUT = Duration.ofMillis(100);
 
     /**
      * Interface to class storing partition's consumption state information.
@@ -81,7 +82,7 @@ public class ConsumeManager implements AutoCloseable {
         /**
          * Do any preparation for upcoming rebalance.
          */
-        void prepareForRebalance();
+        void prepareForRebalance(Collection<TopicPartition> revokingPartitions);
 
         /**
          * Update assignment with given partitions list.
@@ -129,18 +130,18 @@ public class ConsumeManager implements AutoCloseable {
                     return;
                 }
 
-                handler.prepareForRebalance();
+                handler.prepareForRebalance(partitions);
                 pausedPartitions.addAll(consumer.paused());
             }
 
             @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-                handler.updateAssignment(partitions);
+            public void onPartitionsAssigned(Collection<TopicPartition> ignored) {
+                handler.updateAssignment(consumer.assignment());
 
                 // Consumer rebalance resets all pause states of assigned partitions even though they
                 // haven't moved over from/to different consumer instance.
                 // Need to re-call pause with originally paused partitions to bring state back consistent.
-                pausedPartitions.retainAll(partitions);
+                pausedPartitions.retainAll(consumer.assignment());
                 try {
                     consumer.pause(pausedPartitions);
                 } finally {
@@ -151,7 +152,7 @@ public class ConsumeManager implements AutoCloseable {
     }
 
     /**
-     * Run a single {@link Consumer#poll(long)} to obtain records from subscribing topics.
+     * Run a single {@link Consumer#poll(Duration)} to obtain records from subscribing topics.
      * For each consumed record, {@link ConsumerHandler#receive(ConsumerRecord)} called.
      * After finish processing consumed records, {@link PartitionStates#updatePartitionsStatus()} called.
      * According to the values from {@link PartitionStates#partitionsNeedsPause()} and
@@ -162,7 +163,7 @@ public class ConsumeManager implements AutoCloseable {
      */
     public void poll() {
         Timer timer = Utils.timer();
-        ConsumerRecords<byte[], byte[]> records = consumer.poll(POLL_TIMEOUT_MILLIS);
+        ConsumerRecords<byte[], byte[]> records = consumer.poll(POLL_TIMEOUT);
         metrics.consumerPollTime.record(timer.duration());
 
         timer = Utils.timer();
