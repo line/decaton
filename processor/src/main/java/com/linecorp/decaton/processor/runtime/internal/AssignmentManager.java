@@ -59,13 +59,13 @@ public class AssignmentManager {
 
         /**
          * Mark the partitions as revoking
-         * @param partitions target partition to mark
+         * @param partitions target partitions to mark
          */
         void markRevoking(Collection<TopicPartition> partitions);
 
         /**
          * Set the partitions as not revoking
-         * @param partitions target partition to unmark
+         * @param partitions target partitions to unmark
          */
         void unmarkRevoking(Collection<TopicPartition> partitions);
 
