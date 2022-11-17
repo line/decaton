@@ -139,13 +139,13 @@ public class PartitionContexts implements OffsetsStore, AssignmentStore, Partiti
     @Override
     public Map<TopicPartition, OffsetAndMetadata> commitReadyOffsets() {
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
-        contexts.values()
-                .stream()
-                .filter(context -> !context.revoking()).forEach(context -> {
-                    context.offsetWaitingCommit().ifPresent(
-                            offset -> offsets.put(context.topicPartition(),
-                                                  new OffsetAndMetadata(offset + 1, null)));
-                });
+        for (PartitionContext context : contexts.values()) {
+            if (!context.revoking()) {
+                context.offsetWaitingCommit().ifPresent(
+                        offset -> offsets.put(context.topicPartition(),
+                                              new OffsetAndMetadata(offset + 1, null)));
+            }
+        }
         return offsets;
     }
 

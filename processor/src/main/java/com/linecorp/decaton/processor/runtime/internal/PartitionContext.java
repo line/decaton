@@ -34,6 +34,7 @@ import lombok.experimental.Accessors;
 /**
  * Represents all states of one partition assigned to this subscription instance.
  */
+@Accessors(fluent = true)
 public class PartitionContext implements AutoCloseable {
     private final PartitionScope scope;
     private final PartitionProcessor partitionProcessor;
@@ -53,7 +54,6 @@ public class PartitionContext implements AutoCloseable {
      */
     @Getter
     @Setter
-    @Accessors(fluent = true)
     private boolean revoking;
 
     public PartitionContext(PartitionScope scope, Processors<?> processors, int maxPendingRecords) {

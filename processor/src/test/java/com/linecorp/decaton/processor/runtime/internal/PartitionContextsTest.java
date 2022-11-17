@@ -320,6 +320,13 @@ public class PartitionContextsTest {
         doReturn(false).when(contexts).pausingAllProcessing();
         partitions = contexts.partitionsNeedsResume();
         assertEquals(new HashSet<>(asList(tp(1), tp(2))), new HashSet<>(partitions));
+
+        // unmark revoking
+        doReturn(false).when(cts.get(0)).revoking();
+
+        // unmarked partition should be included
+        partitions = contexts.partitionsNeedsResume();
+        assertEquals(new HashSet<>(asList(tp(0), tp(1), tp(2))), new HashSet<>(partitions));
     }
 
     @Test
