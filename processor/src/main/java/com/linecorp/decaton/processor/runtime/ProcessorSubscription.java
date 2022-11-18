@@ -74,7 +74,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
 
     class Handler implements ConsumerHandler {
         @Override
-        public void prepareForRebalance() {
+        public void prepareForRebalance(Collection<TopicPartition> revokingPartitions) {
             updateState(SubscriptionStateListener.State.REBALANCING);
 
             waitForRemainingTasksCompletion(rebalanceTimeoutMillis.value());
@@ -83,6 +83,8 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
             } catch (CommitFailedException | TimeoutException e) {
                 log.warn("Offset commit failed at group rebalance", e);
             }
+
+            contexts.markRevoking(revokingPartitions);
         }
 
         @Override

@@ -22,10 +22,13 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.CooperativeStickyAssignor;
 import org.junit.ClassRule;
 import org.junit.Rule;
 import org.junit.Test;
@@ -204,6 +207,25 @@ public class CoreFunctionalityTest {
                         ctx.deferCompletion();
                     }
                 }))
+                .build()
+                .run();
+    }
+
+    @Test(timeout = 30000)
+    public void testCooperativeRebalancing() throws Exception {
+        Random rand = randomRule.random();
+        Properties consumerConfig = new Properties();
+        consumerConfig.setProperty(
+                ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
+                CooperativeStickyAssignor.class.getName());
+        ProcessorTestSuite
+                .builder(rule)
+                .consumerConfig(consumerConfig)
+                .configureProcessorsBuilder(builder -> builder.thenProcess(
+                        (ctx, task) -> Thread.sleep(rand.nextInt(10))))
+                .propertySupplier(StaticPropertySupplier.of(
+                        Property.ofStatic(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY, 16)
+                ))
                 .build()
                 .run();
     }

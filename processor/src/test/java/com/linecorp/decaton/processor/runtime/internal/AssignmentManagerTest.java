@@ -16,7 +16,9 @@
 
 package com.linecorp.decaton.processor.runtime.internal;
 
+import static java.util.Arrays.asList;
 import static java.util.Collections.emptySet;
+import static java.util.Collections.singletonList;
 import static org.junit.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doReturn;
@@ -24,7 +26,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -39,7 +40,6 @@ import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
 
-import com.linecorp.decaton.processor.runtime.internal.AssignmentManager;
 import com.linecorp.decaton.processor.runtime.internal.AssignmentManager.AssignmentConfig;
 import com.linecorp.decaton.processor.runtime.internal.AssignmentManager.AssignmentStore;
 
@@ -67,20 +67,22 @@ public class AssignmentManagerTest {
     @Test
     public void testAssign() {
         doReturn(emptySet()).when(store).assignedPartitions();
-        List<TopicPartition> partitions = Arrays.asList(tp(1), tp(2), tp(3));
+        List<TopicPartition> partitions = asList(tp(1), tp(2), tp(3));
         assignManager.assign(partitions);
 
         verify(store, times(1)).addPartitions(captor.capture());
         HashSet<TopicPartition> newAssign = new HashSet<>(partitions);
         assertEquals(newAssign, captor.getValue().keySet());
         verify(store, never()).removePartition(any());
+        verify(store, times(1)).unmarkRevoking(newAssign);
 
         doReturn(newAssign).when(store).assignedPartitions();
-        partitions = Arrays.asList(tp(2), tp(3), tp(4), tp(5));
+        partitions = asList(tp(2), tp(3), tp(4), tp(5));
         assignManager.assign(partitions);
 
         verify(store, times(2)).addPartitions(captor.capture());
-        assertEquals(new HashSet<>(Arrays.asList(tp(4), tp(5))), captor.getValue().keySet());
-        verify(store, never()).removePartition(new HashSet<>(Arrays.asList(tp(1))));
+        assertEquals(new HashSet<>(asList(tp(4), tp(5))), captor.getValue().keySet());
+        verify(store, times(1)).removePartition(singletonList(tp(1)));
+        verify(store, times(1)).unmarkRevoking(new HashSet<>(partitions));
     }
 }

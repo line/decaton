@@ -22,7 +22,6 @@ import static java.util.Collections.singletonList;
 import static java.util.stream.Collectors.toSet;
 import static org.junit.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.times;
@@ -106,7 +105,7 @@ public class ConsumeManagerTest {
                 new ConsumerRecord<>(TOPIC, 1, 102, "key", new byte[0]));
         ConsumerRecords<String, byte[]> consumerRecords =
                 new ConsumerRecords<>(Collections.singletonMap(new TopicPartition(TOPIC, 1), records));
-        doReturn(consumerRecords).when(consumer).poll(anyLong());
+        doReturn(consumerRecords).when(consumer).poll(any());
 
         List<TopicPartition> partitionsNeedsPause = new ArrayList<>(Arrays.asList(tp(1)));
         List<TopicPartition> partitionsNeedsResume = new ArrayList<>(Arrays.asList(tp(2)));
@@ -150,7 +149,7 @@ public class ConsumeManagerTest {
             rebalanceListener.onPartitionsRevoked(singletonList(tp(2)));
             rebalanceListener.onPartitionsAssigned(Arrays.asList(tp(1), tp(3)));
             return ConsumerRecords.empty();
-        }).when(consumer).poll(anyLong());
+        }).when(consumer).poll(any());
 
         Set<TopicPartition> pausedPartitions = new HashSet<>();
         doAnswer(invocation -> {
@@ -158,6 +157,7 @@ public class ConsumeManagerTest {
             pausedPartitions.addAll(invocation.getArgument(0));
             return null;
         }).when(consumer).pause(any());
+        doReturn(new HashSet<>(Arrays.asList(tp(1), tp(3)))).when(consumer).assignment();
 
         consumeManager.poll();
         // Do not call pause for the revoked partition "2".

@@ -65,8 +65,13 @@ public class SubscriptionStateTest {
                 }
                 switch (state) {
                     case INITIALIZING:
-                    case REBALANCING:
                         validTransition = Arrays.asList(State.RUNNING);
+                        break;
+                    case REBALANCING:
+                        // It's possible to transition to SHUTTING_DOWN from REBALANCING
+                        // when onPartitionRevoked and onPartitionAssigned are not done in same poll() and
+                        // shutdown is initiated between them
+                        validTransition = Arrays.asList(State.RUNNING, State.SHUTTING_DOWN);
                         break;
                     case RUNNING:
                         validTransition = Arrays.asList(State.REBALANCING, State.SHUTTING_DOWN);

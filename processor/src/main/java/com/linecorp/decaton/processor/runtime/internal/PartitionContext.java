@@ -16,18 +16,25 @@
 
 package com.linecorp.decaton.processor.runtime.internal;
 
+import java.util.Collection;
 import java.util.OptionalLong;
 import java.util.concurrent.TimeUnit;
 
+import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.common.TopicPartition;
 
 import com.linecorp.decaton.processor.metrics.Metrics;
 import com.linecorp.decaton.processor.metrics.Metrics.PartitionStateMetrics;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 
+import lombok.Getter;
+import lombok.Setter;
+import lombok.experimental.Accessors;
+
 /**
  * Represents all states of one partition assigned to this subscription instance.
  */
+@Accessors(fluent = true)
 public class PartitionContext implements AutoCloseable {
     private final PartitionScope scope;
     private final PartitionProcessor partitionProcessor;
@@ -39,6 +46,15 @@ public class PartitionContext implements AutoCloseable {
     private long lastCommittedOffset;
     private volatile long pausedTimeNanos;
     private long lastQueueStarvedTime;
+    /**
+     * Indicates that this context is about to be revoked.
+     * This is used to prevent committing or pausing/resuming consumer for to-be-revoked partitions
+     * (that throws RuntimeException) before invoking {@link ConsumerRebalanceListener#onPartitionsAssigned(Collection)}
+     * after {@link ConsumerRebalanceListener#onPartitionsRevoked(Collection)} is invoked.
+     */
+    @Getter
+    @Setter
+    private boolean revoking;
 
     public PartitionContext(PartitionScope scope, Processors<?> processors, int maxPendingRecords) {
         this.scope = scope;

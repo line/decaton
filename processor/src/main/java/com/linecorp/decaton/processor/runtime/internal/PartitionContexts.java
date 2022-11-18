@@ -140,9 +140,11 @@ public class PartitionContexts implements OffsetsStore, AssignmentStore, Partiti
     public Map<TopicPartition, OffsetAndMetadata> commitReadyOffsets() {
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
         for (PartitionContext context : contexts.values()) {
-            context.offsetWaitingCommit().ifPresent(
-                    offset -> offsets.put(context.topicPartition(),
-                                          new OffsetAndMetadata(offset + 1, null)));
+            if (!context.revoking()) {
+                context.offsetWaitingCommit().ifPresent(
+                        offset -> offsets.put(context.topicPartition(),
+                                              new OffsetAndMetadata(offset + 1, null)));
+            }
         }
         return offsets;
     }
@@ -156,6 +158,24 @@ public class PartitionContexts implements OffsetsStore, AssignmentStore, Partiti
             // which indicates the offset to "fetch next".
             contexts.get(tp).updateCommittedOffset(offset - 1);
         }
+    }
+
+    @Override
+    public void markRevoking(Collection<TopicPartition> partitions) {
+        contexts.forEach((tp, ctx) -> {
+            if (partitions.contains(tp)) {
+                ctx.revoking(true);
+            }
+        });
+    }
+
+    @Override
+    public void unmarkRevoking(Collection<TopicPartition> partitions) {
+        contexts.forEach((tp, ctx) -> {
+            if (partitions.contains(tp)) {
+                ctx.revoking(false);
+            }
+        });
     }
 
     public int totalPendingTasks() {
@@ -192,6 +212,7 @@ public class PartitionContexts implements OffsetsStore, AssignmentStore, Partiti
     public List<TopicPartition> partitionsNeedsPause() {
         boolean pausingAll = pausingAllProcessing();
         return contexts.values().stream()
+                       .filter(c -> !c.revoking())
                        .filter(c -> !c.paused())
                        .filter(c -> pausingAll || shouldPartitionPaused(c.pendingTasksCount()))
                        .map(PartitionContext::topicPartition)
@@ -202,6 +223,7 @@ public class PartitionContexts implements OffsetsStore, AssignmentStore, Partiti
     public List<TopicPartition> partitionsNeedsResume() {
         boolean pausingAll = pausingAllProcessing();
         return contexts.values().stream()
+                       .filter(c -> !c.revoking())
                        .filter(PartitionContext::paused)
                        .filter(c -> !pausingAll && !shouldPartitionPaused(c.pendingTasksCount()))
                        .map(PartitionContext::topicPartition)

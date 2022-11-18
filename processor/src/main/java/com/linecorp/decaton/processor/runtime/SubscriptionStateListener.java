@@ -16,7 +16,7 @@
 
 package com.linecorp.decaton.processor.runtime;
 
-import com.linecorp.decaton.processor.runtime.ProcessorSubscription;
+import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.RebalanceProtocol;
 
 /**
  * An interface to listen state changes of {@link ProcessorSubscription}.
@@ -45,13 +45,16 @@ public interface SubscriptionStateListener {
      * The expected state transition is:
      * <pre>
      * {@code
-     * INITIALIZING -> RUNNING <-> REBALANCING
+     *                  ┌───┐
+     *                  │   v
+     * INITIALIZING -> RUNNING <-> REBALANCING ┐
+     *                    │                    v
      *                    └──────> SHUTTING_DOWN -> TERMINATED
      * }
      * </pre>
      *
      * Listener will be called at each transition in the flow.
-     * In addition, listener will be also called with INITIALIZING state when Decaton starts initialization sequence.
+     * In addition, listener will be also called with {@link #INITIALIZING} state when Decaton starts initialization sequence.
      */
     enum State {
         /**
@@ -60,12 +63,15 @@ public interface SubscriptionStateListener {
         INITIALIZING,
         /**
          * Consumer group rebalance is running.
-         * Meanwhile no extra records are fetched until it completes.
+         * Meanwhile no extra records are fetched until it completes in {@link RebalanceProtocol#EAGER} rebalancing.
+         * In {@link RebalanceProtocol#COOPERATIVE} rebalancing, records for non-revoked partitions may be fetched.
          */
         REBALANCING,
         /**
          * Started to process tasks.
          * Fetching records from brokers and feeding them into partition processors.
+         * Note that in {@link RebalanceProtocol#COOPERATIVE} rebalancing, {@link #RUNNING} may transition to
+         * {@link #RUNNING} when there's no partition revocation.
          */
         RUNNING,
         /**

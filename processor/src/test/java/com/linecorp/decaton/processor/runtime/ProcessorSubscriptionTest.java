@@ -21,8 +21,8 @@ import static java.util.Collections.singletonMap;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.verify;
 
 import java.nio.charset.StandardCharsets;
@@ -199,10 +199,12 @@ public class ProcessorSubscriptionTest {
                         new ConsumerRecord<>(tp.topic(), tp.partition(), offset, "abc".getBytes(StandardCharsets.UTF_8),
                                              String.valueOf(offset).getBytes()))));
             } else {
-                Thread.sleep(invocation.getArgument(0));
+                Duration timeout = invocation.getArgument(0);
+                Thread.sleep(timeout.toMillis());
                 return ConsumerRecords.empty();
             }
-        }).when(consumer).poll(anyLong());
+        }).when(consumer).poll(any());
+        doReturn(singleton(tp)).when(consumer).assignment();
 
         subscription.start();
         processLatch.await();

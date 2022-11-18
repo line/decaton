@@ -26,6 +26,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
+import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -38,6 +39,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.Producer;
@@ -92,6 +94,7 @@ public class ProcessorTestSuite {
     private final int numTasks;
     private final Function<ProcessorsBuilder<TestTask>, ProcessorsBuilder<TestTask>> configureProcessorsBuilder;
     private final RetryConfig retryConfig;
+    private final Properties consumerConfig;
     private final PropertySupplier propertySuppliers;
     private final Set<ProcessingGuarantee> semantics;
     private final SubscriptionStatesListener statesListener;
@@ -141,6 +144,10 @@ public class ProcessorTestSuite {
          * Supply additional {@link ProcessorProperties} through {@link PropertySupplier}
          */
         private PropertySupplier propertySupplier;
+        /**
+         * Supply additional {@link Properties} to be passed to instantiate {@link KafkaConsumer}
+         */
+        private Properties consumerConfig;
         /**
          * Listen every subscription's state changes
          */
@@ -198,6 +205,7 @@ public class ProcessorTestSuite {
                                           numTasks,
                                           configureProcessorsBuilder,
                                           retryConfig,
+                                          consumerConfig,
                                           propertySupplier,
                                           semantics,
                                           statesListener,
@@ -307,7 +315,8 @@ public class ProcessorTestSuite {
                         builder.enableTracing(tracingProvider);
                     }
                     builder.stateListener(state -> statesListener.onChange(id, state));
-                });
+                },
+                consumerConfig);
     }
 
     @FunctionalInterface
