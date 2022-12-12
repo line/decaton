@@ -24,7 +24,7 @@ public class OffsetState {
     @Getter
     private final long offset;
     @Getter
-    private long timeoutAt;
+    private volatile long timeoutAt;
     @Getter
     private final CompletionImpl completion;
 
