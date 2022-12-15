@@ -34,6 +34,7 @@ import com.linecorp.decaton.client.KafkaProducerSupplier;
 import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.ProcessingContext;
 import com.linecorp.decaton.processor.TaskMetadata;
+import com.linecorp.decaton.processor.runtime.PerKeyQuotaConfig.PerKeyQuotaConfigBuilder;
 import com.linecorp.decaton.processor.tracing.TracingProvider;
 import com.linecorp.decaton.processor.runtime.internal.ConsumerSupplier;
 import com.linecorp.decaton.processor.runtime.internal.DecatonProcessorSupplierImpl;
@@ -85,6 +86,9 @@ public class SubscriptionBuilder {
 
     @Setter(AccessLevel.NONE)
     private RetryConfig retryConfig;
+
+    @Setter(AccessLevel.NONE)
+    private PerKeyQuotaConfig perKeyQuotaConfig;
 
     /**
      * A {@link TracingProvider} for tracing the execution of record processing
@@ -150,6 +154,32 @@ public class SubscriptionBuilder {
      */
     public SubscriptionBuilder enableRetry(RetryConfig config) {
         retryConfig = config;
+        return this;
+    }
+
+    /**
+     * Configure the subscription to enable per-key quota to prevent bursting keys occupy the resources
+     * and causing process for other keys to delay.
+     *
+     * Decaton provides two actions to handle bursting keys: shaping and drop.
+     * With shaping, Decaton will queue tasks with excessive per-key processing rate to the shaping topic and immediately complete it.
+     * With drop, Decaton will just complete them without queueing.
+     *
+     * You can customize the action through {@link PerKeyQuotaConfigBuilder#callback}.
+     *
+     * Some prerequisites need to be confirmed in order to use shaping:
+     * - For shaping tasks queueing, shaping topics need to be prepared on the same Kafka cluster.
+     *   Unless you supply custom shaping topics and callback, the topic name should be {@link ProcessorsBuilder#topic()} + "-shaping".
+     * - By enabling shaping, per-key serial processing of tasks is no longer guaranteed.
+     * - Decaton adopts probabilistic algorithm to account per-key processing rate to prevent consuming infinite amount of memory.
+     *   Currently, the algorithm allows "false-positives" so some keys can be detected as burst
+     *   even when its actual processing rate is not excessive.
+     *
+     * @param config a {@link PerKeyQuotaConfig} instance representing configs.
+     * @return updated instance of {@link SubscriptionBuilder}.
+     */
+    public SubscriptionBuilder enablePerKeyQuota(PerKeyQuotaConfig config) {
+        perKeyQuotaConfig = config;
         return this;
     }
 
