@@ -72,7 +72,7 @@ public class DecatonTaskRetryQueueingProcessor implements DecatonProcessor<byte[
             } else {
                 metrics.retryQueueingFailed.increment();
             }
-            metrics.retryCount.record(nextRetryCount);
+            metrics.retryTaskRetries.record(nextRetryCount);
         });
         context.deferCompletion().completeWith(future);
     }

@@ -263,8 +263,8 @@ public class Metrics {
                                    .tags(availableTags.subscriptionScope())
                                    .register(registry));
 
-        public final DistributionSummary retryCount =
-                meter(() -> DistributionSummary.builder("retry.count")
+        public final DistributionSummary retryTaskRetries =
+                meter(() -> DistributionSummary.builder("retry.task.retries")
                                                .description("The number of times a task was retried")
                                                .tags(availableTags.subscriptionScope())
                                                .register(registry));
