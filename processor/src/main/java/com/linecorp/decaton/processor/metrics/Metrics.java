@@ -30,6 +30,7 @@ import org.apache.kafka.clients.consumer.Consumer;
 import com.linecorp.decaton.processor.metrics.internal.AvailableTags;
 
 import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.Meter.Id;
@@ -261,6 +262,12 @@ public class Metrics {
                                    .description("The number of tasks failed to enqueue in retry topic")
                                    .tags(availableTags.subscriptionScope())
                                    .register(registry));
+
+        public final DistributionSummary retryCount =
+                meter(() -> DistributionSummary.builder("retry.count")
+                                               .description("The number of times a task was retried")
+                                               .tags(availableTags.subscriptionScope())
+                                               .register(registry));
     }
 
     public static Metrics withTags(String... keyValues) {
