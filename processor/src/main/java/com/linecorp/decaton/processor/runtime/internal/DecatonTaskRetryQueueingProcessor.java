@@ -52,10 +52,11 @@ public class DecatonTaskRetryQueueingProcessor implements DecatonProcessor<byte[
     public void process(ProcessingContext<byte[]> context, byte[] serializedTask)
             throws InterruptedException {
         TaskMetadata originalMeta = context.metadata();
+        long nextRetryCount = originalMeta.retryCount() + 1;
         long nextTryTimeMillis = System.currentTimeMillis() + backoff.toMillis();
         TaskMetadataProto taskMetadata =
                 TaskMetadataProto.newBuilder(originalMeta.toProto())
-                                 .setRetryCount(originalMeta.retryCount() + 1)
+                                 .setRetryCount(nextRetryCount)
                                  .setScheduledTimeMillis(nextTryTimeMillis)
                                  .build();
         DecatonTaskRequest request =
@@ -63,6 +64,7 @@ public class DecatonTaskRetryQueueingProcessor implements DecatonProcessor<byte[
                                   .setMetadata(taskMetadata)
                                   .setSerializedTask(ByteString.copyFrom(serializedTask))
                                   .build();
+        metrics.retryTaskRetries.record(nextRetryCount);
 
         CompletableFuture<PutTaskResult> future = producer.sendRequest(context.key(), request);
         future.whenComplete((r, e) -> {
