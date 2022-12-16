@@ -64,6 +64,7 @@ public class DecatonTaskRetryQueueingProcessor implements DecatonProcessor<byte[
                                   .setMetadata(taskMetadata)
                                   .setSerializedTask(ByteString.copyFrom(serializedTask))
                                   .build();
+        metrics.retryTaskRetries.record(nextRetryCount);
 
         CompletableFuture<PutTaskResult> future = producer.sendRequest(context.key(), request);
         future.whenComplete((r, e) -> {
@@ -72,7 +73,6 @@ public class DecatonTaskRetryQueueingProcessor implements DecatonProcessor<byte[
             } else {
                 metrics.retryQueueingFailed.increment();
             }
-            metrics.retryTaskRetries.record(nextRetryCount);
         });
         context.deferCompletion().completeWith(future);
     }
