@@ -27,6 +27,7 @@ import com.linecorp.decaton.client.DecatonClientBuilder.DefaultKafkaProducerSupp
 import com.linecorp.decaton.client.KafkaProducerSupplier;
 
 import lombok.Builder;
+import lombok.NonNull;
 import lombok.Value;
 import lombok.experimental.Accessors;
 
@@ -39,6 +40,7 @@ public class RetryConfig {
     /**
      * Time to backoff before retry processing of queued tasks.
      */
+    @NonNull
     Duration backoff;
     /**
      * Optionally supplied custom retry topic name. Unless specified, the name adding "-retry" suffix to the
