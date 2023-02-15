@@ -99,12 +99,12 @@ public class DecatonClientImplTest {
     public void testTimestampFieldSetExternally() {
         doReturn(1234L).when(timestampSupplier).get();
 
-        client.put("key", HelloTask.getDefaultInstance(), 5678);
+        client.put("key", HelloTask.getDefaultInstance(), 5678L);
 
         verify(producer, times(1)).send(captor.capture(), any(Callback.class));
         ProducerRecord<byte[], DecatonTaskRequest> record = captor.getValue();
         assertNull(record.timestamp());
-        assertEquals(5678, record.value().getMetadata().getTimestampMillis());
+        assertEquals(5678L, record.value().getMetadata().getTimestampMillis());
     }
 
     @Test
@@ -153,6 +153,18 @@ public class DecatonClientImplTest {
         assertTrue(record.value().getMetadata().getTimestampMillis() > 0);
         assertNotNull(record.value().getMetadata().getSourceApplicationId());
         assertNotNull(record.value().getMetadata().getSourceInstanceId());
+    }
+
+    @Test
+    public void testSpecifyingPartition() {
+        doReturn(1234L).when(timestampSupplier).get();
+
+        client.put("key", HelloTask.getDefaultInstance(), 4);
+
+        verify(producer, times(1)).send(captor.capture(), any(Callback.class));
+        ProducerRecord<byte[], DecatonTaskRequest> record = captor.getValue();
+        assertNotNull(record.partition());
+        assertEquals(4, record.partition().intValue());
     }
 
     private void verifyAndAssertTaskMetadata(long timestamp, long scheduledTime) {

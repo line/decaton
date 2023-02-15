@@ -19,6 +19,9 @@ package com.linecorp.decaton.client;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
+import org.apache.kafka.clients.producer.Partitioner;
+import org.apache.kafka.common.Cluster;
+
 import com.linecorp.decaton.common.Serializer;
 
 import lombok.Builder;
@@ -78,6 +81,19 @@ public interface DecatonClient<T> extends AutoCloseable {
      * @return a {@link CompletableFuture} which represents the result of task put.
      */
     CompletableFuture<PutTaskResult> put(String key, T task, Consumer<Throwable> errorCallback);
+
+    /**
+     * Put a task onto a specified kafka partition.
+     * Note that the specified partition here is prioritised over the result of
+     * {@link Partitioner#partition(String, Object, byte[], Object, byte[], Cluster)}.
+     *
+     * @param key the criteria to shuffle and order tasks. null can be specified if it doesn't matters.
+     * @param task an instance of task. Should never be null.
+     * @param partition the id of the partition
+     *
+     * @return a {@link CompletableFuture} which represents the result of task put.
+     */
+    CompletableFuture<PutTaskResult> put(String key, T task, int partition);
 
     /**
      * Put a task onto associated decaton queue with specifying arbitrary timestamp.

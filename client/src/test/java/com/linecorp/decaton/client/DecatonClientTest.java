@@ -66,6 +66,11 @@ public class DecatonClientTest {
         }
 
         @Override
+        public CompletableFuture<PutTaskResult> put(String key, HelloTask task, int partition) {
+            return null;
+        }
+
+        @Override
         public void close() throws Exception {
             // noop
         }

@@ -92,6 +92,23 @@ public class DecatonClientImpl<T> implements DecatonClient<T> {
     }
 
     @Override
+    public CompletableFuture<PutTaskResult> put(String key, T task, int partition) {
+        byte[] serializedKey = keySerializer.serialize(topic, key);
+        byte[] serializedTask = serializer.serialize(task);
+        TaskMetadataProto taskMetadata = TaskMetadataProto.newBuilder()
+                                                          .setTimestampMillis(timestampSupplier.get())
+                                                          .setSourceApplicationId(applicationId)
+                                                          .setSourceInstanceId(instanceId)
+                                                          .build();
+        DecatonTaskRequest request =
+                DecatonTaskRequest.newBuilder()
+                                  .setMetadata(taskMetadata)
+                                  .setSerializedTask(ByteString.copyFrom(serializedTask))
+                                  .build();
+        return producer.sendRequest(serializedKey, request, partition);
+    }
+
+    @Override
     public void close() throws Exception {
         producer.close();
     }
