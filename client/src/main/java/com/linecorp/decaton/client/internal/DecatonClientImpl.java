@@ -32,7 +32,8 @@ import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
 import com.linecorp.decaton.protocol.Decaton.TaskMetadataProto;
 
 public class DecatonClientImpl<T> implements DecatonClient<T> {
-    private static final org.apache.kafka.common.serialization.Serializer<String> keySerializer = new PrintableAsciiStringSerializer();
+    private static final org.apache.kafka.common.serialization.Serializer<String> keySerializer =
+            new PrintableAsciiStringSerializer();
     private final String topic;
     private final Serializer<T> serializer;
     private final DecatonTaskProducer producer;
@@ -82,6 +83,19 @@ public class DecatonClientImpl<T> implements DecatonClient<T> {
     }
 
     @Override
+    public CompletableFuture<PutTaskResult> put(String key, T task, TaskMetadata overrideTaskMetadata,
+                                                Integer partition) {
+        byte[] serializedKey = keySerializer.serialize(topic, key);
+        byte[] serializedTask = serializer.serialize(task);
+        TaskMetadataProto taskMetadata = convertToTaskMetadataProto(overrideTaskMetadata);
+        DecatonTaskRequest request = DecatonTaskRequest.newBuilder()
+                                                       .setMetadata(taskMetadata)
+                                                       .setSerializedTask(ByteString.copyFrom(serializedTask))
+                                                       .build();
+        return producer.sendRequest(serializedKey, request, partition);
+    }
+
+    @Override
     public CompletableFuture<PutTaskResult> put(String key, T task) {
         return put(key, task, timestampSupplier.get());
     }
@@ -89,23 +103,6 @@ public class DecatonClientImpl<T> implements DecatonClient<T> {
     @Override
     public CompletableFuture<PutTaskResult> put(String key, T task, Consumer<Throwable> errorCallback) {
         return put(key, task, timestampSupplier.get(), errorCallback);
-    }
-
-    @Override
-    public CompletableFuture<PutTaskResult> put(String key, T task, int partition) {
-        byte[] serializedKey = keySerializer.serialize(topic, key);
-        byte[] serializedTask = serializer.serialize(task);
-        TaskMetadataProto taskMetadata = TaskMetadataProto.newBuilder()
-                                                          .setTimestampMillis(timestampSupplier.get())
-                                                          .setSourceApplicationId(applicationId)
-                                                          .setSourceInstanceId(instanceId)
-                                                          .build();
-        DecatonTaskRequest request =
-                DecatonTaskRequest.newBuilder()
-                                  .setMetadata(taskMetadata)
-                                  .setSerializedTask(ByteString.copyFrom(serializedTask))
-                                  .build();
-        return producer.sendRequest(serializedKey, request, partition);
     }
 
     @Override

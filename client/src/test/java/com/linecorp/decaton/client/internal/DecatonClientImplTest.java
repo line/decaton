@@ -111,7 +111,8 @@ public class DecatonClientImplTest {
     public void testTimestampFieldSetExternallyWithCallback() {
         doReturn(1234L).when(timestampSupplier).get();
 
-        client.put("key", HelloTask.getDefaultInstance(), 5678, ignored -> {});
+        client.put("key", HelloTask.getDefaultInstance(), 5678, ignored -> {
+        });
 
         verify(producer, times(1)).send(captor.capture(), any(Callback.class));
         ProducerRecord<byte[], DecatonTaskRequest> record = captor.getValue();
@@ -159,7 +160,26 @@ public class DecatonClientImplTest {
     public void testSpecifyingPartition() {
         doReturn(1234L).when(timestampSupplier).get();
 
-        client.put("key", HelloTask.getDefaultInstance(), 4);
+        client.put("key", HelloTask.getDefaultInstance(),
+                   TaskMetadata.builder()
+                               .timestamp(5678L)
+                               .scheduledTime(6912L)
+                               .build(), 4);
+
+        verify(producer, times(1)).send(captor.capture(), any(Callback.class));
+        ProducerRecord<byte[], DecatonTaskRequest> record = captor.getValue();
+        assertNotNull(record.partition());
+        assertEquals(4, record.partition().intValue());
+        assertNull(record.timestamp());
+        assertEquals(5678L, record.value().getMetadata().getTimestampMillis());
+        assertEquals(6912L, record.value().getMetadata().getScheduledTimeMillis());
+    }
+
+    @Test
+    public void testSpecifyingPartitionWithoutMetadata() {
+        doReturn(1234L).when(timestampSupplier).get();
+
+        client.put("key", HelloTask.getDefaultInstance(), TaskMetadata.builder().build(), 4);
 
         verify(producer, times(1)).send(captor.capture(), any(Callback.class));
         ProducerRecord<byte[], DecatonTaskRequest> record = captor.getValue();

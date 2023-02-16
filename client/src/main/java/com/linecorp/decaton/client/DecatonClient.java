@@ -62,6 +62,17 @@ public interface DecatonClient<T> extends AutoCloseable {
     CompletableFuture<PutTaskResult> put(String key, T task, TaskMetadata overrideTaskMetadata);
 
     /**
+     * Put a task onto a specified kafka partition with specifying some fields of task metadata.
+     * @param key the criteria to shuffle and order tasks. null can be specified if it doesn't matters.
+     * @param task an instance of task. Should never be null.
+     * @param partition the id of the partition
+     *
+     * @return a {@link CompletableFuture} which represents the result of task put.
+     */
+    CompletableFuture<PutTaskResult> put(String key, T task, TaskMetadata overrideTaskMetadata,
+                                         Integer partition);
+
+    /**
      * Put a task onto associated decaton queue.
      * This is just a helper method for typical use cases - put task asynchronously and observe result just for telling
      * whether the message production succeeded:
@@ -81,19 +92,6 @@ public interface DecatonClient<T> extends AutoCloseable {
      * @return a {@link CompletableFuture} which represents the result of task put.
      */
     CompletableFuture<PutTaskResult> put(String key, T task, Consumer<Throwable> errorCallback);
-
-    /**
-     * Put a task onto a specified kafka partition.
-     * Note that the specified partition here is prioritised over the result of
-     * {@link Partitioner#partition(String, Object, byte[], Object, byte[], Cluster)}.
-     *
-     * @param key the criteria to shuffle and order tasks. null can be specified if it doesn't matters.
-     * @param task an instance of task. Should never be null.
-     * @param partition the id of the partition
-     *
-     * @return a {@link CompletableFuture} which represents the result of task put.
-     */
-    CompletableFuture<PutTaskResult> put(String key, T task, int partition);
 
     /**
      * Put a task onto associated decaton queue with specifying arbitrary timestamp.
