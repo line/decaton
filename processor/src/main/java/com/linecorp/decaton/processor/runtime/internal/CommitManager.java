@@ -21,7 +21,9 @@ import java.util.Map;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.RebalanceInProgressException;
 
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.Property;
@@ -128,7 +130,13 @@ public class CommitManager {
         consumer.commitAsync(offsets, (ignored, exception) -> {
             asyncCommitInFlight = false;
             if (exception != null) {
-                log.warn("Offset commit failed asynchronously", exception);
+                if (exception instanceof RetriableCommitFailedException) {
+                    log.debug("Offset commit failed once, will retry", exception.getCause());
+                } else if (exception instanceof RebalanceInProgressException) {
+                    log.debug("Offset commit skipped due to rebalancing", exception);
+                } else {
+                    log.warn("Offset commit failed asynchronously", exception);
+                }
                 return;
             }
             if (Thread.currentThread() != callingThread) {
