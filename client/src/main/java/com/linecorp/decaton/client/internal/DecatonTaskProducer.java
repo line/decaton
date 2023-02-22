@@ -61,12 +61,8 @@ public class DecatonTaskProducer implements AutoCloseable {
         this.topic = topic;
     }
 
-    public CompletableFuture<PutTaskResult> sendRequest(byte[] key, DecatonTaskRequest request) {
-        ProducerRecord<byte[], DecatonTaskRequest> record = new ProducerRecord<>(topic, key, request);
-        return sendRequest(record);
-    }
-
-    public CompletableFuture<PutTaskResult> sendRequest(byte[] key, DecatonTaskRequest request, int partition) {
+    public CompletableFuture<PutTaskResult> sendRequest(byte[] key, DecatonTaskRequest request,
+                                                        Integer partition) {
         ProducerRecord<byte[], DecatonTaskRequest> record = new ProducerRecord<>(topic, partition, key, request);
         return sendRequest(record);
     }

@@ -63,9 +63,11 @@ public interface DecatonClient<T> extends AutoCloseable {
 
     /**
      * Put a task onto a specified kafka partition with specifying some fields of task metadata.
-     * @param key the criteria to shuffle and order tasks. null can be specified if it doesn't matters.
+     * @param key the criteria to shuffle and order tasks. null can be specified if it doesn't matter.
      * @param task an instance of task. Should never be null.
-     * @param partition the id of the partition
+     * @param overrideTaskMetadata taskMetaData which can be set by users and used for event publish.
+     * null can be specified if it doesn't matter.
+     * @param partition the id of the partition. null can be specified if it doesn't matter.
      *
      * @return a {@link CompletableFuture} which represents the result of task put.
      */
