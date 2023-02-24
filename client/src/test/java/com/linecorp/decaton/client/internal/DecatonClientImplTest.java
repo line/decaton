@@ -179,7 +179,7 @@ public class DecatonClientImplTest {
     public void testSpecifyingPartitionWithoutMetadata() {
         doReturn(1234L).when(timestampSupplier).get();
 
-        client.put("key", HelloTask.getDefaultInstance(), TaskMetadata.builder().build(), 4);
+        client.put("key", HelloTask.getDefaultInstance(), null, 4);
 
         verify(producer, times(1)).send(captor.capture(), any(Callback.class));
         ProducerRecord<byte[], DecatonTaskRequest> record = captor.getValue();

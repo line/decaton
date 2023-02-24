@@ -124,12 +124,11 @@ public class DecatonClientImpl<T> implements DecatonClient<T> {
                                                             .setSourceApplicationId(applicationId)
                                                             .setSourceInstanceId(instanceId)
                                                             .setTimestampMillis(timestampSupplier.get());
-
-        final Long timestamp = overrideTaskMetadata.getTimestamp();
-        final Long scheduledTime = overrideTaskMetadata.getScheduledTime();
         if (overrideTaskMetadata == null) {
             return taskMetadataProtoBuilder.build();
         }
+        final Long timestamp = overrideTaskMetadata.getTimestamp();
+        final Long scheduledTime = overrideTaskMetadata.getScheduledTime();
         if (timestamp != null) {
             taskMetadataProtoBuilder.setTimestampMillis(timestamp);
         }
