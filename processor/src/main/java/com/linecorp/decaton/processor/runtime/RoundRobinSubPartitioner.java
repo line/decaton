@@ -14,15 +14,26 @@
  * under the License.
  */
 
-package com.linecorp.decaton.processor.runtime.internal;
+package com.linecorp.decaton.processor.runtime;
 
-public enum SubpartitioningStrategy {
-    /**
-     * A strategy that partitions tasks by their keys.
-     */
-    KEY_BASE,
-    /**
-     * A strategy that partitions tasks by round-robin.
-     */
-    ROUND_ROBIN
+import java.util.concurrent.atomic.AtomicLong;
+
+public class RoundRobinSubPartitioner implements SubPartitioner {
+    private final int bound;
+    private final AtomicLong monotonicValueSupplier;
+
+
+    public RoundRobinSubPartitioner(int bound) {
+        this.bound = bound;
+        monotonicValueSupplier = new AtomicLong();
+    }
+    private static int toPositive(int number) {
+        return number & 2147483647;
+    }
+
+
+    @Override
+    public int partitionFor(byte[] key) {
+        return toPositive((int) monotonicValueSupplier.getAndIncrement()) % bound;
+    }
 }

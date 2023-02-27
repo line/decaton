@@ -14,36 +14,27 @@
  * under the License.
  */
 
-package com.linecorp.decaton.processor.runtime.internal;
+package com.linecorp.decaton.processor.runtime;
 
 import java.nio.ByteBuffer;
-import java.util.concurrent.atomic.AtomicLong;
 
-class SubPartitioner {
+public class DefaultSubPartitioner implements SubPartitioner {
     private final int bound;
-    private final AtomicLong monotonicValueSupplier;
-    private final SubpartitioningStrategy strategy;
+    private final RoundRobinSubPartitioner roundRobinStrategy;
 
-    SubPartitioner(int bound) {
-        this(bound, null);
-    }
-
-    SubPartitioner(int bound, SubpartitioningStrategy strategy) {
-        if (strategy == null) {
-            strategy = SubpartitioningStrategy.KEY_BASE;
-        }
+    public DefaultSubPartitioner(int bound) {
         this.bound = bound;
-        monotonicValueSupplier = new AtomicLong();
-        this.strategy = strategy;
+        roundRobinStrategy = new RoundRobinSubPartitioner(bound);
     }
 
     private static int toPositive(int number) {
         return number & 2147483647;
     }
 
+    @Override
     public int partitionFor(byte[] key) {
-        if (key == null || strategy == SubpartitioningStrategy.ROUND_ROBIN) {
-            return toPositive((int) monotonicValueSupplier.getAndIncrement()) % bound;
+        if (key == null) {
+            return roundRobinStrategy.partitionFor(key);
         } else {
             // Kafka client uses murmur2 for hashing keys to decide partition to route the record,
             // so all keys we receive in a partition processor has highly biased distribution.
