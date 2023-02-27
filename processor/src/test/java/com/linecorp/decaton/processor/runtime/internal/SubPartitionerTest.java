@@ -105,4 +105,17 @@ public class SubPartitionerTest {
             }
         }
     }
+
+    @Test
+    public void testRoundRobin() {
+        for (int subpartitionCount : SUBPARTITION_COUNTS) {
+            SubPartitioner subPartitioner = new SubPartitioner(subpartitionCount, SubpartitioningStrategy.ROUND_ROBIN);
+            for (byte[] key : keys) {
+                int assign1 = subPartitioner.partitionFor(key);
+                int assign2 = subPartitioner.partitionFor(key);
+                assertEquals(String.format("[%d] first assign: %d; second assign: %d", subpartitionCount, assign1, assign2),
+                             assign2, (assign1 + 1) % subpartitionCount);
+            }
+        }
+    }
 }
