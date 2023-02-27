@@ -22,10 +22,19 @@ import java.util.concurrent.atomic.AtomicLong;
 class SubPartitioner {
     private final int bound;
     private final AtomicLong monotonicValueSupplier;
+    private final SubpartitioningStrategy strategy;
 
     SubPartitioner(int bound) {
+        this(bound, null);
+    }
+
+    SubPartitioner(int bound, SubpartitioningStrategy strategy) {
+        if (strategy == null) {
+            strategy = SubpartitioningStrategy.KEY_BASE;
+        }
         this.bound = bound;
         monotonicValueSupplier = new AtomicLong();
+        this.strategy = strategy;
     }
 
     private static int toPositive(int number) {
@@ -33,7 +42,7 @@ class SubPartitioner {
     }
 
     public int partitionFor(byte[] key) {
-        if (key == null) {
+        if (key == null || strategy == SubpartitioningStrategy.ROUND_ROBIN) {
             return toPositive((int) monotonicValueSupplier.getAndIncrement()) % bound;
         } else {
             // Kafka client uses murmur2 for hashing keys to decide partition to route the record,
