@@ -191,4 +191,57 @@ public class MetricsTest {
                             .counters().stream().mapToDouble(cn -> cn.count()).sum() == 1.0);
         }
     }
+
+    @Test(timeout = 30000)
+    public void testDeferredCompletionLeak() throws Exception {
+        Metrics.register(new PrometheusMeterRegistry(PrometheusConfig.DEFAULT));
+
+        int count = 10;
+        CountDownLatch processLatch = new CountDownLatch(count);
+        DecatonProcessor<HelloTask> processor = (context, task) -> {
+            processLatch.countDown();
+            if (task.getAge() % 3 == 2) {
+                context.deferCompletion();
+            }
+        };
+
+        Properties props = new Properties();
+        props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, rule.bootstrapServers());
+        try (ProcessorSubscription subscription = TestUtils.subscription(
+                rule.bootstrapServers(),
+                builder -> builder.processorsBuilder(ProcessorsBuilder
+                                                             .consuming(topicName,
+                                                                        new ProtocolBuffersDeserializer<>(HelloTask.parser()))
+                                                             .thenProcess(processor))
+                                  .addProperties(StaticPropertySupplier.of(
+                                          Property.ofStatic(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY, 2),
+                                          Property.ofStatic(ProcessorProperties.CONFIG_MAX_PENDING_RECORDS, 3))));
+             Producer<String, DecatonTaskRequest> producer =
+                     new KafkaProducer<>(props,
+                                         new PrintableAsciiStringSerializer(),
+                                         new ProtocolBuffersKafkaSerializer<>())) {
+            for (int i = 0; i < count; i++) {
+                DecatonTaskRequest req = DecatonTaskRequest.newBuilder()
+                                                           .setSerializedTask(
+                                                                   HelloTask.newBuilder()
+                                                                           .setAge(i)
+                                                                           .build().toByteString())
+                                                           .build();
+                // All requests will be sent on partition 0 for simplicity
+                producer.send(new ProducerRecord<>(topicName, 0, null, req));
+            }
+            processLatch.await();
+
+            // offset 2 will not be committed
+            TestUtils.awaitCondition("last committed offset should becomes 1",
+                                     () -> Metrics.registry()
+                                                  .find("decaton.offset.last.committed")
+                                                  .tags("topic", topicName, "partition", "0")
+                                                  .gauge().value() == 1.0);
+            TestUtils.awaitCondition("latest consumed offset should becomes 9",
+                                     () -> Metrics.registry()
+                                                  .find("decaton.offset.latest.consumed")
+                                                  .tags("topic", topicName, "partition", "0")
+                                                  .gauge().value() == 9.0);
+        }}
 }
