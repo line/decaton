@@ -43,7 +43,7 @@ public class PartitionContext implements AutoCloseable {
     private final PartitionStateMetrics metrics;
 
     // The offset committed successfully at last commit
-    private long lastCommittedOffset;
+    private volatile long lastCommittedOffset;
     private volatile long pausedTimeNanos;
     private long lastQueueStarvedTime;
     /**
@@ -55,7 +55,7 @@ public class PartitionContext implements AutoCloseable {
     @Getter
     @Setter
     private boolean revoking;
-    private long latestConsumedOffset;
+    private volatile long latestConsumedOffset;
 
     public PartitionContext(PartitionScope scope, Processors<?> processors, int maxPendingRecords) {
         this.scope = scope;
@@ -136,7 +136,7 @@ public class PartitionContext implements AutoCloseable {
     }
 
     public OffsetState registerOffset(long offset) {
-        latestConsumedOffset = Math.max(latestConsumedOffset, offset);
+        latestConsumedOffset = offset;
         return commitControl.reportFetchedOffset(offset);
     }
 
