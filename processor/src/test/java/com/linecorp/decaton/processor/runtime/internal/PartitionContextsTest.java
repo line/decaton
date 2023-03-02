@@ -264,15 +264,21 @@ public class PartitionContextsTest {
 
     @Test
     public void testMaybeHandlePropertyReload() {
-        putContexts(12);
-
+        int count = 12;
+        List<PartitionContext> allContexts = putContexts(count);
+        List<PartitionContext> pendingContexts = new ArrayList<>();
+        List<PartitionContext> reloadableContexts = new ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            PartitionContext context = allContexts.get(i);
+            if (i % 3 == 0) {
+                doReturn(100).when(context).pendingTasksCount();
+                pendingContexts.add(context);
+            } else {
+                doReturn(0).when(context).pendingTasksCount();
+                reloadableContexts.add(context);
+            }
+        }
         clearInvocations(contexts);
-
-        PartitionContext context = mock(PartitionContext.class);
-        doReturn(context).when(contexts).instantiateContext(any());
-
-        // there are some pending tasks
-        doReturn(100).when(contexts).totalPendingTasks();
 
         contexts.maybeHandlePropertyReload();
         // property reload is not requested yet
@@ -281,13 +287,14 @@ public class PartitionContextsTest {
         partitionConcurrencyProperty.set(42);
         contexts.maybeHandlePropertyReload();
         // property reload is requested, but there are pending tasks
-        verify(contexts, never()).instantiateContext(any());
+        verify(contexts, times(reloadableContexts.size())).instantiateContext(any());
 
-        // pending tasks done
-        doReturn(0).when(contexts).totalPendingTasks();
+        for (PartitionContext partitionContext: pendingContexts) {
+            doReturn(0).when(partitionContext).pendingTasksCount();
+        }
         contexts.maybeHandlePropertyReload();
-
-        verify(contexts, times(12)).instantiateContext(any());
+        // completed reloading request
+        verify(contexts, times(count)).instantiateContext(any());
     }
 
     @Test

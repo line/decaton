@@ -28,6 +28,8 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Function;
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -53,6 +55,8 @@ public class PartitionContexts implements OffsetsStore, AssignmentStore, Partiti
     private final Map<TopicPartition, PartitionContext> contexts;
 
     private final AtomicBoolean reloadRequested;
+    private final ReentrantLock lock;
+    private HashSet<TopicPartition> reloadedPartitions;
 
     public PartitionContexts(SubscriptionScope scope, Processors<?> processors) {
         this.scope = scope;
@@ -63,6 +67,8 @@ public class PartitionContexts implements OffsetsStore, AssignmentStore, Partiti
         maxPendingRecords = scope.props().get(ProcessorProperties.CONFIG_MAX_PENDING_RECORDS).value();
         contexts = new HashMap<>();
         reloadRequested = new AtomicBoolean(false);
+        lock = new ReentrantLock();
+        reloadedPartitions = new HashSet<>();
 
         scope.props().get(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY).listen((oldVal, newVal) -> {
             // This listener will be called at listener registration.
@@ -71,8 +77,14 @@ public class PartitionContexts implements OffsetsStore, AssignmentStore, Partiti
                 return;
             }
 
-            if (!reloadRequested.getAndSet(true)) {
-                logger.info("Requested reload partition.concurrency oldValue={}, newValue={}", oldVal, newVal);
+            lock.lock();
+            try {
+                if (!reloadRequested.getAndSet(true)) {
+                    reloadedPartitions = new HashSet<>();
+                    logger.info("Requested reload partition.concurrency oldValue={}, newValue={}", oldVal, newVal);
+                }
+            } finally {
+                lock.unlock();
             }
         });
     }
@@ -250,28 +262,35 @@ public class PartitionContexts implements OffsetsStore, AssignmentStore, Partiti
      */
     public void maybeHandlePropertyReload() {
         if (reloadRequested.get()) {
-            if (totalPendingTasks() > 0) {
-                logger.debug("Waiting pending tasks for property reload.");
-                return;
+            lock.lock();
+            try {
+                Map<TopicPartition, PartitionContext> copiedContexts = new HashMap<>(contexts);
+                for (Entry<TopicPartition, PartitionContext> entry: copiedContexts.entrySet()) {
+                    TopicPartition topicPartition = entry.getKey();
+                    if (!reloadedPartitions.contains(topicPartition)
+                        && entry.getValue().pendingTasksCount() == 0) {
+                        logger.debug("Start reloading partition context({})", topicPartition);
+                        reloadContext(topicPartition);
+                        reloadedPartitions.add(topicPartition);
+                    }
+                }
+                if (reloadedPartitions.size() == contexts.size()) {
+                    reloadRequested.set(false);
+                    logger.info("Completed reloading all partition contexts");
+                }
+            } finally {
+                lock.unlock();
             }
-            // it's ok to check-and-set reloadRequested without synchronization
-            // because this field is set to false only in this method, and this method is called from only subscription thread.
-            reloadRequested.set(false);
-            logger.info("Completed waiting pending tasks. Start reloading partition contexts");
-            reloadContexts();
         }
     }
 
-    private void reloadContexts() {
-        // Save current topicPartitions into copy to update contexts map while iterating over this copy.
-        Set<TopicPartition> topicPartitions = new HashSet<>(contexts.keySet());
-
-        logger.info("Start dropping partition contexts");
-        removePartition(topicPartitions);
-        logger.info("Finished dropping partition contexts. Start recreating partition contexts");
-        Map<TopicPartition, AssignmentConfig> configs = topicPartitions.stream().collect(
-                toMap(Function.identity(), tp -> new AssignmentConfig(true)));
-        addPartitions(configs);
+    private void reloadContext(TopicPartition topicPartition) {
+        logger.info("Start dropping partition context({})", topicPartition);
+        List<TopicPartition> partitions = new ArrayList<>();
+        partitions.add(topicPartition);
+        removePartition(partitions);
+        logger.info("Finished dropping partition context. Start recreating partition context");
+        initContext(topicPartition, true);
         logger.info("Completed reloading property");
     }
 
