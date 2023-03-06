@@ -35,6 +35,7 @@ import static org.mockito.Mockito.verify;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -256,10 +257,10 @@ public class PartitionContextsTest {
     }
 
     @Test
-    public void testPausingAllProcessingByPropertyReload() {
+    public void testShouldNotBePausingAllProcessingByPropertyReload() {
         assertFalse(contexts.pausingAllProcessing());
         partitionConcurrencyProperty.set(42);
-        assertTrue(contexts.pausingAllProcessing());
+        assertFalse(contexts.pausingAllProcessing());
     }
 
     @Test
@@ -272,9 +273,11 @@ public class PartitionContextsTest {
             PartitionContext context = allContexts.get(i);
             if (i % 3 == 0) {
                 doReturn(100).when(context).pendingTasksCount();
+                doReturn(true).when(context).reloading();
                 pendingContexts.add(context);
             } else {
                 doReturn(0).when(context).pendingTasksCount();
+                doReturn(true).when(context).reloading();
                 reloadableContexts.add(context);
             }
         }
@@ -283,14 +286,26 @@ public class PartitionContextsTest {
         contexts.maybeHandlePropertyReload();
         // property reload is not requested yet
         verify(contexts, never()).instantiateContext(any());
+        for (PartitionContext context: allContexts) {
+            verify(context, never()).reloading(true);
+        }
 
         partitionConcurrencyProperty.set(42);
         contexts.maybeHandlePropertyReload();
+
+        for (PartitionContext context: allContexts) {
+            verify(context).reloading(true);
+        }
+
         // property reload is requested, but there are pending tasks
         verify(contexts, times(reloadableContexts.size())).instantiateContext(any());
+        for (PartitionContext context: reloadableContexts) {
+            doReturn(false).when(context).reloading();
+        }
 
-        for (PartitionContext partitionContext: pendingContexts) {
-            doReturn(0).when(partitionContext).pendingTasksCount();
+        for (PartitionContext context: pendingContexts) {
+            doReturn(0).when(context).pendingTasksCount();
+            doReturn(true).when(context).reloading();
         }
         contexts.maybeHandlePropertyReload();
         // completed reloading request

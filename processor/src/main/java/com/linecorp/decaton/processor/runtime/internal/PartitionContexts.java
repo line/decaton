@@ -31,6 +31,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
@@ -56,7 +57,6 @@ public class PartitionContexts implements OffsetsStore, AssignmentStore, Partiti
 
     private final AtomicBoolean reloadRequested;
     private final ReentrantLock lock;
-    private HashSet<TopicPartition> reloadedPartitions;
 
     public PartitionContexts(SubscriptionScope scope, Processors<?> processors) {
         this.scope = scope;
@@ -68,7 +68,6 @@ public class PartitionContexts implements OffsetsStore, AssignmentStore, Partiti
         contexts = new HashMap<>();
         reloadRequested = new AtomicBoolean(false);
         lock = new ReentrantLock();
-        reloadedPartitions = new HashSet<>();
 
         scope.props().get(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY).listen((oldVal, newVal) -> {
             // This listener will be called at listener registration.
@@ -80,7 +79,9 @@ public class PartitionContexts implements OffsetsStore, AssignmentStore, Partiti
             lock.lock();
             try {
                 if (!reloadRequested.getAndSet(true)) {
-                    reloadedPartitions = new HashSet<>();
+                    for (PartitionContext context: contexts.values()) {
+                        context.reloading(true);
+                    }
                     logger.info("Requested reload partition.concurrency oldValue={}, newValue={}", oldVal, newVal);
                 }
             } finally {
@@ -212,7 +213,7 @@ public class PartitionContexts implements OffsetsStore, AssignmentStore, Partiti
 
     // visible for testing
     boolean pausingAllProcessing() {
-        return processingRateProp.value() == RateLimiter.PAUSED || reloadRequested.get();
+        return processingRateProp.value() == RateLimiter.PAUSED;
     }
 
     @Override
@@ -264,17 +265,17 @@ public class PartitionContexts implements OffsetsStore, AssignmentStore, Partiti
         if (reloadRequested.get()) {
             lock.lock();
             try {
-                Map<TopicPartition, PartitionContext> copiedContexts = new HashMap<>(contexts);
-                for (Entry<TopicPartition, PartitionContext> entry: copiedContexts.entrySet()) {
-                    TopicPartition topicPartition = entry.getKey();
-                    if (!reloadedPartitions.contains(topicPartition)
-                        && entry.getValue().pendingTasksCount() == 0) {
-                        logger.debug("Start reloading partition context({})", topicPartition);
-                        reloadContext(topicPartition);
-                        reloadedPartitions.add(topicPartition);
-                    }
-                }
-                if (reloadedPartitions.size() == contexts.size()) {
+                List<TopicPartition> reloadableTopicPartitions = contexts.entrySet()
+                        .stream()
+                        .filter(entry -> entry.getValue().reloading() && entry.getValue().pendingTasksCount() == 0)
+                        .map(entry -> entry.getKey())
+                        .collect(Collectors.toList());
+                reloadContexts(reloadableTopicPartitions);
+                long reloadingPartitions = contexts.values()
+                        .stream()
+                        .filter(PartitionContext::reloading)
+                        .count();
+                if (reloadingPartitions == 0) {
                     reloadRequested.set(false);
                     logger.info("Completed reloading all partition contexts");
                 }
@@ -284,13 +285,13 @@ public class PartitionContexts implements OffsetsStore, AssignmentStore, Partiti
         }
     }
 
-    private void reloadContext(TopicPartition topicPartition) {
-        logger.info("Start dropping partition context({})", topicPartition);
-        List<TopicPartition> partitions = new ArrayList<>();
-        partitions.add(topicPartition);
-        removePartition(partitions);
-        logger.info("Finished dropping partition context. Start recreating partition context");
-        initContext(topicPartition, true);
+    private void reloadContexts(Collection<TopicPartition> topicPartitions) {
+        logger.info("Start dropping partition context({})", topicPartitions);
+        removePartition(topicPartitions);
+        logger.info("Finished dropping partition contexts. Start recreating partition contexts");
+        Map<TopicPartition, AssignmentConfig> configs = topicPartitions.stream().collect(
+                toMap(Function.identity(), tp -> new AssignmentConfig(true)));
+        addPartitions(configs);
         logger.info("Completed reloading property");
     }
 
