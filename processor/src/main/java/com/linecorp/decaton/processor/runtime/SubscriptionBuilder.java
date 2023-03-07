@@ -91,6 +91,13 @@ public class SubscriptionBuilder {
      */
     private TracingProvider tracingProvider = NoopTracingProvider.INSTANCE;
 
+    /**
+     *
+     * A {@link SubPartitionerSupplier} for partitioning tasks into subpartitions
+     */
+    @Setter
+    private SubPartitionerSupplier subPartitionerSupplier = DefaultSubPartitioner::new;
+
     public SubscriptionBuilder(String subscriptionId) {
         this.subscriptionId = Objects.requireNonNull(subscriptionId, "subscriptionId");
         propertiesBuilder = ProcessorProperties.builder();
@@ -179,7 +186,8 @@ public class SubscriptionBuilder {
                                                         Optional.ofNullable(retryConfig),
                                                         props,
                                                         tracingProvider,
-                                                        consumerMaxPollRecords());
+                                                        consumerMaxPollRecords(),
+                                                        subPartitionerSupplier);
 
         Properties consumerConfig = Objects.requireNonNull(this.consumerConfig, "consumerConfig");
         ConsumerSupplier consumerSupplier = new ConsumerSupplier(consumerConfig);

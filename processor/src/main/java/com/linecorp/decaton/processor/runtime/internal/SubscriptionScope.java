@@ -19,6 +19,7 @@ package com.linecorp.decaton.processor.runtime.internal;
 import java.util.Optional;
 
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
+import com.linecorp.decaton.processor.runtime.SubPartitionerSupplier;
 import com.linecorp.decaton.processor.tracing.TracingProvider;
 import com.linecorp.decaton.processor.runtime.RetryConfig;
 
@@ -38,6 +39,7 @@ public class SubscriptionScope {
     private final ProcessorProperties props;
     private final TracingProvider tracingProvider;
     private final int maxPollRecords;
+    private final SubPartitionerSupplier subPartitionerSupplier;
 
     public Optional<String> retryTopic() {
         return retryConfig.map(conf -> conf.retryTopicOrDefault(topic));

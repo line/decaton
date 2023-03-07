@@ -30,7 +30,6 @@ import org.slf4j.LoggerFactory;
 
 import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.runtime.AsyncShutdownable;
-import com.linecorp.decaton.processor.runtime.DefaultSubPartitioner;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.metrics.Metrics;
 import com.linecorp.decaton.processor.runtime.SubPartitioner;
@@ -102,7 +101,7 @@ public class PartitionProcessor implements AsyncShutdownable {
         //   4. at next subscription loop, all processors are reloaded with 3 again, then start processing
         int concurrency = scope.props().get(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY).value();
         units = new ArrayList<>(concurrency);
-        subPartitioner = new DefaultSubPartitioner(concurrency);
+        subPartitioner = scope.subPartitionerSupplier().get(concurrency);
         rateLimiter = new DynamicRateLimiter(scope.props().get(ProcessorProperties.CONFIG_PROCESSING_RATE));
 
         try {
