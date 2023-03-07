@@ -81,10 +81,9 @@ public class PartitionContexts implements OffsetsStore, AssignmentStore, Partiti
 
             lock.lock();
             try {
-                if (!reloadRequested.getAndSet(true)) {
-                    reloadStates.replaceAll((t, v) -> true);
-                    logger.info("Requested reload partition.concurrency oldValue={}, newValue={}", oldVal, newVal);
-                }
+                reloadRequested.set(true);
+                reloadStates.replaceAll((t, v) -> true);
+                logger.info("Requested reload partition.concurrency oldValue={}, newValue={}", oldVal, newVal);
             } finally {
                 lock.unlock();
             }
