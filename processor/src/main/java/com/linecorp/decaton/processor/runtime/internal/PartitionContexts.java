@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
@@ -57,6 +58,7 @@ public class PartitionContexts implements OffsetsStore, AssignmentStore, Partiti
 
     private final AtomicBoolean reloadRequested;
     private final ReentrantLock lock;
+    private final Map<TopicPartition, Boolean> reloadStates;
 
     public PartitionContexts(SubscriptionScope scope, Processors<?> processors) {
         this.scope = scope;
@@ -68,6 +70,7 @@ public class PartitionContexts implements OffsetsStore, AssignmentStore, Partiti
         contexts = new HashMap<>();
         reloadRequested = new AtomicBoolean(false);
         lock = new ReentrantLock();
+        reloadStates = new ConcurrentHashMap<>();
 
         scope.props().get(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY).listen((oldVal, newVal) -> {
             // This listener will be called at listener registration.
@@ -79,9 +82,7 @@ public class PartitionContexts implements OffsetsStore, AssignmentStore, Partiti
             lock.lock();
             try {
                 if (!reloadRequested.getAndSet(true)) {
-                    for (PartitionContext context: contexts.values()) {
-                        context.reloading(true);
-                    }
+                    reloadStates.replaceAll((t, v) -> true);
                     logger.info("Requested reload partition.concurrency oldValue={}, newValue={}", oldVal, newVal);
                 }
             } finally {
@@ -138,7 +139,13 @@ public class PartitionContexts implements OffsetsStore, AssignmentStore, Partiti
             context.pause();
         }
         contexts.put(tp, context);
+        finishReloading(tp);
         return context;
+    }
+
+    // visible for testing
+    void finishReloading(TopicPartition tp) {
+        reloadStates.put(tp, false);
     }
 
     /**
@@ -227,7 +234,9 @@ public class PartitionContexts implements OffsetsStore, AssignmentStore, Partiti
         return contexts.values().stream()
                        .filter(c -> !c.revoking())
                        .filter(c -> !c.paused())
-                       .filter(c -> pausingAll || shouldPartitionPaused(c.pendingTasksCount()))
+                       .filter(c -> pausingAll
+                                    || reloadStates.get(c.topicPartition())
+                                    || shouldPartitionPaused(c.pendingTasksCount()))
                        .map(PartitionContext::topicPartition)
                        .collect(toList());
     }
@@ -265,15 +274,16 @@ public class PartitionContexts implements OffsetsStore, AssignmentStore, Partiti
         if (reloadRequested.get()) {
             lock.lock();
             try {
-                List<TopicPartition> reloadableTopicPartitions = contexts.entrySet()
+                List<TopicPartition> reloadableTopicPartitions = reloadStates.entrySet()
                         .stream()
-                        .filter(entry -> entry.getValue().reloading() && entry.getValue().pendingTasksCount() == 0)
+                        .filter(entry -> entry.getValue()
+                                         && contexts.get(entry.getKey()).pendingTasksCount() == 0)
                         .map(entry -> entry.getKey())
                         .collect(Collectors.toList());
                 reloadContexts(reloadableTopicPartitions);
-                long reloadingPartitions = contexts.values()
+                long reloadingPartitions = reloadStates.values()
                         .stream()
-                        .filter(PartitionContext::reloading)
+                        .filter(reloading -> reloading)
                         .count();
                 if (reloadingPartitions == 0) {
                     reloadRequested.set(false);

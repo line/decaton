@@ -166,6 +166,22 @@ public class PartitionContextsTest {
         Collection<TopicPartition> needPause = contexts.partitionsNeedsPause();
         assertTrue(needPause.isEmpty());
 
+        // Pause all partitions by reloading
+        partitionConcurrencyProperty.set(42);
+        needPause = contexts.partitionsNeedsPause();
+        assertEquals(2, needPause.size());
+
+        // Resume 1 partition by finishing reloading
+        contexts.finishReloading(cts.get(0).topicPartition());
+        needPause = contexts.partitionsNeedsPause();
+        assertEquals(1, needPause.size());
+        assertEquals(cts.get(1).topicPartition(), needPause.iterator().next());
+
+        // Resume all partitions by finishing reloading
+        contexts.finishReloading(cts.get(1).topicPartition());
+        needPause = contexts.partitionsNeedsPause();
+        assertTrue(needPause.isEmpty());
+
         // Pause 1 partition.
         doReturn(PENDING_RECORDS_TO_PAUSE).when(cts.get(0)).pendingTasksCount();
         needPause = contexts.partitionsNeedsPause();
@@ -273,11 +289,9 @@ public class PartitionContextsTest {
             PartitionContext context = allContexts.get(i);
             if (i % 3 == 0) {
                 doReturn(100).when(context).pendingTasksCount();
-                doReturn(true).when(context).reloading();
                 pendingContexts.add(context);
             } else {
                 doReturn(0).when(context).pendingTasksCount();
-                doReturn(true).when(context).reloading();
                 reloadableContexts.add(context);
             }
         }
@@ -286,26 +300,18 @@ public class PartitionContextsTest {
         contexts.maybeHandlePropertyReload();
         // property reload is not requested yet
         verify(contexts, never()).instantiateContext(any());
-        for (PartitionContext context: allContexts) {
-            verify(context, never()).reloading(true);
-        }
 
         partitionConcurrencyProperty.set(42);
         contexts.maybeHandlePropertyReload();
 
-        for (PartitionContext context: allContexts) {
-            verify(context).reloading(true);
-        }
-
         // property reload is requested, but there are pending tasks
         verify(contexts, times(reloadableContexts.size())).instantiateContext(any());
         for (PartitionContext context: reloadableContexts) {
-            doReturn(false).when(context).reloading();
+            contexts.finishReloading(context.topicPartition());
         }
 
         for (PartitionContext context: pendingContexts) {
             doReturn(0).when(context).pendingTasksCount();
-            doReturn(true).when(context).reloading();
         }
         contexts.maybeHandlePropertyReload();
         // completed reloading request

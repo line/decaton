@@ -56,9 +56,6 @@ public class PartitionContext implements AutoCloseable {
     @Setter
     private boolean revoking;
 
-    @Getter
-    private boolean reloading;
-
     public PartitionContext(PartitionScope scope, Processors<?> processors, int maxPendingRecords) {
         this.scope = scope;
         this.processors = processors;
@@ -158,13 +155,6 @@ public class PartitionContext implements AutoCloseable {
         long pausedNanos = System.nanoTime() - pausedTimeNanos;
         pausedTimeNanos = -1;
         metrics.partitionPausedTime.record(pausedNanos, TimeUnit.NANOSECONDS);
-    }
-
-    public void reloading(boolean reloading) {
-        this.reloading = reloading;
-        if (reloading) {
-            pause();
-        }
     }
 
     @Override
