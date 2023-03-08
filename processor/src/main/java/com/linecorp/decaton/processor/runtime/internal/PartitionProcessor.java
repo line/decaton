@@ -16,6 +16,7 @@
 
 package com.linecorp.decaton.processor.runtime.internal;
 
+import static com.linecorp.decaton.processor.runtime.ProcessorProperties.CONFIG_DESTROY_PROCESSOR_TIMEOUT_MS;
 import static java.util.stream.Collectors.toList;
 
 import java.time.Duration;
@@ -24,6 +25,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeoutException;
 import java.util.stream.IntStream;
 
 import org.apache.kafka.common.TopicPartition;
@@ -34,6 +37,7 @@ import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.runtime.AsyncShutdownable;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.metrics.Metrics;
+import com.linecorp.decaton.processor.runtime.Property;
 import com.linecorp.decaton.processor.runtime.internal.Utils.Task;
 
 /**
@@ -59,6 +63,8 @@ public class PartitionProcessor implements AsyncShutdownable {
     private final RateLimiter rateLimiter;
 
     private final CompletionStage<Void> shutdownFuture;
+
+    private final Property<Long> destroyingTimeoutMillis;
 
     private Task destroyThreadProcessorTask(int i) {
         return () -> processors.destroyThreadScope(scope.subscriptionId(), scope.topicPartition(), i);
@@ -104,6 +110,7 @@ public class PartitionProcessor implements AsyncShutdownable {
         units = new ArrayList<>(concurrency);
         subPartitioner = new SubPartitioner(concurrency);
         rateLimiter = new DynamicRateLimiter(scope.props().get(ProcessorProperties.CONFIG_PROCESSING_RATE));
+        destroyingTimeoutMillis = scope.props().get(CONFIG_DESTROY_PROCESSOR_TIMEOUT_MS);
 
         try {
             for (int i = 0; i < concurrency; i++) {
@@ -165,5 +172,14 @@ public class PartitionProcessor implements AsyncShutdownable {
     @Override
     public CompletionStage<Void> shutdownFuture() {
         return shutdownFuture;
+    }
+
+    @Override
+    public void awaitShutdown() throws InterruptedException, ExecutionException {
+        try {
+            awaitShutdown(Duration.ofMillis(destroyingTimeoutMillis.value()));
+        } catch (TimeoutException e) {
+            // impossible
+        }
     }
 }

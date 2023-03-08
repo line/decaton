@@ -29,6 +29,7 @@ import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.ProcessingContext;
 import com.linecorp.decaton.processor.runtime.internal.AbstractDecatonProperties;
 import com.linecorp.decaton.processor.runtime.internal.OutOfOrderCommitControl;
+import com.linecorp.decaton.processor.runtime.internal.PartitionProcessor;
 import com.linecorp.decaton.processor.runtime.internal.RateLimiter;
 
 /**
@@ -179,6 +180,19 @@ public class ProcessorProperties extends AbstractDecatonProperties {
             PropertyDefinition.define("decaton.deferred.complete.timeout.ms", Long.class, -1L,
                                       v -> v instanceof Long);
 
+    /**
+     * Timeout for destroying processors.
+     * When {@link PartitionProcessor#close()} is called, all processors will be destroyed.
+     * At this time, Decaton waits synchronously for the running tasks to finish until this timeout.
+     * If it is not a problem not to wait for task completion, it is recommended to set this timeout,
+     * since this task termination doesn't affect offsets.
+     *
+     * Reloadable: yes
+     */
+    public static final PropertyDefinition<Long> CONFIG_DESTROY_PROCESSOR_TIMEOUT_MS =
+            PropertyDefinition.define("decaton.destroy.processor.timeout.ms", Long.class, 1000L,
+                                      v -> v instanceof Long && (Long) v >= 0);
+
     public static final List<PropertyDefinition<?>> PROPERTY_DEFINITIONS =
             Collections.unmodifiableList(Arrays.asList(
                     CONFIG_IGNORE_KEYS,
@@ -190,7 +204,8 @@ public class ProcessorProperties extends AbstractDecatonProperties {
                     CONFIG_SHUTDOWN_TIMEOUT_MS,
                     CONFIG_LOGGING_MDC_ENABLED,
                     CONFIG_BIND_CLIENT_METRICS,
-                    CONFIG_DEFERRED_COMPLETE_TIMEOUT_MS));
+                    CONFIG_DEFERRED_COMPLETE_TIMEOUT_MS,
+                    CONFIG_DESTROY_PROCESSOR_TIMEOUT_MS));
 
     /**
      * Find and return a {@link PropertyDefinition} from its name.
