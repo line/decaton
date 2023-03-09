@@ -35,6 +35,7 @@ import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
 
 import com.linecorp.decaton.processor.DeferredCompletion;
+import com.linecorp.decaton.processor.runtime.DefaultSubPartitioner;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider;
 import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
@@ -64,7 +65,8 @@ public class ProcessorUnitTest {
                         new SubscriptionScope("subscription", "topic",
                                               Optional.empty(), ProcessorProperties.builder().build(),
                                               NoopTracingProvider.INSTANCE,
-                                              ConsumerSupplier.DEFAULT_MAX_POLL_RECORDS),
+                                              ConsumerSupplier.DEFAULT_MAX_POLL_RECORDS,
+                                              DefaultSubPartitioner::new),
                         new TopicPartition("topic", 0)),
                 0);
 

@@ -45,6 +45,7 @@ import org.mockito.junit.MockitoRule;
 
 import com.linecorp.decaton.client.internal.DecatonTaskProducer;
 import com.linecorp.decaton.processor.ProcessingContext;
+import com.linecorp.decaton.processor.runtime.DefaultSubPartitioner;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.TaskMetadata;
 import com.linecorp.decaton.processor.runtime.RetryConfig;
@@ -62,7 +63,8 @@ public class DecatonTaskRetryQueueingProcessorTest {
             "subscription", "topic",
             Optional.of(RetryConfig.builder().backoff(RETRY_BACKOFF).build()),
             ProcessorProperties.builder().build(), NoopTracingProvider.INSTANCE,
-            ConsumerSupplier.DEFAULT_MAX_POLL_RECORDS);
+            ConsumerSupplier.DEFAULT_MAX_POLL_RECORDS,
+            DefaultSubPartitioner::new);
 
     @Mock
     private ProcessingContext<byte[]> context;
