@@ -18,6 +18,11 @@ package com.linecorp.decaton.processor.runtime;
 
 import java.nio.ByteBuffer;
 
+/**
+ * Default implementation for {@link SubPartitioner}.
+ * This implementation guarantees that tasks with same key will always be assigned to the same subpartition.
+ * If the key is null, the subpartition will be chosen in round-robin manner.
+ */
 public class DefaultSubPartitioner implements SubPartitioner {
     private final int bound;
     private final RoundRobinSubPartitioner roundRobinStrategy;

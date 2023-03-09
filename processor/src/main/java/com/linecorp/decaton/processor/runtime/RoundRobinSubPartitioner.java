@@ -18,6 +18,11 @@ package com.linecorp.decaton.processor.runtime;
 
 import java.util.concurrent.atomic.AtomicLong;
 
+/**
+ * A {@link SubPartitioner} implementation that assigns tasks to sub-partitions in round-robin manner.
+ * This implementation is useful when you want to evenly distribute tasks among sub-partitions
+ * regardless of the key of the tasks.
+ */
 public class RoundRobinSubPartitioner implements SubPartitioner {
     private final int bound;
     private final AtomicLong monotonicValueSupplier;
