@@ -16,7 +16,6 @@
 
 package com.linecorp.decaton.processor.runtime.internal;
 
-import static com.linecorp.decaton.processor.runtime.ProcessorProperties.CONFIG_DESTROY_PROCESSOR_TIMEOUT_MS;
 import static com.linecorp.decaton.processor.runtime.ProcessorProperties.CONFIG_PROCESSOR_THREADS_TERMINATION_TIMEOUT_MS;
 import static java.util.stream.Collectors.toList;
 
