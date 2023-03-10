@@ -179,6 +179,22 @@ public class ProcessorProperties extends AbstractDecatonProperties {
             PropertyDefinition.define("decaton.deferred.complete.timeout.ms", Long.class, -1L,
                                       v -> v instanceof Long);
 
+    /**
+     * Timeout for processor threads termination.
+     * When a partition is revoked for rebalance or a subscription is about to be shutdown,
+     * all processors will be destroyed.
+     * At this time, Decaton waits synchronously for the running tasks to finish until this timeout.
+     *
+     * Even if timeout occurs, Decaton will continue other clean-up tasks.
+     * Therefore, you can set this timeout only if unexpected behavior is acceptable in the middle of the last
+     * {@link DecatonProcessor#process(ProcessingContext, Object)} which timed out.
+     *
+     * Reloadable: yes
+     */
+    public static final PropertyDefinition<Long> CONFIG_PROCESSOR_THREADS_TERMINATION_TIMEOUT_MS =
+            PropertyDefinition.define("decaton.processor.threads.termination.timeout.ms", Long.class,
+                                      Long.MAX_VALUE, v -> v instanceof Long && (Long) v >= 0);
+
     public static final List<PropertyDefinition<?>> PROPERTY_DEFINITIONS =
             Collections.unmodifiableList(Arrays.asList(
                     CONFIG_IGNORE_KEYS,
@@ -190,7 +206,8 @@ public class ProcessorProperties extends AbstractDecatonProperties {
                     CONFIG_SHUTDOWN_TIMEOUT_MS,
                     CONFIG_LOGGING_MDC_ENABLED,
                     CONFIG_BIND_CLIENT_METRICS,
-                    CONFIG_DEFERRED_COMPLETE_TIMEOUT_MS));
+                    CONFIG_DEFERRED_COMPLETE_TIMEOUT_MS,
+                    CONFIG_PROCESSOR_THREADS_TERMINATION_TIMEOUT_MS));
 
     /**
      * Find and return a {@link PropertyDefinition} from its name.
