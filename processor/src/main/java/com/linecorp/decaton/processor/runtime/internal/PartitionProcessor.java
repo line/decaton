@@ -179,7 +179,7 @@ public class PartitionProcessor implements AsyncShutdownable {
         try {
             awaitShutdown(Duration.ofMillis(destroyingTimeoutMillis.value()));
         } catch (TimeoutException e) {
-            // impossible
+            logger.warn("awaitShutdown failed due to timeout in {} ms", destroyingTimeoutMillis.value(), e);
         }
     }
 }

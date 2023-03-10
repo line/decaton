@@ -182,15 +182,18 @@ public class ProcessorProperties extends AbstractDecatonProperties {
 
     /**
      * Timeout for destroying processors.
-     * When {@link PartitionProcessor#close()} is called, all processors will be destroyed.
+     * When a partition is revoked for rebalance or a subscription is about to be shutdown,
+     * all processors will be destroyed.
      * At this time, Decaton waits synchronously for the running tasks to finish until this timeout.
-     * If it is not a problem not to wait for task completion, it is recommended to set this timeout,
-     * since this task termination doesn't affect offsets.
+     *
+     * Even if timeout occurs, Decaton will continue other clean-up tasks.
+     * Therefore, you can set this timeout only if unexpected behavior is acceptable in the middle of the last
+     * {@link DecatonProcessor#process(ProcessingContext, Object)} which timed out.
      *
      * Reloadable: yes
      */
     public static final PropertyDefinition<Long> CONFIG_DESTROY_PROCESSOR_TIMEOUT_MS =
-            PropertyDefinition.define("decaton.destroy.processor.timeout.ms", Long.class, 1000L,
+            PropertyDefinition.define("decaton.destroy.processor.timeout.ms", Long.class, Long.MAX_VALUE,
                                       v -> v instanceof Long && (Long) v >= 0);
 
     public static final List<PropertyDefinition<?>> PROPERTY_DEFINITIONS =
