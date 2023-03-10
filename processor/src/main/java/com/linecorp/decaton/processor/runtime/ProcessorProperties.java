@@ -29,7 +29,6 @@ import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.ProcessingContext;
 import com.linecorp.decaton.processor.runtime.internal.AbstractDecatonProperties;
 import com.linecorp.decaton.processor.runtime.internal.OutOfOrderCommitControl;
-import com.linecorp.decaton.processor.runtime.internal.PartitionProcessor;
 import com.linecorp.decaton.processor.runtime.internal.RateLimiter;
 
 /**
