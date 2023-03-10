@@ -206,6 +206,9 @@ public class Metrics {
 
     public class PartitionStateMetrics extends AbstractMetrics {
         public final Gauge tasksPending;
+        public final Gauge partitionPaused;
+        public final Gauge lastCommittedOffset;
+        public final Gauge latestConsumedOffset;
 
         public final Timer queueStarvedTime =
                 meter(() -> Timer.builder("partition.queue.starved.time")
@@ -220,9 +223,11 @@ public class Metrics {
                                  .tags(availableTags.partitionScope())
                                  .register(registry));
 
-        public final Gauge partitionPaused;
 
-        public PartitionStateMetrics(Supplier<Number> pendingTasksFn, Supplier<Number> partitionPausedFn) {
+        public PartitionStateMetrics(Supplier<Number> pendingTasksFn,
+                                     Supplier<Number> partitionPausedFn,
+                                     Supplier<Number> lastCommittedOffsetFn,
+                                     Supplier<Number> latestConsumedOffsetFn) {
             tasksPending = meter(() -> Gauge.builder("tasks.pending", pendingTasksFn)
                                             .description("The number of pending tasks")
                                             .tags(availableTags.partitionScope())
@@ -231,6 +236,14 @@ public class Metrics {
                                                .description("Whether the partition is paused. 1 if paused, 0 otherwise")
                                                .tags(availableTags.partitionScope())
                                                .register(registry));
+            lastCommittedOffset = meter(() -> Gauge.builder("offset.last.committed", lastCommittedOffsetFn)
+                                                   .description("The last committed offset")
+                                                   .tags(availableTags.partitionScope())
+                                                   .register(registry()));
+            latestConsumedOffset = meter(() -> Gauge.builder("offset.latest.consumed", latestConsumedOffsetFn)
+                                                    .description("The latest consumed offset")
+                                                    .tags(availableTags.partitionScope())
+                                                    .register(registry()));
         }
     }
 

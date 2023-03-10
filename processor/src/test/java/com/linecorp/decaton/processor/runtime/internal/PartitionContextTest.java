@@ -30,6 +30,7 @@ import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
 
+import com.linecorp.decaton.processor.runtime.DefaultSubPartitioner;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider;
 
@@ -41,7 +42,8 @@ public class PartitionContextTest {
             new SubscriptionScope("subscription", "topic",
                                   Optional.empty(), ProcessorProperties.builder().build(),
                                   NoopTracingProvider.INSTANCE,
-                                  ConsumerSupplier.DEFAULT_MAX_POLL_RECORDS),
+                                  ConsumerSupplier.DEFAULT_MAX_POLL_RECORDS,
+                                  DefaultSubPartitioner::new),
             new TopicPartition("topic", 0));
 
     @Mock

@@ -20,7 +20,6 @@ import static com.linecorp.decaton.processor.runtime.ProcessorProperties.CONFIG_
 import static java.util.stream.Collectors.toList;
 
 import java.time.Duration;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -38,6 +37,7 @@ import com.linecorp.decaton.processor.runtime.AsyncShutdownable;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.metrics.Metrics;
 import com.linecorp.decaton.processor.runtime.Property;
+import com.linecorp.decaton.processor.runtime.SubPartitioner;
 import com.linecorp.decaton.processor.runtime.internal.Utils.Task;
 
 /**
@@ -108,7 +108,7 @@ public class PartitionProcessor implements AsyncShutdownable {
         //   4. at next subscription loop, all processors are reloaded with 3 again, then start processing
         int concurrency = scope.props().get(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY).value();
         units = new ArrayList<>(concurrency);
-        subPartitioner = new SubPartitioner(concurrency);
+        subPartitioner = scope.subPartitionerSupplier().get(concurrency);
         rateLimiter = new DynamicRateLimiter(scope.props().get(ProcessorProperties.CONFIG_PROCESSING_RATE));
         destroyingTimeoutMillis = scope.props().get(CONFIG_DESTROY_PROCESSOR_TIMEOUT_MS);
 
@@ -149,7 +149,7 @@ public class PartitionProcessor implements AsyncShutdownable {
     }
 
     public void addTask(TaskRequest request) {
-        int subPartition = subPartitioner.partitionFor(request.key());
+        int subPartition = subPartitioner.subPartitionFor(request.key());
         units.get(subPartition).putTask(request);
     }
 

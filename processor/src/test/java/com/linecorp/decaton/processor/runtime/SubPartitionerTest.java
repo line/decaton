@@ -14,7 +14,7 @@
  * under the License.
  */
 
-package com.linecorp.decaton.processor.runtime.internal;
+package com.linecorp.decaton.processor.runtime;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -27,8 +27,6 @@ import java.util.List;
 import org.apache.kafka.common.utils.Utils;
 import org.junit.Before;
 import org.junit.Test;
-
-import com.linecorp.decaton.processor.runtime.internal.SubPartitioner;
 
 public class SubPartitionerTest {
     static final int DIST_KEYS_COUNT = 10000;
@@ -74,9 +72,9 @@ public class SubPartitionerTest {
             for (int subpartitionCount : SUBPARTITION_COUNTS) {
                 for (List<byte[]> partition : partitions) {
                     int[] counts = new int[subpartitionCount];
-                    SubPartitioner subPartitioner = new SubPartitioner(counts.length);
+                    SubPartitioner subPartitioner = new DefaultSubPartitioner(counts.length);
                     for (byte[] key : partition) {
-                        int subPartition = subPartitioner.partitionFor(key);
+                        int subPartition = subPartitioner.subPartitionFor(key);
                         counts[subPartition]++;
                     }
 
@@ -96,12 +94,25 @@ public class SubPartitionerTest {
     @Test
     public void testConsistentSelectionForSameKeys() {
         for (int subpartitionCount : SUBPARTITION_COUNTS) {
-            SubPartitioner subPartitioner = new SubPartitioner(subpartitionCount);
+            SubPartitioner subPartitioner = new DefaultSubPartitioner(subpartitionCount);
             for (byte[] key : keys) {
-                int assign1 = subPartitioner.partitionFor(key);
-                int assign2 = subPartitioner.partitionFor(key);
+                int assign1 = subPartitioner.subPartitionFor(key);
+                int assign2 = subPartitioner.subPartitionFor(key);
                 assertEquals(String.format("[%d] assign of %s", subpartitionCount, key),
                              assign2, assign1);
+            }
+        }
+    }
+
+    @Test
+    public void testRoundRobin() {
+        for (int subpartitionCount : SUBPARTITION_COUNTS) {
+            SubPartitioner subPartitioner = new RoundRobinSubPartitioner(subpartitionCount);
+            for (byte[] key : keys) {
+                int assign1 = subPartitioner.subPartitionFor(key);
+                int assign2 = subPartitioner.subPartitionFor(key);
+                assertEquals(String.format("[%d] first assign: %d; second assign: %d", subpartitionCount, assign1, assign2),
+                             assign2, (assign1 + 1) % subpartitionCount);
             }
         }
     }

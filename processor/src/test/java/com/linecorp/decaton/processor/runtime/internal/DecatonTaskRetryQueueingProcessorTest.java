@@ -45,6 +45,7 @@ import org.mockito.junit.MockitoRule;
 
 import com.linecorp.decaton.client.internal.DecatonTaskProducer;
 import com.linecorp.decaton.processor.ProcessingContext;
+import com.linecorp.decaton.processor.runtime.DefaultSubPartitioner;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.TaskMetadata;
 import com.linecorp.decaton.processor.runtime.RetryConfig;
@@ -62,7 +63,8 @@ public class DecatonTaskRetryQueueingProcessorTest {
             "subscription", "topic",
             Optional.of(RetryConfig.builder().backoff(RETRY_BACKOFF).build()),
             ProcessorProperties.builder().build(), NoopTracingProvider.INSTANCE,
-            ConsumerSupplier.DEFAULT_MAX_POLL_RECORDS);
+            ConsumerSupplier.DEFAULT_MAX_POLL_RECORDS,
+            DefaultSubPartitioner::new);
 
     @Mock
     private ProcessingContext<byte[]> context;
@@ -75,7 +77,7 @@ public class DecatonTaskRetryQueueingProcessorTest {
     @Before
     public void setUp() {
         processor = new DecatonTaskRetryQueueingProcessor(scope, producer);
-        doReturn(CompletableFuture.completedFuture(null)).when(producer).sendRequest(any(), any());
+        doReturn(CompletableFuture.completedFuture(null)).when(producer).sendRequest(any(), any(), any());
         doReturn(new CompletionImpl()).when(context).deferCompletion();
         doReturn("key".getBytes(StandardCharsets.UTF_8)).when(context).key();
         doReturn(TaskMetadata.builder().build()).when(context).metadata();
@@ -101,7 +103,7 @@ public class DecatonTaskRetryQueueingProcessorTest {
         processor.process(context, task.toByteArray());
 
         ArgumentCaptor<DecatonTaskRequest> captor = ArgumentCaptor.forClass(DecatonTaskRequest.class);
-        verify(producer, times(1)).sendRequest(eq(key), captor.capture());
+        verify(producer, times(1)).sendRequest(eq(key), captor.capture(), eq(null));
 
         DecatonTaskRequest request = captor.getValue();
         assertEquals(task.toByteString(), request.getSerializedTask());
@@ -120,7 +122,7 @@ public class DecatonTaskRetryQueueingProcessorTest {
         CompletionImpl comp = new CompletionImpl();
 
         doReturn(comp).when(context).deferCompletion();
-        doReturn(future).when(producer).sendRequest(any(), any());
+        doReturn(future).when(producer).sendRequest(any(), any(), any());
 
         processor.process(context, HelloTask.getDefaultInstance().toByteArray());
 
@@ -133,7 +135,7 @@ public class DecatonTaskRetryQueueingProcessorTest {
 
     @Test
     public void testDeferCompletion_EXCEPTION() throws InterruptedException {
-        doThrow(new KafkaException("kafka")).when(producer).sendRequest(any(), any());
+        doThrow(new KafkaException("kafka")).when(producer).sendRequest(any(), any(), any());
 
         try {
             processor.process(context, HelloTask.getDefaultInstance().toByteArray());

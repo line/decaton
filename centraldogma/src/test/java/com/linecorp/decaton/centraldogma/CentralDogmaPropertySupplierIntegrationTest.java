@@ -37,6 +37,9 @@ import org.junit.Test;
 
 import com.fasterxml.jackson.databind.JsonNode;
 
+import com.linecorp.armeria.client.WebClientBuilder;
+import com.linecorp.armeria.client.retry.RetryRule;
+import com.linecorp.armeria.client.retry.RetryingClient;
 import com.linecorp.centraldogma.client.CentralDogma;
 import com.linecorp.centraldogma.client.CentralDogmaRepository;
 import com.linecorp.centraldogma.common.Change;
@@ -51,7 +54,14 @@ import com.linecorp.decaton.processor.runtime.Property;
 public class CentralDogmaPropertySupplierIntegrationTest {
 
     @Rule
-    public CentralDogmaRule centralDogmaRule = new CentralDogmaRule();
+    public CentralDogmaRule centralDogmaRule = new CentralDogmaRule() {
+        @Override
+        protected void configureHttpClient(WebClientBuilder builder) {
+            builder.decorator(RetryingClient.builder(RetryRule.onUnprocessed())
+                                            .maxTotalAttempts(3)
+                                            .newDecorator());
+        }
+    };
 
     private static final String PROJECT_NAME = "unit-test";
     private static final String REPOSITORY_NAME = "repo";

@@ -61,9 +61,13 @@ public class DecatonTaskProducer implements AutoCloseable {
         this.topic = topic;
     }
 
-    public CompletableFuture<PutTaskResult> sendRequest(byte[] key, DecatonTaskRequest request) {
-        ProducerRecord<byte[], DecatonTaskRequest> record = new ProducerRecord<>(topic, key, request);
+    public CompletableFuture<PutTaskResult> sendRequest(byte[] key, DecatonTaskRequest request,
+                                                        Integer partition) {
+        ProducerRecord<byte[], DecatonTaskRequest> record = new ProducerRecord<>(topic, partition, key, request);
+        return sendRequest(record);
+    }
 
+    private CompletableFuture<PutTaskResult> sendRequest(ProducerRecord<byte[], DecatonTaskRequest> record) {
         CompletableFuture<PutTaskResult> result = new CompletableFuture<>();
         producer.send(record, (metadata, exception) -> {
             if (exception == null) {
@@ -73,7 +77,6 @@ public class DecatonTaskProducer implements AutoCloseable {
                 result.completeExceptionally(exception);
             }
         });
-
         return result;
     }
 

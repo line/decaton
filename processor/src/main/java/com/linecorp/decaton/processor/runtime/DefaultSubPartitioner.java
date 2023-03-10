@@ -14,27 +14,32 @@
  * under the License.
  */
 
-package com.linecorp.decaton.processor.runtime.internal;
+package com.linecorp.decaton.processor.runtime;
 
 import java.nio.ByteBuffer;
-import java.util.concurrent.atomic.AtomicLong;
 
-class SubPartitioner {
+/**
+ * Default implementation for {@link SubPartitioner}.
+ * This implementation guarantees that tasks with same key will always be assigned to the same subpartition.
+ * If the key is null, the subpartition will be chosen in round-robin manner.
+ */
+public class DefaultSubPartitioner implements SubPartitioner {
     private final int bound;
-    private final AtomicLong monotonicValueSupplier;
+    private final RoundRobinSubPartitioner roundRobinStrategy;
 
-    SubPartitioner(int bound) {
+    public DefaultSubPartitioner(int bound) {
         this.bound = bound;
-        monotonicValueSupplier = new AtomicLong();
+        roundRobinStrategy = new RoundRobinSubPartitioner(bound);
     }
 
     private static int toPositive(int number) {
         return number & 2147483647;
     }
 
-    public int partitionFor(byte[] key) {
+    @Override
+    public int subPartitionFor(byte[] key) {
         if (key == null) {
-            return toPositive((int) monotonicValueSupplier.getAndIncrement()) % bound;
+            return roundRobinStrategy.subPartitionFor(key);
         } else {
             // Kafka client uses murmur2 for hashing keys to decide partition to route the record,
             // so all keys we receive in a partition processor has highly biased distribution.
