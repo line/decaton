@@ -181,7 +181,7 @@ public class ProcessorProperties extends AbstractDecatonProperties {
                                       v -> v instanceof Long);
 
     /**
-     * Timeout for destroying processors.
+     * Timeout for processor threads termination.
      * When a partition is revoked for rebalance or a subscription is about to be shutdown,
      * all processors will be destroyed.
      * At this time, Decaton waits synchronously for the running tasks to finish until this timeout.
@@ -192,9 +192,9 @@ public class ProcessorProperties extends AbstractDecatonProperties {
      *
      * Reloadable: yes
      */
-    public static final PropertyDefinition<Long> CONFIG_DESTROY_PROCESSOR_TIMEOUT_MS =
-            PropertyDefinition.define("decaton.destroy.processor.timeout.ms", Long.class, Long.MAX_VALUE,
-                                      v -> v instanceof Long && (Long) v >= 0);
+    public static final PropertyDefinition<Long> CONFIG_PROCESSOR_THREADS_TERMINATION_TIMEOUT_MS =
+            PropertyDefinition.define("decaton.processor.threads.termination.timeout.ms", Long.class,
+                                      Long.MAX_VALUE, v -> v instanceof Long && (Long) v >= 0);
 
     public static final List<PropertyDefinition<?>> PROPERTY_DEFINITIONS =
             Collections.unmodifiableList(Arrays.asList(
@@ -208,7 +208,7 @@ public class ProcessorProperties extends AbstractDecatonProperties {
                     CONFIG_LOGGING_MDC_ENABLED,
                     CONFIG_BIND_CLIENT_METRICS,
                     CONFIG_DEFERRED_COMPLETE_TIMEOUT_MS,
-                    CONFIG_DESTROY_PROCESSOR_TIMEOUT_MS));
+                    CONFIG_PROCESSOR_THREADS_TERMINATION_TIMEOUT_MS));
 
     /**
      * Find and return a {@link PropertyDefinition} from its name.

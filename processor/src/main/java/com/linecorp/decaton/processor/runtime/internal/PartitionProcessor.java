@@ -17,6 +17,7 @@
 package com.linecorp.decaton.processor.runtime.internal;
 
 import static com.linecorp.decaton.processor.runtime.ProcessorProperties.CONFIG_DESTROY_PROCESSOR_TIMEOUT_MS;
+import static com.linecorp.decaton.processor.runtime.ProcessorProperties.CONFIG_PROCESSOR_THREADS_TERMINATION_TIMEOUT_MS;
 import static java.util.stream.Collectors.toList;
 
 import java.time.Duration;
@@ -64,7 +65,7 @@ public class PartitionProcessor implements AsyncShutdownable {
 
     private final CompletionStage<Void> shutdownFuture;
 
-    private final Property<Long> destroyingTimeoutMillis;
+    private final Property<Long> processorThreadTerminationTimeoutMillis;
 
     private Task destroyThreadProcessorTask(int i) {
         return () -> processors.destroyThreadScope(scope.subscriptionId(), scope.topicPartition(), i);
@@ -110,7 +111,8 @@ public class PartitionProcessor implements AsyncShutdownable {
         units = new ArrayList<>(concurrency);
         subPartitioner = scope.subPartitionerSupplier().get(concurrency);
         rateLimiter = new DynamicRateLimiter(scope.props().get(ProcessorProperties.CONFIG_PROCESSING_RATE));
-        destroyingTimeoutMillis = scope.props().get(CONFIG_DESTROY_PROCESSOR_TIMEOUT_MS);
+        processorThreadTerminationTimeoutMillis = scope.props()
+                                                       .get(CONFIG_PROCESSOR_THREADS_TERMINATION_TIMEOUT_MS);
 
         try {
             for (int i = 0; i < concurrency; i++) {
@@ -177,9 +179,10 @@ public class PartitionProcessor implements AsyncShutdownable {
     @Override
     public void awaitShutdown() throws InterruptedException, ExecutionException {
         try {
-            awaitShutdown(Duration.ofMillis(destroyingTimeoutMillis.value()));
+            awaitShutdown(Duration.ofMillis(processorThreadTerminationTimeoutMillis.value()));
         } catch (TimeoutException e) {
-            logger.warn("awaitShutdown failed due to timeout in {} ms", destroyingTimeoutMillis.value(), e);
+            logger.warn("awaitShutdown failed due to timeout in {} ms",
+                        processorThreadTerminationTimeoutMillis.value(), e);
         }
     }
 }
