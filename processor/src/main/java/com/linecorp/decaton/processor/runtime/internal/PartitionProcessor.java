@@ -141,7 +141,7 @@ public class PartitionProcessor implements AsyncShutdownable {
     }
 
     public void addTask(TaskRequest request) {
-        int subPartition = subPartitioner.partitionFor(request.key());
+        int subPartition = subPartitioner.subPartitionFor(request.key());
         units.get(subPartition).putTask(request);
     }
 

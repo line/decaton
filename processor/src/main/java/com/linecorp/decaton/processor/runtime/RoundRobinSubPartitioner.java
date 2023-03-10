@@ -38,7 +38,7 @@ public class RoundRobinSubPartitioner implements SubPartitioner {
 
 
     @Override
-    public int partitionFor(byte[] key) {
+    public int subPartitionFor(byte[] key) {
         return toPositive((int) monotonicValueSupplier.getAndIncrement()) % bound;
     }
 }

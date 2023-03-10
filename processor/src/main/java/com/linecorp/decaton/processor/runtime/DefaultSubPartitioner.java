@@ -37,9 +37,9 @@ public class DefaultSubPartitioner implements SubPartitioner {
     }
 
     @Override
-    public int partitionFor(byte[] key) {
+    public int subPartitionFor(byte[] key) {
         if (key == null) {
-            return roundRobinStrategy.partitionFor(key);
+            return roundRobinStrategy.subPartitionFor(key);
         } else {
             // Kafka client uses murmur2 for hashing keys to decide partition to route the record,
             // so all keys we receive in a partition processor has highly biased distribution.

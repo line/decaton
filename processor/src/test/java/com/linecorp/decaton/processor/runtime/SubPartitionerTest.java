@@ -74,7 +74,7 @@ public class SubPartitionerTest {
                     int[] counts = new int[subpartitionCount];
                     SubPartitioner subPartitioner = new DefaultSubPartitioner(counts.length);
                     for (byte[] key : partition) {
-                        int subPartition = subPartitioner.partitionFor(key);
+                        int subPartition = subPartitioner.subPartitionFor(key);
                         counts[subPartition]++;
                     }
 
@@ -96,8 +96,8 @@ public class SubPartitionerTest {
         for (int subpartitionCount : SUBPARTITION_COUNTS) {
             SubPartitioner subPartitioner = new DefaultSubPartitioner(subpartitionCount);
             for (byte[] key : keys) {
-                int assign1 = subPartitioner.partitionFor(key);
-                int assign2 = subPartitioner.partitionFor(key);
+                int assign1 = subPartitioner.subPartitionFor(key);
+                int assign2 = subPartitioner.subPartitionFor(key);
                 assertEquals(String.format("[%d] assign of %s", subpartitionCount, key),
                              assign2, assign1);
             }
@@ -109,8 +109,8 @@ public class SubPartitionerTest {
         for (int subpartitionCount : SUBPARTITION_COUNTS) {
             SubPartitioner subPartitioner = new RoundRobinSubPartitioner(subpartitionCount);
             for (byte[] key : keys) {
-                int assign1 = subPartitioner.partitionFor(key);
-                int assign2 = subPartitioner.partitionFor(key);
+                int assign1 = subPartitioner.subPartitionFor(key);
+                int assign2 = subPartitioner.subPartitionFor(key);
                 assertEquals(String.format("[%d] first assign: %d; second assign: %d", subpartitionCount, assign1, assign2),
                              assign2, (assign1 + 1) % subpartitionCount);
             }

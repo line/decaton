@@ -21,5 +21,5 @@ package com.linecorp.decaton.processor.runtime;
  */
 @FunctionalInterface
 public interface SubPartitioner {
-    int partitionFor(byte[] key);
+    int subPartitionFor(byte[] key);
 }
