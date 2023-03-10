@@ -53,6 +53,7 @@ import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
 
+import com.linecorp.decaton.processor.runtime.DefaultSubPartitioner;
 import com.linecorp.decaton.processor.runtime.DynamicProperty;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.Property;
@@ -79,7 +80,8 @@ public class PartitionContextsTest {
     private final PartitionScope scope = new PartitionScope(
             new SubscriptionScope("subscription", "topic",
                                   Optional.empty(), props, NoopTracingProvider.INSTANCE,
-                                  ConsumerSupplier.DEFAULT_MAX_POLL_RECORDS),
+                                  ConsumerSupplier.DEFAULT_MAX_POLL_RECORDS,
+                                  DefaultSubPartitioner::new),
             new TopicPartition("topic", 0));
 
     @Mock

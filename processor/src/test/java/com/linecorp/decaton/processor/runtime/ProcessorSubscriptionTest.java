@@ -106,7 +106,8 @@ public class ProcessorSubscriptionTest {
                 ProcessorProperties.builder().set(Property.ofStatic(
                         ProcessorProperties.CONFIG_SHUTDOWN_TIMEOUT_MS, waitForProcessingOnClose)).build(),
                 NoopTracingProvider.INSTANCE,
-                ConsumerSupplier.DEFAULT_MAX_POLL_RECORDS);
+                ConsumerSupplier.DEFAULT_MAX_POLL_RECORDS,
+                DefaultSubPartitioner::new);
     }
 
     private static ProcessorSubscription subscription(Consumer<byte[], byte[]> consumer,

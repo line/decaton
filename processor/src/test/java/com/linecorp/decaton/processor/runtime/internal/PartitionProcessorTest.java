@@ -37,6 +37,7 @@ import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
 
+import com.linecorp.decaton.processor.runtime.DefaultSubPartitioner;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.Property;
 import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider;
@@ -51,7 +52,8 @@ public class PartitionProcessorTest {
                                   ProcessorProperties.builder().set(Property.ofStatic(
                                           ProcessorProperties.CONFIG_PARTITION_CONCURRENCY, 4)).build(),
                                   NoopTracingProvider.INSTANCE,
-                                  ConsumerSupplier.DEFAULT_MAX_POLL_RECORDS),
+                                  ConsumerSupplier.DEFAULT_MAX_POLL_RECORDS,
+                                  DefaultSubPartitioner::new),
             new TopicPartition("topic", 0));
 
     @Mock
