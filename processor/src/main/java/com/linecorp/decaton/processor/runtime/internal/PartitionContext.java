@@ -56,6 +56,14 @@ public class PartitionContext implements AutoCloseable {
     @Setter
     private boolean revoking;
 
+    /**
+     * Indicates that if true, reloading is requested and not completed.
+     * This is used to perform reloading processing for each partition.
+     */
+    @Getter
+    @Setter
+    private boolean reloadState;
+
     public PartitionContext(PartitionScope scope, Processors<?> processors, int maxPendingRecords) {
         this.scope = scope;
         this.processors = processors;

@@ -162,23 +162,27 @@ public class PartitionContextsTest {
 
         doReturn(0).when(cts.get(0)).pendingTasksCount();
         doReturn(0).when(cts.get(1)).pendingTasksCount();
+        doReturn(false).when(cts.get(0)).reloadState();
+        doReturn(false).when(cts.get(1)).reloadState();
 
         Collection<TopicPartition> needPause = contexts.partitionsNeedsPause();
         assertTrue(needPause.isEmpty());
 
         // Pause all partitions by reloading
         partitionConcurrencyProperty.set(42);
+        doReturn(true).when(cts.get(0)).reloadState();
+        doReturn(true).when(cts.get(1)).reloadState();
         needPause = contexts.partitionsNeedsPause();
         assertEquals(2, needPause.size());
 
         // Resume 1 partition by finishing reloading
-        contexts.finishReloading(cts.get(0).topicPartition());
+        doReturn(false).when(cts.get(0)).reloadState();
         needPause = contexts.partitionsNeedsPause();
         assertEquals(1, needPause.size());
         assertEquals(cts.get(1).topicPartition(), needPause.iterator().next());
 
         // Resume all partitions by finishing reloading
-        contexts.finishReloading(cts.get(1).topicPartition());
+        doReturn(false).when(cts.get(1)).reloadState();
         needPause = contexts.partitionsNeedsPause();
         assertTrue(needPause.isEmpty());
 
@@ -302,12 +306,15 @@ public class PartitionContextsTest {
         verify(contexts, never()).instantiateContext(any());
 
         partitionConcurrencyProperty.set(42);
+        for (PartitionContext context: allContexts) {
+            doReturn(true).when(context).reloadState();
+        }
         contexts.maybeHandlePropertyReload();
 
         // property reload is requested, but there are pending tasks
         verify(contexts, times(reloadableContexts.size())).instantiateContext(any());
         for (PartitionContext context: reloadableContexts) {
-            contexts.finishReloading(context.topicPartition());
+            doReturn(false).when(context).reloadState();
         }
 
         for (PartitionContext context: pendingContexts) {

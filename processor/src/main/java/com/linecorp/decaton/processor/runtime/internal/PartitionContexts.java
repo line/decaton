@@ -56,9 +56,7 @@ public class PartitionContexts implements OffsetsStore, AssignmentStore, Partiti
     private final int maxPendingRecords;
     private final Map<TopicPartition, PartitionContext> contexts;
 
-    private final AtomicBoolean reloadRequested;
     private final ReentrantLock lock;
-    private final Map<TopicPartition, Boolean> reloadStates;
 
     public PartitionContexts(SubscriptionScope scope, Processors<?> processors) {
         this.scope = scope;
@@ -68,9 +66,7 @@ public class PartitionContexts implements OffsetsStore, AssignmentStore, Partiti
         // We don't support dynamic reload of this value so fix at the time of boot-up.
         maxPendingRecords = scope.props().get(ProcessorProperties.CONFIG_MAX_PENDING_RECORDS).value();
         contexts = new HashMap<>();
-        reloadRequested = new AtomicBoolean(false);
         lock = new ReentrantLock();
-        reloadStates = new ConcurrentHashMap<>();
 
         scope.props().get(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY).listen((oldVal, newVal) -> {
             // This listener will be called at listener registration.
@@ -81,8 +77,7 @@ public class PartitionContexts implements OffsetsStore, AssignmentStore, Partiti
 
             lock.lock();
             try {
-                reloadRequested.set(true);
-                reloadStates.replaceAll((t, v) -> true);
+                contexts.values().forEach(context -> context.reloadState(true));
                 logger.info("Requested reload partition.concurrency oldValue={}, newValue={}", oldVal, newVal);
             } finally {
                 lock.unlock();
@@ -138,13 +133,7 @@ public class PartitionContexts implements OffsetsStore, AssignmentStore, Partiti
             context.pause();
         }
         contexts.put(tp, context);
-        finishReloading(tp);
         return context;
-    }
-
-    // visible for testing
-    void finishReloading(TopicPartition tp) {
-        reloadStates.put(tp, false);
     }
 
     /**
@@ -234,7 +223,7 @@ public class PartitionContexts implements OffsetsStore, AssignmentStore, Partiti
                        .filter(c -> !c.revoking())
                        .filter(c -> !c.paused())
                        .filter(c -> pausingAll
-                                    || reloadStates.get(c.topicPartition())
+                                    || c.reloadState()
                                     || shouldPartitionPaused(c.pendingTasksCount()))
                        .map(PartitionContext::topicPartition)
                        .collect(toList());
@@ -246,7 +235,9 @@ public class PartitionContexts implements OffsetsStore, AssignmentStore, Partiti
         return contexts.values().stream()
                        .filter(c -> !c.revoking())
                        .filter(PartitionContext::paused)
-                       .filter(c -> !pausingAll && !shouldPartitionPaused(c.pendingTasksCount()))
+                       .filter(c -> !pausingAll
+                                    && !c.reloadState()
+                                    && !shouldPartitionPaused(c.pendingTasksCount()))
                        .map(PartitionContext::topicPartition)
                        .collect(toList());
     }
@@ -266,31 +257,31 @@ public class PartitionContexts implements OffsetsStore, AssignmentStore, Partiti
     }
 
     /**
-     * Waits for all pending tasks if property-reload is requested, then recreate all partition contexts with latest property values.
+     * Waits for pending tasks if property-reload is requested,
+     * then recreate partition contexts with latest property values.
      * This method must be called from only subscription thread.
      */
     public void maybeHandlePropertyReload() {
-        if (reloadRequested.get()) {
-            lock.lock();
-            try {
-                List<TopicPartition> reloadableTopicPartitions = reloadStates.entrySet()
-                        .stream()
-                        .filter(entry -> entry.getValue()
-                                         && contexts.get(entry.getKey()).pendingTasksCount() == 0)
-                        .map(entry -> entry.getKey())
-                        .collect(Collectors.toList());
-                reloadContexts(reloadableTopicPartitions);
-                long reloadingPartitions = reloadStates.values()
-                        .stream()
-                        .filter(reloading -> reloading)
-                        .count();
-                if (reloadingPartitions == 0) {
-                    reloadRequested.set(false);
-                    logger.info("Completed reloading all partition contexts");
-                }
-            } finally {
-                lock.unlock();
+        lock.lock();
+        try {
+            List<TopicPartition> reloadableTopicPartitions = contexts.entrySet()
+                    .stream()
+                    .filter(entry -> entry.getValue().reloadState() && entry.getValue().pendingTasksCount() == 0)
+                    .map(Entry::getKey)
+                    .collect(Collectors.toList());
+            if (reloadableTopicPartitions.isEmpty()) {
+                return;
             }
+            reloadContexts(reloadableTopicPartitions);
+            long reloadingPartitions = contexts.values()
+                    .stream()
+                    .filter(PartitionContext::reloadState)
+                    .count();
+            if (reloadingPartitions == 0) {
+                logger.info("Completed reloading all partition contexts");
+            }
+        } finally {
+            lock.unlock();
         }
     }
 
