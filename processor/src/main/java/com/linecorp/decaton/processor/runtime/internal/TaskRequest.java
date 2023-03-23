@@ -19,8 +19,10 @@ package com.linecorp.decaton.processor.runtime.internal;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Headers;
 
+import com.linecorp.decaton.processor.runtime.internal.PerKeyQuotaManager.QuotaUsage;
 import com.linecorp.decaton.processor.tracing.TracingProvider.RecordTraceHandle;
 
+import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.ToString;
 import lombok.experimental.Accessors;
@@ -28,6 +30,7 @@ import lombok.experimental.Accessors;
 @ToString
 @Getter
 @Accessors(fluent = true)
+@AllArgsConstructor
 public class TaskRequest {
     private final TopicPartition topicPartition;
     private final long recordOffset;
@@ -40,22 +43,8 @@ public class TaskRequest {
     private final RecordTraceHandle trace;
     @ToString.Exclude
     private byte[] rawRequestBytes;
-
-    public TaskRequest(TopicPartition topicPartition,
-                       long recordOffset,
-                       OffsetState offsetState,
-                       byte[] key,
-                       Headers headers,
-                       RecordTraceHandle trace,
-                       byte[] rawRequestBytes) {
-        this.topicPartition = topicPartition;
-        this.recordOffset = recordOffset;
-        this.offsetState = offsetState;
-        this.key = key;
-        this.headers = headers;
-        this.trace = trace;
-        this.rawRequestBytes = rawRequestBytes;
-    }
+    @ToString.Exclude
+    private final QuotaUsage quotaUsage;
 
     public String id() {
         // TaskRequest object is held alive through associated ProcessingContext's lifetime, hence holding

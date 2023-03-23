@@ -118,7 +118,9 @@ public class ProcessorSubscriptionTest {
         return new SubscriptionScope(
                 "subscription",
                 topic,
-                Optional.empty(), propertiesBuilder.build(),
+                Optional.empty(),
+                Optional.empty(),
+                propertiesBuilder.build(),
                 NoopTracingProvider.INSTANCE,
                 ConsumerSupplier.DEFAULT_MAX_POLL_RECORDS,
                 DefaultSubPartitioner::new);

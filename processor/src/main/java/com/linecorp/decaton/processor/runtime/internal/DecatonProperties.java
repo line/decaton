@@ -16,6 +16,8 @@
 
 package com.linecorp.decaton.processor.runtime.internal;
 
+import java.util.Optional;
+
 import com.linecorp.decaton.processor.runtime.Property;
 import com.linecorp.decaton.processor.runtime.PropertyDefinition;
 
@@ -31,5 +33,15 @@ public interface DecatonProperties {
      *
      * @throws IllegalArgumentException when {@link PropertyDefinition} doesn't exists in properties.
      */
-    <T> Property<T> get(PropertyDefinition<T> definition);
+    default <T> Property<T> get(PropertyDefinition<T> definition) {
+        return tryGet(definition).orElseThrow(() -> new IllegalArgumentException("no such property: " + definition));
+    }
+
+    /**
+     * Returns associated {@link Property} for the {@link PropertyDefinition} given as an argument.
+     * @param definition a {@link PropertyDefinition} to lookup associated {@link Property}.
+     * @param <T> type of the property.
+     * @return a {@link Property} associated to the given {@link PropertyDefinition} or {@link Optional#empty()} if not exist
+     */
+    <T> Optional<Property<T>> tryGet(PropertyDefinition<T> definition);
 }

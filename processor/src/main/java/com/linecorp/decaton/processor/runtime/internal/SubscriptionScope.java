@@ -16,8 +16,11 @@
 
 package com.linecorp.decaton.processor.runtime.internal;
 
+import java.util.Collections;
 import java.util.Optional;
+import java.util.Set;
 
+import com.linecorp.decaton.processor.runtime.PerKeyQuotaConfig;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.SubPartitionerSupplier;
 import com.linecorp.decaton.processor.tracing.TracingProvider;
@@ -36,6 +39,7 @@ public class SubscriptionScope {
     private final String subscriptionId;
     private final String topic;
     private final Optional<RetryConfig> retryConfig;
+    private final Optional<PerKeyQuotaConfig> perKeyQuotaConfig;
     private final ProcessorProperties props;
     private final TracingProvider tracingProvider;
     private final int maxPollRecords;
@@ -43,6 +47,11 @@ public class SubscriptionScope {
 
     public Optional<String> retryTopic() {
         return retryConfig.map(conf -> conf.retryTopicOrDefault(topic));
+    }
+
+    public Set<String> shapingTopics() {
+        return perKeyQuotaConfig.map(conf -> conf.shapingTopicsSupplier().apply(topic))
+                                .orElse(Collections.emptySet());
     }
 
     @Override

@@ -17,6 +17,7 @@
 package com.linecorp.decaton.processor.runtime.internal;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertSame;
 
 import java.util.Arrays;
@@ -65,6 +66,11 @@ public class AbstractDecatonPropertiesTest {
     @Test(expected = IllegalArgumentException.class)
     public void testGetAbsentProperty() {
         props.get(PropertyDefinition.define("absent.key", Long.class, 0L));
+    }
+
+    @Test
+    public void testTryGetAbsentProperty() {
+        assertFalse(props.tryGet(PropertyDefinition.define("absent.key", Long.class, 0L)).isPresent());
     }
 
     @Test

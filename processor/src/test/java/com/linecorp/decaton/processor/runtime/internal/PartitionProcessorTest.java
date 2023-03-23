@@ -29,6 +29,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 
 import org.apache.kafka.common.TopicPartition;
 import org.junit.Rule;
@@ -38,23 +39,33 @@ import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
 
 import com.linecorp.decaton.processor.runtime.DefaultSubPartitioner;
+import com.linecorp.decaton.processor.runtime.PerKeyQuotaConfig;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.Property;
+import com.linecorp.decaton.processor.runtime.internal.AbstractDecatonProperties.Builder;
 import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider;
 
 public class PartitionProcessorTest {
     @Rule
     public MockitoRule rule = MockitoJUnit.rule();
 
-    private static final PartitionScope scope = new PartitionScope(
-            new SubscriptionScope("subscription", "topic",
-                                  Optional.empty(),
-                                  ProcessorProperties.builder().set(Property.ofStatic(
-                                          ProcessorProperties.CONFIG_PARTITION_CONCURRENCY, 4)).build(),
-                                  NoopTracingProvider.INSTANCE,
-                                  ConsumerSupplier.DEFAULT_MAX_POLL_RECORDS,
-                                  DefaultSubPartitioner::new),
-            new TopicPartition("topic", 0));
+    private static PartitionScope scope(
+            String topic,
+            Optional<PerKeyQuotaConfig> perKeyQuotaConfig,
+            Consumer<Builder<ProcessorProperties>> propConfigurer) {
+        Builder<ProcessorProperties> builder = ProcessorProperties.builder();
+        builder.set(Property.ofStatic(
+                ProcessorProperties.CONFIG_PARTITION_CONCURRENCY, 4));
+        propConfigurer.accept(builder);
+        return new PartitionScope(
+                new SubscriptionScope("subscription", "topic",
+                                      Optional.empty(), perKeyQuotaConfig,
+                                      builder.build(),
+                                      NoopTracingProvider.INSTANCE,
+                                      ConsumerSupplier.DEFAULT_MAX_POLL_RECORDS,
+                                      DefaultSubPartitioner::new),
+                new TopicPartition(topic, 0));
+    }
 
     @Mock
     private Processors<?> processors;
@@ -71,7 +82,7 @@ public class PartitionProcessorTest {
 
         List<ProcessorUnit> units = new ArrayList<>();
         try {
-            new PartitionProcessor(scope, processors) {
+            new PartitionProcessor(scope("topic", Optional.empty(), prop -> {}), processors) {
                 @Override
                 ProcessorUnit createUnit(int threadId) {
                     ProcessorUnit unit = spy(super.createUnit(threadId));
@@ -88,5 +99,29 @@ public class PartitionProcessorTest {
         verify(units.get(1), times(1)).initiateShutdown();
         verify(units.get(0), times(1)).shutdownFuture();
         verify(units.get(1), times(1)).shutdownFuture();
+    }
+
+    @Test
+    public void testRateProperty() {
+        assertEquals("decaton.processing.rate.per.partition",
+                     PartitionProcessor.rateProperty(scope("topic", Optional.of(PerKeyQuotaConfig.shape()), prop -> {}))
+                                       .definition().name());
+    }
+
+    @Test
+    public void testRatePropertyForShapingTopic() {
+        assertEquals("decaton.per.key.quota.processing.rate",
+                     PartitionProcessor.rateProperty(scope("topic-shaping", Optional.of(PerKeyQuotaConfig.shape()), prop -> {}))
+                                       .definition().name());
+    }
+
+    @Test
+    public void testOverrideRatePropertyForShapingTopic() {
+        assertEquals("decaton.shaping.topic.processing.rate.per.partition.topic-shaping",
+                     PartitionProcessor.rateProperty(scope("topic-shaping", Optional.of(PerKeyQuotaConfig.shape()), prop -> {
+                                           prop.set(Property.ofStatic(PerKeyQuotaConfig.shapingRateProperty("topic-shaping"),
+                                                                      42L));
+                                       }))
+                                       .definition().name());
     }
 }

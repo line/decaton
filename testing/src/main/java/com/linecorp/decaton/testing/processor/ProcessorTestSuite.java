@@ -52,14 +52,19 @@ import com.google.protobuf.ByteString;
 import com.linecorp.decaton.client.DecatonClientBuilder.DefaultKafkaProducerSupplier;
 import com.linecorp.decaton.client.KafkaProducerSupplier;
 import com.linecorp.decaton.processor.DecatonProcessor;
+import com.linecorp.decaton.processor.runtime.PerKeyQuotaConfig;
+import com.linecorp.decaton.processor.runtime.PerKeyQuotaConfig.PerKeyQuotaConfigBuilder;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.ProcessorSubscription;
 import com.linecorp.decaton.processor.runtime.ProcessorsBuilder;
+import com.linecorp.decaton.processor.runtime.Property;
 import com.linecorp.decaton.processor.runtime.PropertySupplier;
 import com.linecorp.decaton.processor.runtime.RetryConfig;
 import com.linecorp.decaton.processor.runtime.RetryConfig.RetryConfigBuilder;
+import com.linecorp.decaton.processor.runtime.StaticPropertySupplier;
 import com.linecorp.decaton.processor.runtime.SubscriptionStateListener;
 import com.linecorp.decaton.processor.runtime.TaskExtractor;
+import com.linecorp.decaton.processor.runtime.internal.RateLimiter;
 import com.linecorp.decaton.processor.tracing.TracingProvider;
 import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
 import com.linecorp.decaton.protocol.Decaton.TaskMetadataProto;
@@ -94,6 +99,7 @@ public class ProcessorTestSuite {
     private final int numTasks;
     private final Function<ProcessorsBuilder<TestTask>, ProcessorsBuilder<TestTask>> configureProcessorsBuilder;
     private final RetryConfig retryConfig;
+    private final PerKeyQuotaConfig perKeyQuotaConfig;
     private final Properties consumerConfig;
     private final PropertySupplier propertySuppliers;
     private final Set<ProcessingGuarantee> semantics;
@@ -140,6 +146,10 @@ public class ProcessorTestSuite {
          * Configure retry-queueing feature for the subscription
          */
         private RetryConfig retryConfig;
+        /**
+         * Configure per-key quota feature for the subscription
+         */
+        private PerKeyQuotaConfig perKeyQuotaConfig;
         /**
          * Supply additional {@link ProcessorProperties} through {@link PropertySupplier}
          */
@@ -205,6 +215,7 @@ public class ProcessorTestSuite {
                                           numTasks,
                                           configureProcessorsBuilder,
                                           retryConfig,
+                                          perKeyQuotaConfig,
                                           consumerConfig,
                                           propertySupplier,
                                           semantics,
@@ -231,9 +242,9 @@ public class ProcessorTestSuite {
         ProcessorSubscription[] subscriptions = new ProcessorSubscription[NUM_SUBSCRIPTION_INSTANCES];
 
         try (Producer<byte[], DecatonTaskRequest> producer = producerSupplier.apply(rule.bootstrapServers())) {
-            ConcurrentMap<TopicPartition, Long> retryOffsets = new ConcurrentHashMap<>();
+            ConcurrentMap<TopicPartition, Long> queuedTaskOffsets = new ConcurrentHashMap<>();
             for (int i = 0; i < subscriptions.length; i++) {
-                subscriptions[i] = newSubscription(i, topic, Optional.of(rollingRestartLatch), retryOffsets);
+                subscriptions[i] = newSubscription(i, topic, Optional.of(rollingRestartLatch), queuedTaskOffsets);
             }
             CompletableFuture<Map<TopicPartition, Long>> produceFuture =
                     produceTasks(producer, topic, record -> semantics.forEach(g -> g.onProduce(record)));
@@ -241,10 +252,10 @@ public class ProcessorTestSuite {
             if (!rollingRestartLatch.await(DEFINITELY_TOO_SLOW.toMillis(), TimeUnit.MILLISECONDS)) {
                 throw new TimeoutException("Rolling restart did not complete within " + DEFINITELY_TOO_SLOW);
             }
-            performRollingRestart(subscriptions, i -> newSubscription(i, topic, Optional.empty(), retryOffsets));
+            performRollingRestart(subscriptions, i -> newSubscription(i, topic, Optional.empty(), queuedTaskOffsets));
             awaitAllOffsetsCommitted(produceFuture.get(DEFINITELY_TOO_SLOW.toMillis(), TimeUnit.MILLISECONDS));
-            if (!retryOffsets.isEmpty()) {
-                awaitAllOffsetsCommitted(retryOffsets);
+            if (!queuedTaskOffsets.isEmpty()) {
+                awaitAllOffsetsCommitted(queuedTaskOffsets);
             }
 
             for (ProcessingGuarantee guarantee : semantics) {
@@ -270,7 +281,7 @@ public class ProcessorTestSuite {
             int id,
             String topic,
             Optional<CountDownLatch> processLatch,
-            ConcurrentMap<TopicPartition, Long> retryOffsets) throws InterruptedException, TimeoutException {
+            ConcurrentMap<TopicPartition, Long> queuedTaskOffsets) throws InterruptedException, TimeoutException {
         DecatonProcessor<TestTask> preprocessor = (context, task) -> {
             long startTime = System.nanoTime();
             try {
@@ -298,15 +309,17 @@ public class ProcessorTestSuite {
                     builder.processorsBuilder(processorsBuilder);
                     if (retryConfig != null) {
                         RetryConfigBuilder retryConfigBuilder = retryConfig.toBuilder();
-                        KafkaProducerSupplier innerSupplier =
-                                Optional.ofNullable(retryConfig.producerSupplier())
-                                        .orElseGet(DefaultKafkaProducerSupplier::new);
-                        retryConfigBuilder.producerSupplier(props -> new InterceptingProducer(
-                                innerSupplier.getProducer(props),
-                                meta -> retryOffsets.compute(new TopicPartition(meta.topic(), meta.partition()),
-                                                             (k, v) -> Math.max(v == null ? -1L : v, meta.offset())))
-                        );
+                        retryConfigBuilder.producerSupplier(producerSupplier(retryConfig.producerSupplier(), queuedTaskOffsets));
                         builder.enableRetry(retryConfigBuilder.build());
+                    }
+                    if (perKeyQuotaConfig != null) {
+                        PerKeyQuotaConfigBuilder perKeyQuotaConfigBuilder = perKeyQuotaConfig.toBuilder();
+                        perKeyQuotaConfigBuilder.producerSupplier(producerSupplier(perKeyQuotaConfig.producerSupplier(), queuedTaskOffsets));
+                        builder.enablePerKeyQuota(perKeyQuotaConfigBuilder.build());
+                        String shapingTopic = topic + "-shaping";
+                        builder.overrideShapingRate(shapingTopic, StaticPropertySupplier.of(
+                                Property.ofStatic(PerKeyQuotaConfig.shapingRateProperty(shapingTopic), RateLimiter.UNLIMITED)
+                        ));
                     }
                     if (propertySuppliers != null) {
                         builder.addProperties(propertySuppliers);
@@ -322,6 +335,18 @@ public class ProcessorTestSuite {
     @FunctionalInterface
     interface SubscriptionConstructor {
         ProcessorSubscription apply(int index) throws InterruptedException, TimeoutException;
+    }
+
+    private static KafkaProducerSupplier producerSupplier(
+            KafkaProducerSupplier supplier,
+            ConcurrentMap<TopicPartition, Long> queuedTaskOffsets) {
+        KafkaProducerSupplier innerSupplier =
+                Optional.ofNullable(supplier)
+                        .orElseGet(DefaultKafkaProducerSupplier::new);
+        return props -> new InterceptingProducer(
+                innerSupplier.getProducer(props),
+                meta -> queuedTaskOffsets.compute(new TopicPartition(meta.topic(), meta.partition()),
+                                                  (k, v) -> Math.max(v == null ? -1L : v, meta.offset())));
     }
 
     private static void performRollingRestart(ProcessorSubscription[] subscriptions,

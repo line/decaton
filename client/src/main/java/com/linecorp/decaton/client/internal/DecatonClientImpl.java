@@ -52,7 +52,7 @@ public class DecatonClientImpl<T> implements DecatonClient<T> {
         this.serializer = serializer;
         this.applicationId = applicationId;
         this.instanceId = instanceId;
-        producer = new DecatonTaskProducer(topic, producerConfig, producerSupplier);
+        producer = new DecatonTaskProducer(producerConfig, producerSupplier);
         this.timestampSupplier = timestampSupplier;
     }
 
@@ -115,7 +115,7 @@ public class DecatonClientImpl<T> implements DecatonClient<T> {
                                   .setSerializedTask(ByteString.copyFrom(serializedTask))
                                   .build();
 
-        return producer.sendRequest(serializedKey, request, partition);
+        return producer.sendRequest(topic, serializedKey, request, partition);
     }
 
     private TaskMetadataProto convertToTaskMetadataProto(TaskMetadata overrideTaskMetadata) {

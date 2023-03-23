@@ -128,10 +128,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
             });
 
             if (blacklistedKeysFilter.shouldTake(record)) {
-                TaskRequest taskRequest =
-                        new TaskRequest(tp, record.offset(), offsetState, record.key(),
-                                        record.headers(), trace, record.value());
-                context.addRequest(taskRequest);
+                context.addRecord(record, offsetState, trace);
             } else {
                 offsetState.completion().complete();
             }
@@ -220,11 +217,11 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
     }
 
     private Set<String> subscribeTopics() {
-        return Stream.of(Optional.of(scope.topic()),
-                         scope.retryTopic())
-                     .filter(Optional::isPresent)
-                     .map(Optional::get)
-                     .collect(Collectors.toSet());
+        return Stream.concat(
+                Stream.of(Optional.of(scope.topic()), scope.retryTopic())
+                      .filter(Optional::isPresent)
+                      .map(Optional::get),
+                scope.shapingTopics().stream()).collect(Collectors.toSet());
     }
 
     @Override

@@ -25,6 +25,7 @@ import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.runtime.internal.DecatonProcessorSupplierImpl;
 import com.linecorp.decaton.processor.runtime.internal.DefaultTaskExtractor;
 import com.linecorp.decaton.processor.runtime.internal.Processors;
+import com.linecorp.decaton.processor.runtime.internal.QuotaAwareTask;
 
 import lombok.Getter;
 import lombok.experimental.Accessors;
@@ -39,14 +40,14 @@ public class ProcessorsBuilder<T> {
     @Getter
     private final String topic;
     private final TaskExtractor<T> taskExtractor;
-    private final TaskExtractor<T> retryTaskExtractor;
+    private final TaskExtractor<T> decatonQueuedTaskExtractor;
 
     private final List<DecatonProcessorSupplier<T>> suppliers;
 
-    public ProcessorsBuilder(String topic, TaskExtractor<T> taskExtractor, TaskExtractor<T> retryTaskExtractor) {
+    public ProcessorsBuilder(String topic, TaskExtractor<T> taskExtractor, TaskExtractor<T> decatonQueuedTaskExtractor) {
         this.topic = topic;
         this.taskExtractor = taskExtractor;
-        this.retryTaskExtractor = retryTaskExtractor;
+        this.decatonQueuedTaskExtractor = decatonQueuedTaskExtractor;
         suppliers = new ArrayList<>();
     }
 
@@ -73,8 +74,8 @@ public class ProcessorsBuilder<T> {
      */
     public static <T> ProcessorsBuilder<T> consuming(String topic, TaskExtractor<T> taskExtractor) {
         DefaultTaskExtractor<byte[]> innerExtractor = new DefaultTaskExtractor<>(bytes -> bytes);
-        TaskExtractor<T> retryTaskExtractor = bytes -> {
-            // Retry tasks are serialized as PB DecatonTaskRequest.
+        TaskExtractor<T> decatonQueuedTaskExtractor = bytes -> {
+            // Retry/Shaping tasks are serialized as PB DecatonTaskRequest.
             // First, deserialize PB from raw bytes.
             DecatonTask<byte[]> retryTask = innerExtractor.extract(bytes);
 
@@ -87,7 +88,7 @@ public class ProcessorsBuilder<T> {
             return new DecatonTask<>(retryTask.metadata(), task.taskData(), task.taskDataBytes());
         };
 
-        return new ProcessorsBuilder<>(topic, taskExtractor, retryTaskExtractor);
+        return new ProcessorsBuilder<>(topic, taskExtractor, decatonQueuedTaskExtractor);
     }
 
     /**
@@ -131,6 +132,12 @@ public class ProcessorsBuilder<T> {
     }
 
     public Processors<T> build(DecatonProcessorSupplier<byte[]> retryProcessorSupplier) {
-        return new Processors<>(suppliers, retryProcessorSupplier, taskExtractor, retryTaskExtractor);
+        return build(retryProcessorSupplier, null);
+    }
+
+    Processors<T> build(DecatonProcessorSupplier<byte[]> retryProcessorSupplier,
+                        DecatonProcessorSupplier<QuotaAwareTask<T>> shapingProcessorSupplier) {
+        return new Processors<>(suppliers, retryProcessorSupplier, shapingProcessorSupplier, taskExtractor,
+                                decatonQueuedTaskExtractor);
     }
 }
