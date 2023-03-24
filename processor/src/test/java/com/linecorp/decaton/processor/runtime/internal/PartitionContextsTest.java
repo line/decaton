@@ -162,27 +162,27 @@ public class PartitionContextsTest {
 
         doReturn(0).when(cts.get(0)).pendingTasksCount();
         doReturn(0).when(cts.get(1)).pendingTasksCount();
-        doReturn(false).when(cts.get(0)).reloadState();
-        doReturn(false).when(cts.get(1)).reloadState();
+        doReturn(false).when(cts.get(0)).reloadRequested();
+        doReturn(false).when(cts.get(1)).reloadRequested();
 
         Collection<TopicPartition> needPause = contexts.partitionsNeedsPause();
         assertTrue(needPause.isEmpty());
 
         // Pause all partitions by reloading
         partitionConcurrencyProperty.set(42);
-        doReturn(true).when(cts.get(0)).reloadState();
-        doReturn(true).when(cts.get(1)).reloadState();
+        doReturn(true).when(cts.get(0)).reloadRequested();
+        doReturn(true).when(cts.get(1)).reloadRequested();
         needPause = contexts.partitionsNeedsPause();
         assertEquals(2, needPause.size());
 
         // Resume 1 partition by finishing reloading
-        doReturn(false).when(cts.get(0)).reloadState();
+        doReturn(false).when(cts.get(0)).reloadRequested();
         needPause = contexts.partitionsNeedsPause();
         assertEquals(1, needPause.size());
         assertEquals(cts.get(1).topicPartition(), needPause.iterator().next());
 
         // Resume all partitions by finishing reloading
-        doReturn(false).when(cts.get(1)).reloadState();
+        doReturn(false).when(cts.get(1)).reloadRequested();
         needPause = contexts.partitionsNeedsPause();
         assertTrue(needPause.isEmpty());
 
@@ -307,14 +307,14 @@ public class PartitionContextsTest {
 
         partitionConcurrencyProperty.set(42);
         for (PartitionContext context: allContexts) {
-            doReturn(true).when(context).reloadState();
+            doReturn(true).when(context).reloadRequested();
         }
         contexts.maybeHandlePropertyReload();
 
         // property reload is requested, but there are pending tasks
         verify(contexts, times(reloadableContexts.size())).instantiateContext(any());
         for (PartitionContext context: reloadableContexts) {
-            doReturn(false).when(context).reloadState();
+            doReturn(false).when(context).reloadRequested();
         }
 
         for (PartitionContext context: pendingContexts) {

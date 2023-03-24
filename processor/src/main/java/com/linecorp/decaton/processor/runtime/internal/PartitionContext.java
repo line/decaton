@@ -62,7 +62,7 @@ public class PartitionContext implements AutoCloseable {
      */
     @Getter
     @Setter
-    private boolean reloadState;
+    private volatile boolean reloadRequested;
 
     public PartitionContext(PartitionScope scope, Processors<?> processors, int maxPendingRecords) {
         this.scope = scope;
