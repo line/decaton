@@ -22,17 +22,12 @@ import static java.util.stream.Collectors.toMap;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Function;
-import java.util.stream.Collectors;
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
@@ -289,7 +284,7 @@ public class PartitionContexts implements OffsetsStore, AssignmentStore, Partiti
                     .filter(entry -> entry.getValue().reloadRequested()
                                      && entry.getValue().pendingTasksCount() == 0)
                     .map(Entry::getKey)
-                    .collect(Collectors.toList());
+                    .collect(toList());
             if (reloadableTopicPartitions.isEmpty()) {
                 return;
             }
@@ -307,13 +302,13 @@ public class PartitionContexts implements OffsetsStore, AssignmentStore, Partiti
     }
 
     private void reloadContexts(Collection<TopicPartition> topicPartitions) {
-        logger.info("Start dropping partition context({})", topicPartitions);
+        logger.info("Start dropping partition contexts({})", topicPartitions);
         removePartition(topicPartitions);
         logger.info("Finished dropping partition contexts. Start recreating partition contexts");
         Map<TopicPartition, AssignmentConfig> configs = topicPartitions.stream().collect(
                 toMap(Function.identity(), tp -> new AssignmentConfig(true)));
         addPartitions(configs);
-        logger.info("Completed reloading property");
+        logger.info("Completed reloading partition contexts({})", topicPartitions);
     }
 
     private void destroyProcessors(Collection<TopicPartition> partitions) {

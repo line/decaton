@@ -74,7 +74,8 @@ public class ProcessorProperties extends AbstractDecatonProperties {
                                            && (long) v <= RateLimiter.MAX_RATE);
     /**
      * Concurrency used to process tasks coming from single partition.
-     * Reloading this property will pause all assigned partitions until current pending tasks have done.
+     * Reloading this property will be performed for each assigned partition as soon as
+     * the current pending tasks of the assigned partition have done.
      *
      * Reloadable: yes
      */
