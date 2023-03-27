@@ -35,6 +35,7 @@ import static org.mockito.Mockito.verify;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -163,8 +164,28 @@ public class PartitionContextsTest {
 
         doReturn(0).when(cts.get(0)).pendingTasksCount();
         doReturn(0).when(cts.get(1)).pendingTasksCount();
+        doReturn(false).when(cts.get(0)).reloadRequested();
+        doReturn(false).when(cts.get(1)).reloadRequested();
 
         Collection<TopicPartition> needPause = contexts.partitionsNeedsPause();
+        assertTrue(needPause.isEmpty());
+
+        // Pause all partitions by reloading
+        partitionConcurrencyProperty.set(42);
+        doReturn(true).when(cts.get(0)).reloadRequested();
+        doReturn(true).when(cts.get(1)).reloadRequested();
+        needPause = contexts.partitionsNeedsPause();
+        assertEquals(2, needPause.size());
+
+        // Resume 1 partition by finishing reloading
+        doReturn(false).when(cts.get(0)).reloadRequested();
+        needPause = contexts.partitionsNeedsPause();
+        assertEquals(1, needPause.size());
+        assertEquals(cts.get(1).topicPartition(), needPause.iterator().next());
+
+        // Resume all partitions by finishing reloading
+        doReturn(false).when(cts.get(1)).reloadRequested();
+        needPause = contexts.partitionsNeedsPause();
         assertTrue(needPause.isEmpty());
 
         // Pause 1 partition.
@@ -258,38 +279,52 @@ public class PartitionContextsTest {
     }
 
     @Test
-    public void testPausingAllProcessingByPropertyReload() {
+    public void testShouldNotBePausingAllProcessingByPropertyReload() {
         assertFalse(contexts.pausingAllProcessing());
         partitionConcurrencyProperty.set(42);
-        assertTrue(contexts.pausingAllProcessing());
+        assertFalse(contexts.pausingAllProcessing());
     }
 
     @Test
     public void testMaybeHandlePropertyReload() {
-        putContexts(12);
-
+        int count = 12;
+        List<PartitionContext> allContexts = putContexts(count);
+        List<PartitionContext> pendingContexts = new ArrayList<>();
+        List<PartitionContext> reloadableContexts = new ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            PartitionContext context = allContexts.get(i);
+            if (i % 3 == 0) {
+                doReturn(100).when(context).pendingTasksCount();
+                pendingContexts.add(context);
+            } else {
+                doReturn(0).when(context).pendingTasksCount();
+                reloadableContexts.add(context);
+            }
+        }
         clearInvocations(contexts);
-
-        PartitionContext context = mock(PartitionContext.class);
-        doReturn(context).when(contexts).instantiateContext(any());
-
-        // there are some pending tasks
-        doReturn(100).when(contexts).totalPendingTasks();
 
         contexts.maybeHandlePropertyReload();
         // property reload is not requested yet
         verify(contexts, never()).instantiateContext(any());
 
         partitionConcurrencyProperty.set(42);
+        for (PartitionContext context: allContexts) {
+            doReturn(true).when(context).reloadRequested();
+        }
         contexts.maybeHandlePropertyReload();
+
         // property reload is requested, but there are pending tasks
-        verify(contexts, never()).instantiateContext(any());
+        verify(contexts, times(reloadableContexts.size())).instantiateContext(any());
+        for (PartitionContext context: reloadableContexts) {
+            doReturn(false).when(context).reloadRequested();
+        }
 
-        // pending tasks done
-        doReturn(0).when(contexts).totalPendingTasks();
+        for (PartitionContext context: pendingContexts) {
+            doReturn(0).when(context).pendingTasksCount();
+        }
         contexts.maybeHandlePropertyReload();
-
-        verify(contexts, times(12)).instantiateContext(any());
+        // completed reloading request
+        verify(contexts, times(count)).instantiateContext(any());
     }
 
     @Test
