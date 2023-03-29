@@ -32,7 +32,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
-import org.junit.Rule;
+import org.junit.BeforeClass;
+import org.junit.ClassRule;
 import org.junit.Test;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -53,8 +54,8 @@ import com.linecorp.decaton.processor.runtime.Property;
 
 public class CentralDogmaPropertySupplierIntegrationTest {
 
-    @Rule
-    public CentralDogmaRule centralDogmaRule = new CentralDogmaRule() {
+    @ClassRule
+    public static final CentralDogmaRule centralDogmaRule = new CentralDogmaRule() {
         @Override
         protected void configureHttpClient(WebClientBuilder builder) {
             builder.decorator(RetryingClient.builder(RetryRule.onUnprocessed())
@@ -63,19 +64,25 @@ public class CentralDogmaPropertySupplierIntegrationTest {
         }
     };
 
+    private static CentralDogma client;
     private static final String PROJECT_NAME = "unit-test";
     private static final String REPOSITORY_NAME = "repo";
     private static final String FILENAME = "/subscription.json";
 
-    private JsonNode defaultProperties() {
+    @BeforeClass
+    public static void initDogmaRepo() {
+        client = centralDogmaRule.client();
+        client.createProject(PROJECT_NAME).join();
+        client.createRepository(PROJECT_NAME, REPOSITORY_NAME).join();
+    }
+
+    private static JsonNode defaultProperties() {
         return CentralDogmaPropertySupplier.convertPropertyListToJsonNode(
                 ProcessorProperties.defaultProperties());
     }
 
     @Test(timeout = 50000)
     public void testCDIntegration() throws InterruptedException {
-        CentralDogma client = centralDogmaRule.client();
-
         final String ORIGINAL =
                 "{\n"
                 + "  \"decaton.partition.concurrency\": 10,\n"
@@ -85,15 +92,14 @@ public class CentralDogmaPropertySupplierIntegrationTest {
                 + "  ],\n"
                 + "  \"decaton.processing.rate.per.partition\": 50\n"
                 + "}\n";
-
-        client.createProject(PROJECT_NAME).join();
-        CentralDogmaRepository centralDogmaRepository = client.createRepository(PROJECT_NAME, REPOSITORY_NAME).join();
+        CentralDogmaRepository centralDogmaRepository = client.forRepo(PROJECT_NAME, REPOSITORY_NAME);
         centralDogmaRepository
-              .commit("summary", Change.ofJsonUpsert(FILENAME, ORIGINAL))
-              .push()
-              .join();
+                .commit("summary", Change.ofJsonUpsert(FILENAME, ORIGINAL))
+                .push()
+                .join();
 
-        CentralDogmaPropertySupplier supplier = new CentralDogmaPropertySupplier(centralDogmaRepository, FILENAME);
+        CentralDogmaPropertySupplier supplier = new CentralDogmaPropertySupplier(centralDogmaRepository,
+                                                                                 FILENAME);
 
         Property<Integer> prop = supplier.getProperty(CONFIG_PARTITION_CONCURRENCY).get();
 
@@ -113,9 +119,9 @@ public class CentralDogmaPropertySupplierIntegrationTest {
         prop.listen((o, n) -> latch.countDown());
 
         centralDogmaRepository
-              .commit("summary", Change.ofJsonPatch(FILENAME, ORIGINAL, UPDATED))
-              .push()
-              .join();
+                .commit("summary", Change.ofJsonPatch(FILENAME, ORIGINAL, UPDATED))
+                .push()
+                .join();
 
         latch.await();
         assertEquals(20, prop.value().intValue());
@@ -123,11 +129,7 @@ public class CentralDogmaPropertySupplierIntegrationTest {
 
     @Test
     public void testFileExist() {
-        CentralDogma client = centralDogmaRule.client();
-        client.createProject(PROJECT_NAME).join();
-        CentralDogmaRepository centralDogmaRepository = client.createRepository(PROJECT_NAME, REPOSITORY_NAME)
-                                                              .join();
-
+        CentralDogmaRepository centralDogmaRepository = client.forRepo(PROJECT_NAME, REPOSITORY_NAME);
         centralDogmaRepository
                 .commit("test", Change.ofJsonUpsert(FILENAME, "{}"))
                 .push()
@@ -138,18 +140,14 @@ public class CentralDogmaPropertySupplierIntegrationTest {
 
     @Test
     public void testFileNonExistent() {
-        CentralDogma client = centralDogmaRule.client();
-        client.createProject(PROJECT_NAME).join();
-        CentralDogmaRepository centralDogmaRepository = client.createRepository(PROJECT_NAME, REPOSITORY_NAME).join();
+        CentralDogmaRepository centralDogmaRepository = client.forRepo(PROJECT_NAME, REPOSITORY_NAME);
         assertFalse(CentralDogmaPropertySupplier
                             .fileExists(centralDogmaRepository, FILENAME, Revision.HEAD));
     }
 
     @Test(timeout = 10000)
     public void testCDRegisterSuccess() {
-        CentralDogma client = centralDogmaRule.client();
-        client.createProject(PROJECT_NAME).join();
-        CentralDogmaRepository centralDogmaRepository = client.createRepository(PROJECT_NAME, REPOSITORY_NAME).join();
+        CentralDogmaRepository centralDogmaRepository = client.forRepo(PROJECT_NAME, REPOSITORY_NAME);
 
         CentralDogmaPropertySupplier.register(centralDogmaRepository, FILENAME);
         Entry<JsonNode> prop = centralDogmaRepository.file(Query.ofJson(FILENAME)).get().join();
@@ -166,9 +164,8 @@ public class CentralDogmaPropertySupplierIntegrationTest {
 
     @Test(timeout = 15000, expected = RuntimeException.class)
     public void testCDRegisterTimeout() {
-        CentralDogma client = centralDogmaRule.client();
-        client.createProject(PROJECT_NAME).join();
-        CentralDogmaRepository centralDogmaRepository = spy(client.createRepository(PROJECT_NAME, REPOSITORY_NAME).join());
+        CentralDogmaRepository centralDogmaRepository = spy(
+                client.createRepository(PROJECT_NAME, REPOSITORY_NAME).join());
 
         doReturn(CompletableFuture.completedFuture(new Revision(1)))
                 .when(centralDogmaRepository)
@@ -184,9 +181,7 @@ public class CentralDogmaPropertySupplierIntegrationTest {
         CountDownLatch userAIsRunning = new CountDownLatch(1);
         CountDownLatch userBIsRunning = new CountDownLatch(1);
 
-        CentralDogma client = centralDogmaRule.client();
-        client.createProject(PROJECT_NAME).join();
-        CentralDogmaRepository userB = client.createRepository(PROJECT_NAME, REPOSITORY_NAME).join();
+        CentralDogmaRepository userB = client.forRepo(PROJECT_NAME, REPOSITORY_NAME);
         CentralDogmaRepository userA = spy(client.forRepo(PROJECT_NAME, REPOSITORY_NAME));
         JsonNode userBPush = Jackson.readTree("{\"foo\": \"bar\"}");
 
