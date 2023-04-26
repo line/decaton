@@ -103,7 +103,7 @@ public class PerKeyQuotaManagerTest {
         doReturn(new Stat(timestamp - 15000L, timestamp, 645)).when(windowedStat).recordAndGet(eq(timestamp), eq(key));
 
         QuotaUsage usage = manager.record(key);
-        assertEquals(UsageType.Violate, usage.type());
+        assertEquals(UsageType.VIOLATE, usage.type());
         double epsilon = 0.0001;
         assertEquals(43.0, usage.metric().rate(), epsilon);
     }

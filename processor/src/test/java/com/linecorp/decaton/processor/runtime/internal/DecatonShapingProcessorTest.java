@@ -94,7 +94,7 @@ public class DecatonShapingProcessorTest {
         doReturn(CompletableFuture.completedFuture(null)).when(producer).sendRequest(
                 any(), any(), any(), any());
         processor.process(context, new QuotaAwareTask<>(
-                task, task.toByteArray(), new QuotaUsage(UsageType.Violate, Metric.builder().rate(42).build())));
+                task, task.toByteArray(), new QuotaUsage(UsageType.VIOLATE, Metric.builder().rate(42).build())));
 
         verify(producer, times(1))
                 .sendRequest(eq("topic-shaping"),

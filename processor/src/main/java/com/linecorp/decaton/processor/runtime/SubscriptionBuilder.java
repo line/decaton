@@ -22,11 +22,15 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
 
 import com.linecorp.decaton.client.DecatonClientBuilder.DefaultKafkaProducerSupplier;
 import com.linecorp.decaton.client.internal.DecatonTaskProducer;
@@ -34,9 +38,7 @@ import com.linecorp.decaton.client.KafkaProducerSupplier;
 import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.ProcessingContext;
 import com.linecorp.decaton.processor.TaskMetadata;
-import com.linecorp.decaton.processor.runtime.PerKeyQuotaConfig.QuotaCallback;
-import com.linecorp.decaton.processor.runtime.internal.DecatonShapingProcessor;
-import com.linecorp.decaton.processor.runtime.internal.QuotaAwareTask;
+import com.linecorp.decaton.processor.runtime.internal.QuotaApplier;
 import com.linecorp.decaton.processor.tracing.TracingProvider;
 import com.linecorp.decaton.processor.runtime.internal.ConsumerSupplier;
 import com.linecorp.decaton.processor.runtime.internal.DecatonProcessorSupplierImpl;
@@ -189,6 +191,7 @@ public class SubscriptionBuilder {
      * - Rate-limit will be applied for shaping topics to process bursting tasks without excessive resource usage.
      *   {@link ProcessorProperties#CONFIG_PER_KEY_QUOTA_PROCESSING_RATE} will be used as the rate-limit value by default.
      *   If you need to set rate-limit value per shaping-topic, you can override it via {@link SubscriptionBuilder#overrideShapingRate}.
+     * - Per-key quota doesn't apply to the retry-topic.
      *
      * @param config a {@link PerKeyQuotaConfig} instance representing configs.
      * @return updated instance of {@link SubscriptionBuilder}.
@@ -249,8 +252,8 @@ public class SubscriptionBuilder {
 
         return new ProcessorSubscription(scope,
                                          consumerSupplier,
-                                         processorsBuilder.build(maybeRetryProcessorSupplier(scope),
-                                                                 maybeShapingProcessorSupplier(scope)),
+                                         quotaApplierSupplier(scope),
+                                         processorsBuilder.build(maybeRetryProcessorSupplier(scope)),
                                          props,
                                          stateListener);
     }
@@ -279,45 +282,37 @@ public class SubscriptionBuilder {
         };
     }
 
-    private <T> DecatonProcessorSupplier<QuotaAwareTask<T>> maybeShapingProcessorSupplier(SubscriptionScope scope) {
-        if (perKeyQuotaConfig == null) {
-            return null;
-        }
-        Supplier<DecatonTaskProducer> producerSupplier =
-                producerSupplier(presetShapingProducerConfig,
-                                 perKeyQuotaConfig.producerConfig(),
-                                 perKeyQuotaConfig.producerSupplier());
-        return new DecatonProcessorSupplierImpl<>(() -> {
-            @SuppressWarnings("unchecked")
-            QuotaCallback<T> callback = (QuotaCallback<T>) perKeyQuotaConfig.callbackSupplier().apply(scope.topic());
-            DecatonTaskProducer producer = producerSupplier.get();
-            return new DecatonShapingProcessor<>(scope, producer, callback);
-        }, ProcessorScope.SINGLETON);
-    }
-
     private DecatonProcessorSupplier<byte[]> maybeRetryProcessorSupplier(SubscriptionScope scope) {
         if (retryConfig == null) {
             return null;
         }
-        Supplier<DecatonTaskProducer> producerSupplier =
-                producerSupplier(presetRetryProducerConfig,
-                                 retryConfig.producerConfig(),
-                                 retryConfig.producerSupplier());
+        Properties producerConfig = new Properties();
+        producerConfig.putAll(presetRetryProducerConfig);
+        producerConfig.putAll(Optional.ofNullable(retryConfig.producerConfig())
+                                      .orElseGet(producerConfigSupplier(consumerConfig)));
+        KafkaProducerSupplier producerSupplier = Optional.ofNullable(retryConfig.producerSupplier())
+                                                         .orElseGet(DefaultKafkaProducerSupplier::new);
         return new DecatonProcessorSupplierImpl<>(() -> {
-            DecatonTaskProducer producer = producerSupplier.get();
+            DecatonTaskProducer producer = new DecatonTaskProducer(scope.retryTopic().get(), producerConfig, producerSupplier);
             return new DecatonTaskRetryQueueingProcessor(scope, producer);
         }, ProcessorScope.SINGLETON);
     }
 
-    private Supplier<DecatonTaskProducer> producerSupplier(
-            Map<String, String> preset, Properties configOverride, KafkaProducerSupplier supplier) {
+    private Supplier<QuotaApplier> quotaApplierSupplier(SubscriptionScope scope) {
+        if (perKeyQuotaConfig == null) {
+            return () -> QuotaApplier.NoopApplier.INSTANCE;
+        }
         Properties producerConfig = new Properties();
-
-        producerConfig.putAll(preset);
-        producerConfig.putAll(Optional.ofNullable(configOverride)
+        producerConfig.putAll(presetShapingProducerConfig);
+        producerConfig.putAll(Optional.ofNullable(perKeyQuotaConfig.producerConfig())
                                       .orElseGet(producerConfigSupplier(consumerConfig)));
-        KafkaProducerSupplier producerSupplier = Optional.ofNullable(supplier)
-                                                         .orElseGet(DefaultKafkaProducerSupplier::new);
-        return () -> new DecatonTaskProducer(producerConfig, producerSupplier);
+        Function<Properties, Producer<byte[], byte[]>> producerSupplier =
+                Optional.ofNullable(perKeyQuotaConfig.producerSupplier())
+                        .orElseGet(() -> properties -> new KafkaProducer<>
+                                (properties, new ByteArraySerializer(), new ByteArraySerializer()));
+        return () -> new QuotaApplier.Impl(
+                producerSupplier.apply(producerConfig),
+                perKeyQuotaConfig.callbackSupplier().apply(scope.topic()),
+                scope);
     }
 }

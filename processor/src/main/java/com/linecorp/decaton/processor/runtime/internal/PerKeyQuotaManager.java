@@ -51,15 +51,15 @@ class PerKeyQuotaManager {
     private static final double DELTA = 0.00001;
 
     enum UsageType {
-        Comply,
-        Violate,
+        COMPLY,
+        VIOLATE,
     }
     @Getter
     @Accessors(fluent = true)
     @RequiredArgsConstructor
     @EqualsAndHashCode
     static class QuotaUsage {
-        static final QuotaUsage COMPLY = new QuotaUsage(UsageType.Comply, null);
+        static final QuotaUsage COMPLY = new QuotaUsage(UsageType.COMPLY, null);
 
         private final UsageType type;
         private final Metric metric;
@@ -117,7 +117,7 @@ class PerKeyQuotaManager {
         if (rate < quota) {
             return QuotaUsage.COMPLY;
         }
-        return new QuotaUsage(UsageType.Violate,
+        return new QuotaUsage(UsageType.VIOLATE,
                               Metric.builder()
                                     .rate(rate).build());
     }

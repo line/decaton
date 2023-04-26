@@ -25,7 +25,6 @@ import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.runtime.internal.DecatonProcessorSupplierImpl;
 import com.linecorp.decaton.processor.runtime.internal.DefaultTaskExtractor;
 import com.linecorp.decaton.processor.runtime.internal.Processors;
-import com.linecorp.decaton.processor.runtime.internal.QuotaAwareTask;
 
 import lombok.Getter;
 import lombok.experimental.Accessors;
@@ -40,14 +39,16 @@ public class ProcessorsBuilder<T> {
     @Getter
     private final String topic;
     private final TaskExtractor<T> taskExtractor;
-    private final TaskExtractor<T> decatonQueuedTaskExtractor;
+    private final TaskExtractor<T> retryTaskExtractor;
 
     private final List<DecatonProcessorSupplier<T>> suppliers;
 
-    public ProcessorsBuilder(String topic, TaskExtractor<T> taskExtractor, TaskExtractor<T> decatonQueuedTaskExtractor) {
+    public ProcessorsBuilder(String topic,
+                             TaskExtractor<T> taskExtractor,
+                             TaskExtractor<T> retryTaskExtractor) {
         this.topic = topic;
         this.taskExtractor = taskExtractor;
-        this.decatonQueuedTaskExtractor = decatonQueuedTaskExtractor;
+        this.retryTaskExtractor = retryTaskExtractor;
         suppliers = new ArrayList<>();
     }
 
@@ -73,22 +74,22 @@ public class ProcessorsBuilder<T> {
      * @return an instance of {@link ProcessorsBuilder}.
      */
     public static <T> ProcessorsBuilder<T> consuming(String topic, TaskExtractor<T> taskExtractor) {
-        DefaultTaskExtractor<byte[]> innerExtractor = new DefaultTaskExtractor<>(bytes -> bytes);
-        TaskExtractor<T> decatonQueuedTaskExtractor = bytes -> {
-            // Retry/Shaping tasks are serialized as PB DecatonTaskRequest.
+        DefaultTaskExtractor<byte[]> outerExtractor = new DefaultTaskExtractor<>(bytes -> bytes);
+        TaskExtractor<T> retryTaskExtractor = bytes -> {
+            // Retry tasks are serialized as PB DecatonTaskRequest.
             // First, deserialize PB from raw bytes.
-            DecatonTask<byte[]> retryTask = innerExtractor.extract(bytes);
+            DecatonTask<byte[]> wrappedTask = outerExtractor.extract(bytes);
 
             // Original raw task bytes is stored in DecatonTaskRequest#serializedTask.
             // Extract DecatonTask from DecatonTaskRequest#serializedTask using given taskExtractor.
-            DecatonTask<T> task = taskExtractor.extract(retryTask.taskData());
+            DecatonTask<T> task = taskExtractor.extract(wrappedTask.taskData());
 
             // Instantiate DecatonTask.
-            // Use retryTask#metadata because retry count is stored in retryTask#metada not task#metadata
-            return new DecatonTask<>(retryTask.metadata(), task.taskData(), task.taskDataBytes());
+            // Use wrappedTask#metadata because retry count is stored in wrappedTask#metada not task#metadata
+            return new DecatonTask<>(wrappedTask.metadata(), task.taskData(), task.taskDataBytes());
         };
 
-        return new ProcessorsBuilder<>(topic, taskExtractor, decatonQueuedTaskExtractor);
+        return new ProcessorsBuilder<>(topic, taskExtractor, retryTaskExtractor);
     }
 
     /**
@@ -131,13 +132,7 @@ public class ProcessorsBuilder<T> {
         return thenProcess(new DecatonProcessorSupplierImpl<>(() -> processor, ProcessorScope.PROVIDED));
     }
 
-    public Processors<T> build(DecatonProcessorSupplier<byte[]> retryProcessorSupplier) {
-        return build(retryProcessorSupplier, null);
-    }
-
-    Processors<T> build(DecatonProcessorSupplier<byte[]> retryProcessorSupplier,
-                        DecatonProcessorSupplier<QuotaAwareTask<T>> shapingProcessorSupplier) {
-        return new Processors<>(suppliers, retryProcessorSupplier, shapingProcessorSupplier, taskExtractor,
-                                decatonQueuedTaskExtractor);
+    Processors<T> build(DecatonProcessorSupplier<byte[]> retryProcessorSupplier) {
+        return new Processors<>(suppliers, retryProcessorSupplier, taskExtractor, retryTaskExtractor);
     }
 }

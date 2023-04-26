@@ -38,7 +38,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class ProcessPipeline<T> implements AutoCloseable {
     private final ThreadScope scope;
-    private final List<DecatonProcessor<QuotaAwareTask<T>>> processors;
+    private final List<DecatonProcessor<T>> processors;
     private final DecatonProcessor<byte[]> retryProcessor;
     private final TaskExtractor<T> taskExtractor;
     private final ExecutionScheduler scheduler;
@@ -48,7 +48,7 @@ public class ProcessPipeline<T> implements AutoCloseable {
     private volatile boolean terminated;
 
     ProcessPipeline(ThreadScope scope,
-                    List<DecatonProcessor<QuotaAwareTask<T>>> processors,
+                    List<DecatonProcessor<T>> processors,
                     DecatonProcessor<byte[]> retryProcessor,
                     TaskExtractor<T> taskExtractor,
                     ExecutionScheduler scheduler,
@@ -66,7 +66,7 @@ public class ProcessPipeline<T> implements AutoCloseable {
     }
 
     public ProcessPipeline(ThreadScope scope,
-                           List<DecatonProcessor<QuotaAwareTask<T>>> processors,
+                           List<DecatonProcessor<T>> processors,
                            DecatonProcessor<byte[]> retryProcessor,
                            TaskExtractor<T> taskExtractor,
                            ExecutionScheduler scheduler,
@@ -117,18 +117,13 @@ public class ProcessPipeline<T> implements AutoCloseable {
 
     // visible for testing
     Completion process(TaskRequest request, DecatonTask<T> task) throws InterruptedException {
-        DecatonTask<QuotaAwareTask<T>> quotaAwareTask = new DecatonTask<>(
-                task.metadata(),
-                new QuotaAwareTask<>(task.taskData(), task.taskDataBytes(), request.quotaUsage()),
-                task.taskDataBytes());
-        ProcessingContext<QuotaAwareTask<T>> context =
-                new ProcessingContextImpl<>(scope.subscriptionId(), request, quotaAwareTask, processors, retryProcessor,
-                                            scope.props());
+        ProcessingContext<T> context =
+                new ProcessingContextImpl<>(scope.subscriptionId(), request, task, processors, retryProcessor, scope.props());
 
         Timer timer = Utils.timer();
         Completion processResult;
         try (LoggingContext ignored = context.loggingContext()) {
-            processResult = context.push(quotaAwareTask.taskData());
+            processResult = context.push(task.taskData());
         } catch (Exception e) {
             if (e instanceof InterruptedException) {
                 Thread.currentThread().interrupt();

@@ -18,22 +18,13 @@ package com.linecorp.decaton.processor.runtime.internal;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
-import java.util.function.Function;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.header.Headers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.linecorp.decaton.processor.Completion;
-import com.linecorp.decaton.processor.Completion.TimeoutChoice;
 import com.linecorp.decaton.processor.DecatonProcessor;
-import com.linecorp.decaton.processor.LoggingContext;
-import com.linecorp.decaton.processor.ProcessingContext;
-import com.linecorp.decaton.processor.TaskMetadata;
 import com.linecorp.decaton.processor.runtime.TaskExtractor;
 import com.linecorp.decaton.processor.metrics.Metrics;
 import com.linecorp.decaton.processor.runtime.DecatonProcessorSupplier;
@@ -43,20 +34,17 @@ public class Processors<T> {
 
     private final List<DecatonProcessorSupplier<T>> suppliers;
     private final DecatonProcessorSupplier<byte[]> retryProcessorSupplier;
-    private final DecatonProcessorSupplier<QuotaAwareTask<T>> shapingProcessorSupplier;
     private final TaskExtractor<T> taskExtractor;
-    private final TaskExtractor<T> decatonQueuedTaskExtractor;
+    private final TaskExtractor<T> retryTaskExtractor;
 
     public Processors(List<DecatonProcessorSupplier<T>> suppliers,
                       DecatonProcessorSupplier<byte[]> retryProcessorSupplier,
-                      DecatonProcessorSupplier<QuotaAwareTask<T>> shapingProcessorSupplier,
                       TaskExtractor<T> taskExtractor,
-                      TaskExtractor<T> decatonQueuedTaskExtractor) {
+                      TaskExtractor<T> retryTaskExtractor) {
         this.suppliers = Collections.unmodifiableList(suppliers);
         this.retryProcessorSupplier = retryProcessorSupplier;
-        this.shapingProcessorSupplier = shapingProcessorSupplier;
         this.taskExtractor = taskExtractor;
-        this.decatonQueuedTaskExtractor = decatonQueuedTaskExtractor;
+        this.retryTaskExtractor = retryTaskExtractor;
     }
 
     private DecatonProcessor<byte[]> retryProcessor(ThreadScope scope) {
@@ -68,18 +56,9 @@ public class Processors<T> {
         return null;
     }
 
-    private DecatonProcessor<QuotaAwareTask<T>> shapingProcessor(ThreadScope scope) {
-        if (shapingProcessorSupplier != null && !scope.isShapingTopic()) {
-            return shapingProcessorSupplier.getProcessor(scope.subscriptionId(),
-                                                         scope.topicPartition(),
-                                                         scope.threadId());
-        }
-        return null;
-    }
-
     private TaskExtractor<T> extractorFromTopic(PartitionScope scope) {
-        if (scope.isRetryTopic() || scope.isShapingTopic()) {
-            return decatonQueuedTaskExtractor;
+        if (scope.isRetryTopic()) {
+            return retryTaskExtractor;
         } else {
             return taskExtractor;
         }
@@ -89,21 +68,15 @@ public class Processors<T> {
                                           ExecutionScheduler scheduler,
                                           Metrics metrics) {
         DecatonProcessor<byte[]> retryProcessor = retryProcessor(scope);
-        DecatonProcessor<QuotaAwareTask<T>> shapingProcessor = shapingProcessor(scope);
 
         TaskExtractor<T> taskExtractor = extractorFromTopic(scope);
         try {
-            List<DecatonProcessor<QuotaAwareTask<T>>> processors =
-                    Stream.concat(
-                            Optional.ofNullable(shapingProcessor)
-                                    .map(Stream::of)
-                                    .orElse(Stream.empty()),
+            List<DecatonProcessor<T>> processors =
                             suppliers.stream()
                                      .map(s -> s.getProcessor(scope.subscriptionId(),
                                                               scope.topicPartition(),
-                                                              scope.threadId()))
-                                     .map(Processors::asQuotaAware)
-                    ).collect(Collectors.toList());
+                                                              scope.threadId())
+                                     ).collect(Collectors.toList());
             logger.info("Creating partition processor core: {}", scope);
             return new ProcessPipeline<>(scope, processors, retryProcessor, taskExtractor, scheduler, metrics);
         } catch (RuntimeException e) {
@@ -125,18 +98,12 @@ public class Processors<T> {
         if (retryProcessorSupplier != null) {
             retryProcessorSupplier.leaveSingletonScope(subscriptionId);
         }
-        if (shapingProcessorSupplier != null) {
-            shapingProcessorSupplier.leaveSingletonScope(subscriptionId);
-        }
     }
 
     public void destroyPartitionScope(String subscriptionId, TopicPartition tp) {
         suppliers.forEach(supplier -> supplier.leavePartitionScope(subscriptionId, tp));
         if (retryProcessorSupplier != null) {
             retryProcessorSupplier.leavePartitionScope(subscriptionId, tp);
-        }
-        if (shapingProcessorSupplier != null) {
-            shapingProcessorSupplier.leavePartitionScope(subscriptionId, tp);
         }
     }
 
@@ -145,55 +112,5 @@ public class Processors<T> {
         if (retryProcessorSupplier != null) {
             retryProcessorSupplier.leaveThreadScope(subscriptionId, tp, threadId);
         }
-        if (shapingProcessorSupplier != null) {
-            shapingProcessorSupplier.leaveThreadScope(subscriptionId, tp, threadId);
-        }
-    }
-
-    private static <T> DecatonProcessor<QuotaAwareTask<T>> asQuotaAware(DecatonProcessor<T> processor) {
-        return (ctx, task) -> {
-            ProcessingContext<T> wrapped = new ProcessingContext<T>() {
-                @Override
-                public TaskMetadata metadata() {
-                    return ctx.metadata();
-                }
-
-                @Override
-                public byte[] key() {
-                    return ctx.key();
-                }
-
-                @Override
-                public Headers headers() {
-                    return ctx.headers();
-                }
-
-                @Override
-                public String subscriptionId() {
-                    return ctx.subscriptionId();
-                }
-
-                @Override
-                public LoggingContext loggingContext() {
-                    return ctx.loggingContext();
-                }
-
-                @Override
-                public Completion deferCompletion(Function<Completion, TimeoutChoice> callback) {
-                    return ctx.deferCompletion(callback);
-                }
-
-                @Override
-                public Completion push(T ignore) throws InterruptedException {
-                    return ctx.push(task);
-                }
-
-                @Override
-                public Completion retry() throws InterruptedException {
-                    return ctx.retry();
-                }
-            };
-            processor.process(wrapped, task.task());
-        };
     }
 }

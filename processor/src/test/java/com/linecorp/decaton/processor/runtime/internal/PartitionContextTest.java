@@ -75,7 +75,7 @@ public class PartitionContextTest {
     public void testQuotaUsage() {
         PartitionContext context = new PartitionContext(
                 scope("topic", Optional.of(PerKeyQuotaConfig.shape())), processors, MAX_PENDING_RECORDS);
-        assertEquals(UsageType.Comply, context.quotaUsage(new byte[0]).type());
+        assertEquals(UsageType.COMPLY, context.quotaUsage(new byte[0]).type());
     }
 
     @Test

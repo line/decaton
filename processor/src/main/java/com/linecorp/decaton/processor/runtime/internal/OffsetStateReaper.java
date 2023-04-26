@@ -38,7 +38,7 @@ public class OffsetStateReaper implements AutoCloseable {
                       Clock clock) {
         this.completionTimeoutMs = completionTimeoutMs;
         this.metrics = metrics;
-        executor = Executors.newSingleThreadExecutor(Utils.namedThreadFactory("OffsetStateReaper"));
+        executor = Executors.newSingleThreadExecutor(Utils.namedThreadFactory(i -> "OffsetStateReaper/" + i));
         this.clock = clock;
     }
 

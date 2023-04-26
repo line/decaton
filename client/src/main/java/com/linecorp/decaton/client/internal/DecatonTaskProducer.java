@@ -45,6 +45,7 @@ public class DecatonTaskProducer implements AutoCloseable {
     }
 
     private final Producer<byte[], DecatonTaskRequest> producer;
+    private final String topic;
 
     private static Properties completeProducerConfig(Properties producerConfig) {
         final Properties result = new Properties();
@@ -53,13 +54,14 @@ public class DecatonTaskProducer implements AutoCloseable {
         return result;
     }
 
-    public DecatonTaskProducer(Properties producerConfig,
+    public DecatonTaskProducer(String topic, Properties producerConfig,
                                KafkaProducerSupplier producerSupplier) {
         Properties completeProducerConfig = completeProducerConfig(producerConfig);
         producer = producerSupplier.getProducer(completeProducerConfig);
+        this.topic = topic;
     }
 
-    public CompletableFuture<PutTaskResult> sendRequest(String topic, byte[] key, DecatonTaskRequest request,
+    public CompletableFuture<PutTaskResult> sendRequest(byte[] key, DecatonTaskRequest request,
                                                         Integer partition) {
         ProducerRecord<byte[], DecatonTaskRequest> record = new ProducerRecord<>(topic, partition, key, request);
         return sendRequest(record);

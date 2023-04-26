@@ -47,8 +47,8 @@ import com.linecorp.decaton.processor.runtime.internal.OffsetState;
 import com.linecorp.decaton.processor.runtime.internal.PartitionContext;
 import com.linecorp.decaton.processor.runtime.internal.PartitionContexts;
 import com.linecorp.decaton.processor.runtime.internal.Processors;
+import com.linecorp.decaton.processor.runtime.internal.QuotaApplier;
 import com.linecorp.decaton.processor.runtime.internal.SubscriptionScope;
-import com.linecorp.decaton.processor.runtime.internal.TaskRequest;
 import com.linecorp.decaton.processor.runtime.internal.Utils;
 import com.linecorp.decaton.processor.runtime.internal.Utils.Timer;
 import com.linecorp.decaton.processor.tracing.TracingProvider;
@@ -68,6 +68,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
     private final CommitManager commitManager;
     private final AssignmentManager assignManager;
     private final ConsumeManager consumeManager;
+    private final QuotaApplier quotaApplier;
     private final CompletableFuture<Void> loopTerminateFuture;
     private final CompletableFuture<Void> shutdownFuture;
     private volatile boolean started;
@@ -128,7 +129,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
             });
 
             if (blacklistedKeysFilter.shouldTake(record)) {
-                context.addRecord(record, offsetState, trace);
+                context.addRecord(record, offsetState, trace, quotaApplier);
             } else {
                 offsetState.completion().complete();
             }
@@ -137,6 +138,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
 
     ProcessorSubscription(SubscriptionScope scope,
                           Supplier<Consumer<byte[], byte[]>> consumerSupplier,
+                          Supplier<QuotaApplier> quotaApplierSupplier,
                           Processors<?> processors,
                           ProcessorProperties props,
                           SubscriptionStateListener stateListener,
@@ -151,6 +153,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
         if (props.get(CONFIG_BIND_CLIENT_METRICS).value()) {
             metrics.bindClientMetrics(consumer);
         }
+        quotaApplier = quotaApplierSupplier.get();
         consumeManager = new ConsumeManager(consumer, contexts, new Handler(), metrics);
         commitManager = new CommitManager(
                 consumer, props.get(ProcessorProperties.CONFIG_COMMIT_INTERVAL_MS), contexts);
@@ -166,10 +169,11 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
 
     public ProcessorSubscription(SubscriptionScope scope,
                                  Supplier<Consumer<byte[], byte[]>> consumerSupplier,
+                                 Supplier<QuotaApplier> quotaApplierSupplier,
                                  Processors<?> processors,
                                  ProcessorProperties props,
                                  SubscriptionStateListener stateListener) {
-        this(scope, consumerSupplier, processors, props, stateListener,
+        this(scope, consumerSupplier, quotaApplierSupplier, processors, props, stateListener,
              new PartitionContexts(scope, processors));
     }
 
@@ -289,6 +293,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
     private void cleanUp() {
         contexts.close();
         consumeManager.close();
+        quotaApplier.close();
         metrics.close();
         updateState(SubscriptionStateListener.State.TERMINATED);
     }

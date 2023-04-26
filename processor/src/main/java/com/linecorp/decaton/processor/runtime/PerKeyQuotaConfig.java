@@ -30,8 +30,6 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 
-import com.linecorp.decaton.client.KafkaProducerSupplier;
-import com.linecorp.decaton.processor.TaskMetadata;
 import com.linecorp.decaton.processor.runtime.PerKeyQuotaConfig.QuotaCallback.Action;
 import com.linecorp.decaton.processor.runtime.internal.RateLimiter;
 
@@ -65,7 +63,7 @@ public class PerKeyQuotaConfig {
      * Configure the callback to determine the action when a key is detected as burst.
      */
     @NonNull
-    Function<String, QuotaCallback<?>> callbackSupplier;
+    Function<String, QuotaCallback> callbackSupplier;
     /**
      * Optionally supplied custom configuration for the {@link Producer} used to produce shaped tasks into shaping
      * topic. See {@link ProducerConfig}.
@@ -76,7 +74,7 @@ public class PerKeyQuotaConfig {
      * {@link Producer} rather than the default {@link KafkaProducer}.
      * The supplied producer is closed along with {@link ProcessorSubscription}'s shutdown.
      */
-    KafkaProducerSupplier producerSupplier;
+    Function<Properties, Producer<byte[], byte[]>> producerSupplier;
 
     public static class PerKeyQuotaConfigBuilder {
         public PerKeyQuotaConfigBuilder shapingTopics(String... topics) {
@@ -84,15 +82,14 @@ public class PerKeyQuotaConfig {
             return this;
         }
 
-        @SuppressWarnings("unchecked")
-        public <T> PerKeyQuotaConfigBuilder callback(QuotaCallback<T> callback) {
-            callbackSupplier = topic -> (QuotaCallback<Object>) callback;
+        public PerKeyQuotaConfigBuilder callback(QuotaCallback callback) {
+            callbackSupplier = topic -> callback;
             return this;
         }
     }
 
     @FunctionalInterface
-    public interface QuotaCallback<T> extends AutoCloseable {
+    public interface QuotaCallback extends AutoCloseable {
         @Value
         @Builder
         @Accessors(fluent = true)
@@ -112,12 +109,12 @@ public class PerKeyQuotaConfig {
 
         /**
          * Decide the action against the key that is detected as bursting.
-         * @param metadata {@link TaskMetadata} of the task
+         * Note that whenever this callback throws, the task will be marked as completed immediately (i.e. will be committed)
+         * without sending it to the shaping topic nor queueing to the processor.
          * @param key key of the task
-         * @param task task data itself
          * @param metric observed metric for the key
          */
-        Action apply(TaskMetadata metadata, byte[] key, T task, Metric metric);
+        Action apply(byte[] key, Metric metric);
 
         @Override
         default void close() {
@@ -134,7 +131,7 @@ public class PerKeyQuotaConfig {
                 .shapingTopicsSupplier(topic -> Collections.singleton(defaultShapingTopic(topic)))
                 .callbackSupplier(topic -> {
                     String shapingTopic = defaultShapingTopic(topic);
-                    return (key, metadata, task, metric) -> new Action(shapingTopic);
+                    return (key, metric) -> new Action(shapingTopic);
                 })
                 .build();
     }

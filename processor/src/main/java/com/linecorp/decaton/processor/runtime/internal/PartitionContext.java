@@ -146,10 +146,15 @@ public class PartitionContext implements AutoCloseable {
 
     public void addRecord(ConsumerRecord<byte[], byte[]> record,
                           OffsetState offsetState,
-                          RecordTraceHandle traceHandle) {
-        partitionProcessor.addTask(new TaskRequest(
+                          RecordTraceHandle traceHandle,
+                          QuotaApplier quotaApplier) {
+        TaskRequest request = new TaskRequest(
                 scope.topicPartition(), record.offset(), offsetState, record.key(),
-                record.headers(), traceHandle, record.value(), quotaUsage(record.key())));
+                record.headers(), traceHandle, record.value(), quotaUsage(record.key()));
+        if (!quotaApplier.apply(request)) {
+            partitionProcessor.addTask(request);
+        }
+
         if (lastQueueStarvedTime > 0) {
             metrics.queueStarvedTime.record(System.nanoTime() - lastQueueStarvedTime, TimeUnit.NANOSECONDS);
             lastQueueStarvedTime = -1;

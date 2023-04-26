@@ -37,14 +37,12 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class DecatonTaskRetryQueueingProcessor implements DecatonProcessor<byte[]> {
     private final DecatonTaskProducer producer;
-    private final String retryTopic;
     private final Duration backoff;
     private final RetryMetrics metrics;
 
     public DecatonTaskRetryQueueingProcessor(SubscriptionScope scope, DecatonTaskProducer producer) {
         RetryConfig retryConfig = scope.retryConfig().get(); // This won't be instantiated unless it present
         this.producer = producer;
-        retryTopic = scope.retryTopic().get(); // This won't be instantiated unless it present
         backoff = retryConfig.backoff();
         metrics = Metrics.withTags("subscription", scope.subscriptionId()).new RetryMetrics();
     }
@@ -67,7 +65,7 @@ public class DecatonTaskRetryQueueingProcessor implements DecatonProcessor<byte[
                                   .build();
         metrics.retryTaskRetries.record(nextRetryCount);
 
-        CompletableFuture<PutTaskResult> future = producer.sendRequest(retryTopic, context.key(), request, null);
+        CompletableFuture<PutTaskResult> future = producer.sendRequest(context.key(), request, null);
         future.whenComplete((r, e) -> {
             if (e == null) {
                 metrics.retryQueuedTasks.increment();
