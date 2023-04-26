@@ -44,6 +44,7 @@ public class DecatonTaskRetryQueueingProcessor implements DecatonProcessor<byte[
         RetryConfig retryConfig = scope.retryConfig().get(); // This won't be instantiated unless it present
         this.producer = producer;
         backoff = retryConfig.backoff();
+
         metrics = Metrics.withTags("subscription", scope.subscriptionId()).new RetryMetrics();
     }
 

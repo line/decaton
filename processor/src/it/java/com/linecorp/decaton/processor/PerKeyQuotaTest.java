@@ -84,7 +84,7 @@ public class PerKeyQuotaTest {
                            .enablePerKeyQuota(PerKeyQuotaConfig.shape()
                                                                .toBuilder()
                                                                .window(Duration.ofMillis(50L))
-                                                               .callback((metadata, key, task, metric) -> {
+                                                               .callback((key, metric) -> {
                                                                    quotaLatch.countDown();
                                                                    return Action.builder().topic(shapingTopic).build();
                                                                })

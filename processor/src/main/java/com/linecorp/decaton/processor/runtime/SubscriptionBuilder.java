@@ -210,9 +210,8 @@ public class SubscriptionBuilder {
     public SubscriptionBuilder overrideShapingRate(String shapingTopic, PropertySupplier supplier) {
         PropertyDefinition<Long> definition = PerKeyQuotaConfig.shapingRateProperty(shapingTopic);
         Optional<Property<Long>> property = supplier.getProperty(definition);
-        if (!property.isPresent()) {
-            throw new IllegalArgumentException(definition.name() + " must exist in the supplier");
-        }
+        propertiesBuilder.set(
+                property.orElseThrow(() -> new IllegalArgumentException(definition.name() + " must exist in the supplier")));
         propertiesBuilder.set(property.get());
         return this;
     }

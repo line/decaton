@@ -20,7 +20,7 @@ import java.util.Random;
 import java.util.function.LongSupplier;
 import java.util.function.Supplier;
 
-import com.linecorp.decaton.processor.runtime.PerKeyQuotaConfig.QuotaCallback.Metric;
+import com.linecorp.decaton.processor.runtime.PerKeyQuotaConfig.QuotaCallback.Metrics;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.Property;
 import com.linecorp.decaton.processor.runtime.internal.WindowedKeyStat.Stat;
@@ -62,7 +62,7 @@ class PerKeyQuotaManager {
         static final QuotaUsage COMPLY = new QuotaUsage(UsageType.COMPLY, null);
 
         private final UsageType type;
-        private final Metric metric;
+        private final Metrics metrics;
     }
 
     private final WindowedKeyStat windowedStat;
@@ -118,7 +118,7 @@ class PerKeyQuotaManager {
             return QuotaUsage.COMPLY;
         }
         return new QuotaUsage(UsageType.VIOLATE,
-                              Metric.builder()
-                                    .rate(rate).build());
+                              Metrics.builder()
+                                     .rate(rate).build());
     }
 }

@@ -69,7 +69,7 @@ public class ProcessorsTest {
                 mock(DecatonProcessorSupplier.class));
 
         Processors<HelloTask> processors = new Processors<>(
-                suppliers, null, null,
+                suppliers, null,
                 new DefaultTaskExtractor<>(bytes -> HelloTask.getDefaultInstance()),
                 null);
 

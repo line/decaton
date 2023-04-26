@@ -41,7 +41,9 @@ public interface QuotaApplier extends AutoCloseable {
     boolean apply(TaskRequest request);
 
     @Override
-    void close();
+    default void close() {
+        // do nothing
+    };
 
     enum NoopApplier implements QuotaApplier {
         INSTANCE;
@@ -50,9 +52,6 @@ public interface QuotaApplier extends AutoCloseable {
         public boolean apply(TaskRequest request) {
             return false;
         }
-
-        @Override
-        public void close() {}
     }
 
     @Slf4j
@@ -89,7 +88,7 @@ public interface QuotaApplier extends AutoCloseable {
             final Action action;
             Completion completion = request.offsetState().completion();
             try {
-                action = callback.apply(request.key(), request.quotaUsage().metric());
+                action = callback.apply(request.key(), request.quotaUsage().metrics());
             } catch (Exception e) {
                 log.error("Exception thrown from the quota callback for key: {}", Arrays.toString(request.key()), e);
                 metrics.shapingQueueingFailed.increment();

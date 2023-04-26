@@ -19,10 +19,15 @@ package com.linecorp.decaton.processor.runtime.internal;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 import java.util.Optional;
 import java.util.OptionalLong;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.Rule;
 import org.junit.Test;
@@ -35,6 +40,7 @@ import com.linecorp.decaton.processor.runtime.PerKeyQuotaConfig;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.internal.PerKeyQuotaManager.UsageType;
 import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider;
+import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider.NoopTrace;
 
 public class PartitionContextTest {
     @Rule
@@ -52,6 +58,10 @@ public class PartitionContextTest {
 
     @Mock
     private Processors<?> processors;
+    @Mock
+    private PartitionProcessor partitionProcessor;
+    @Mock
+    ConsumerRecord<byte[], byte[]> record;
 
     private static final int MAX_PENDING_RECORDS = 100;
 
@@ -90,5 +100,33 @@ public class PartitionContextTest {
         PartitionContext context = new PartitionContext(
                 scope("topic-shaping", Optional.of(PerKeyQuotaConfig.shape())), processors, MAX_PENDING_RECORDS);
         assertNull(context.quotaUsage(new byte[0]));
+
+        context = new PartitionContext(
+                scope("topic-retry", Optional.of(PerKeyQuotaConfig.shape())), processors, MAX_PENDING_RECORDS);
+        assertNull(context.quotaUsage(new byte[0]));
+    }
+
+    @Test
+    public void testQuotaApplied() {
+        PartitionContext context = new PartitionContext(
+                scope("topic-shaping", Optional.of(PerKeyQuotaConfig.shape())),
+                processors,
+                partitionProcessor,
+                MAX_PENDING_RECORDS);
+
+        context.addRecord(record, new OffsetState(42L), NoopTrace.INSTANCE, req -> true);
+        verify(partitionProcessor, never()).addTask(any());
+    }
+
+    @Test
+    public void testQuotaNotApplied() {
+        PartitionContext context = new PartitionContext(
+                scope("topic-shaping", Optional.of(PerKeyQuotaConfig.shape())),
+                processors,
+                partitionProcessor,
+                MAX_PENDING_RECORDS);
+
+        context.addRecord(record, new OffsetState(42L), NoopTrace.INSTANCE, req -> false);
+        verify(partitionProcessor, times(1)).addTask(any());
     }
 }

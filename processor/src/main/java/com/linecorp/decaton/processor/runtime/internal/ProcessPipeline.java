@@ -118,7 +118,8 @@ public class ProcessPipeline<T> implements AutoCloseable {
     // visible for testing
     Completion process(TaskRequest request, DecatonTask<T> task) throws InterruptedException {
         ProcessingContext<T> context =
-                new ProcessingContextImpl<>(scope.subscriptionId(), request, task, processors, retryProcessor, scope.props());
+                new ProcessingContextImpl<>(scope.subscriptionId(), request, task, processors, retryProcessor,
+                                            scope.props());
 
         Timer timer = Utils.timer();
         Completion processResult;

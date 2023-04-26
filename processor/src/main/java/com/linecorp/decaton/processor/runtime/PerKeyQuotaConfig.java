@@ -50,6 +50,7 @@ public class PerKeyQuotaConfig {
     /**
      * Optionally supplied the duration till detect bursting keys.
      * Shorter window enables quick detection at the risk of frequent bursting key isolation that may break per-key serial processing.
+     * On the other hand, longer window enables stable detection at the risk of processors getting dominated by bursting keys for a while.
      */
     @NonNull
     @Builder.Default
@@ -100,7 +101,7 @@ public class PerKeyQuotaConfig {
         @Value
         @Builder
         @Accessors(fluent = true)
-        class Metric {
+        class Metrics {
             /**
              * Observed processing rate for the key
              */
@@ -112,9 +113,9 @@ public class PerKeyQuotaConfig {
          * Note that whenever this callback throws, the task will be marked as completed immediately (i.e. will be committed)
          * without sending it to the shaping topic nor queueing to the processor.
          * @param key key of the task
-         * @param metric observed metric for the key
+         * @param metrics observed metric for the key
          */
-        Action apply(byte[] key, Metric metric);
+        Action apply(byte[] key, Metrics metrics);
 
         @Override
         default void close() {
@@ -131,7 +132,7 @@ public class PerKeyQuotaConfig {
                 .shapingTopicsSupplier(topic -> Collections.singleton(defaultShapingTopic(topic)))
                 .callbackSupplier(topic -> {
                     String shapingTopic = defaultShapingTopic(topic);
-                    return (key, metric) -> new Action(shapingTopic);
+                    return (key, metrics) -> new Action(shapingTopic);
                 })
                 .build();
     }
@@ -141,7 +142,7 @@ public class PerKeyQuotaConfig {
     }
 
     /**
-     * Returns {@link PropertyDefinition} to optionally configure the processing rate for the shaping topic.
+     * Returns {@link PropertyDefinition} to optionally configure the processing rate per second for the shaping topic.
      * @param topic shaping topic name
      * @return definition to configure the property
      */

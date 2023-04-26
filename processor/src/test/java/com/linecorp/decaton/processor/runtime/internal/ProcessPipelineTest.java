@@ -59,7 +59,6 @@ import com.linecorp.decaton.processor.runtime.DefaultSubPartitioner;
 import com.linecorp.decaton.processor.runtime.DynamicProperty;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.TaskExtractor;
-import com.linecorp.decaton.processor.runtime.internal.PerKeyQuotaManager.QuotaUsage;
 import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider;
 import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider.NoopTrace;
 import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
@@ -68,8 +67,6 @@ import com.linecorp.decaton.protocol.Sample.HelloTask;
 
 public class ProcessPipelineTest {
     private static final HelloTask TASK = HelloTask.getDefaultInstance();
-    private static final QuotaAwareTask<HelloTask> QUOTA_AWARE_TASK =
-            new QuotaAwareTask<>(TASK, TASK.toByteArray(), null);
 
     private static final DecatonTaskRequest REQUEST =
             DecatonTaskRequest.newBuilder()
@@ -108,7 +105,7 @@ public class ProcessPipelineTest {
     private TaskExtractor<HelloTask> extractorMock;
 
     @Mock
-    private DecatonProcessor<QuotaAwareTask<HelloTask>> processorMock;
+    private DecatonProcessor<HelloTask> processorMock;
 
     @Mock
     private ExecutionScheduler schedulerMock;
@@ -134,7 +131,7 @@ public class ProcessPipelineTest {
         TaskRequest request = taskRequest();
         pipeline.scheduleThenProcess(request);
         verify(schedulerMock, times(1)).schedule(eq(TaskMetadata.fromProto(REQUEST.getMetadata())));
-        verify(processorMock, times(1)).process(any(), eq(QUOTA_AWARE_TASK));
+        verify(processorMock, times(1)).process(any(), eq(TASK));
         assertTrue(request.offsetState().completion().isComplete());
         assertEquals(completionTimeoutMsProp.value() + clock.millis(),
                      request.offsetState().timeoutAt());
@@ -165,7 +162,7 @@ public class ProcessPipelineTest {
         TaskRequest request = taskRequest();
         pipeline.scheduleThenProcess(request);
         verify(schedulerMock, times(1)).schedule(eq(TaskMetadata.fromProto(REQUEST.getMetadata())));
-        verify(processorMock, times(1)).process(any(), eq(QUOTA_AWARE_TASK));
+        verify(processorMock, times(1)).process(any(), eq(TASK));
 
         // Should complete only after processor completes it
         assertFalse(request.offsetState().completion().isComplete());
@@ -217,7 +214,7 @@ public class ProcessPipelineTest {
         DecatonTask<HelloTask> task = new DecatonTask<>(TaskMetadata.fromProto(REQUEST.getMetadata()), TASK, TASK.toByteArray());
         when(extractorMock.extract(any())).thenReturn(task);
 
-        doThrow(new RuntimeException()).when(processorMock).process(any(), eq(QUOTA_AWARE_TASK));
+        doThrow(new RuntimeException()).when(processorMock).process(any(), eq(TASK));
 
         TaskRequest request = taskRequest();
         // Checking exception doesn't bubble up

@@ -72,11 +72,11 @@ public class Processors<T> {
         TaskExtractor<T> taskExtractor = extractorFromTopic(scope);
         try {
             List<DecatonProcessor<T>> processors =
-                            suppliers.stream()
-                                     .map(s -> s.getProcessor(scope.subscriptionId(),
-                                                              scope.topicPartition(),
-                                                              scope.threadId())
-                                     ).collect(Collectors.toList());
+                    suppliers.stream()
+                             .map(s -> s.getProcessor(scope.subscriptionId(),
+                                                      scope.topicPartition(),
+                                                      scope.threadId()))
+                             .collect(Collectors.toList());
             logger.info("Creating partition processor core: {}", scope);
             return new ProcessPipeline<>(scope, processors, retryProcessor, taskExtractor, scheduler, metrics);
         } catch (RuntimeException e) {

@@ -43,9 +43,7 @@ public class ProcessorsBuilder<T> {
 
     private final List<DecatonProcessorSupplier<T>> suppliers;
 
-    public ProcessorsBuilder(String topic,
-                             TaskExtractor<T> taskExtractor,
-                             TaskExtractor<T> retryTaskExtractor) {
+    public ProcessorsBuilder(String topic, TaskExtractor<T> taskExtractor, TaskExtractor<T> retryTaskExtractor) {
         this.topic = topic;
         this.taskExtractor = taskExtractor;
         this.retryTaskExtractor = retryTaskExtractor;

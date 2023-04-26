@@ -180,7 +180,7 @@ public class ProcessorProperties extends AbstractDecatonProperties {
             PropertyDefinition.define("decaton.deferred.complete.timeout.ms", Long.class, -1L,
                                       v -> v instanceof Long);
     /**
-     * Control per-key processing rate quota.
+     * Control per-key processing rate per second quota.
      * Only effective when per-key quota is enabled by {@link SubscriptionBuilder#enablePerKeyQuota}.
      * <p>
      * Reloadable: yes

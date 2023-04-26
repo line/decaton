@@ -42,15 +42,16 @@ import java.util.function.Function;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.Callback;
+import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
 
 import com.google.protobuf.ByteString;
 
 import com.linecorp.decaton.client.DecatonClientBuilder.DefaultKafkaProducerSupplier;
-import com.linecorp.decaton.client.KafkaProducerSupplier;
 import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.runtime.PerKeyQuotaConfig;
 import com.linecorp.decaton.processor.runtime.PerKeyQuotaConfig.PerKeyQuotaConfigBuilder;
@@ -309,12 +310,28 @@ public class ProcessorTestSuite {
                     builder.processorsBuilder(processorsBuilder);
                     if (retryConfig != null) {
                         RetryConfigBuilder retryConfigBuilder = retryConfig.toBuilder();
-                        retryConfigBuilder.producerSupplier(producerSupplier(retryConfig.producerSupplier(), queuedTaskOffsets));
+                        retryConfigBuilder.producerSupplier(props -> {
+                            final Producer<byte[], DecatonTaskRequest> producer;
+                            if (retryConfig.producerSupplier() != null) {
+                                producer = retryConfig.producerSupplier().getProducer(props);
+                            } else {
+                                producer = new DefaultKafkaProducerSupplier().getProducer(props);
+                            }
+                            return new InterceptingProducer<>(producer, recordingInterceptor(queuedTaskOffsets));
+                        });
                         builder.enableRetry(retryConfigBuilder.build());
                     }
                     if (perKeyQuotaConfig != null) {
                         PerKeyQuotaConfigBuilder perKeyQuotaConfigBuilder = perKeyQuotaConfig.toBuilder();
-                        perKeyQuotaConfigBuilder.producerSupplier(producerSupplier(perKeyQuotaConfig.producerSupplier(), queuedTaskOffsets));
+                        perKeyQuotaConfigBuilder.producerSupplier(props -> {
+                            final Producer<byte[], byte[]> producer;
+                            if (perKeyQuotaConfig.producerSupplier() != null) {
+                                producer = perKeyQuotaConfig.producerSupplier().apply(props);
+                            } else {
+                                producer = new KafkaProducer<>(props, new ByteArraySerializer(), new ByteArraySerializer());
+                            }
+                            return new InterceptingProducer<>(producer, recordingInterceptor(queuedTaskOffsets));
+                        });
                         builder.enablePerKeyQuota(perKeyQuotaConfigBuilder.build());
                         String shapingTopic = topic + "-shaping";
                         builder.overrideShapingRate(shapingTopic, StaticPropertySupplier.of(
@@ -337,16 +354,9 @@ public class ProcessorTestSuite {
         ProcessorSubscription apply(int index) throws InterruptedException, TimeoutException;
     }
 
-    private static KafkaProducerSupplier producerSupplier(
-            KafkaProducerSupplier supplier,
-            ConcurrentMap<TopicPartition, Long> queuedTaskOffsets) {
-        KafkaProducerSupplier innerSupplier =
-                Optional.ofNullable(supplier)
-                        .orElseGet(DefaultKafkaProducerSupplier::new);
-        return props -> new InterceptingProducer(
-                innerSupplier.getProducer(props),
-                meta -> queuedTaskOffsets.compute(new TopicPartition(meta.topic(), meta.partition()),
-                                                  (k, v) -> Math.max(v == null ? -1L : v, meta.offset())));
+    private static Consumer<RecordMetadata> recordingInterceptor(ConcurrentMap<TopicPartition, Long> queuedTaskOffsets) {
+        return meta -> queuedTaskOffsets.compute(new TopicPartition(meta.topic(), meta.partition()),
+                                                 (k, v) -> Math.max(v == null ? -1L : v, meta.offset()));
     }
 
     private static void performRollingRestart(ProcessorSubscription[] subscriptions,
@@ -438,17 +448,17 @@ public class ProcessorTestSuite {
         });
     }
 
-    private static class InterceptingProducer extends ProducerAdaptor<byte[], DecatonTaskRequest> {
+    private static class InterceptingProducer<V> extends ProducerAdaptor<byte[], V> {
         private final Consumer<RecordMetadata> interceptor;
 
-        InterceptingProducer(Producer<byte[], DecatonTaskRequest> delegate,
+        InterceptingProducer(Producer<byte[], V> delegate,
                              Consumer<RecordMetadata> interceptor) {
             super(delegate);
             this.interceptor = interceptor;
         }
 
         @Override
-        public Future<RecordMetadata> send(ProducerRecord<byte[], DecatonTaskRequest> record,
+        public Future<RecordMetadata> send(ProducerRecord<byte[], V> record,
                                            Callback callback) {
             return super.send(record, (meta, e) -> {
                 if (meta != null) {
