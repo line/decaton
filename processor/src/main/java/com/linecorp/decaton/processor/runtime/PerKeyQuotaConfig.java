@@ -26,6 +26,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -112,10 +113,10 @@ public class PerKeyQuotaConfig {
          * Decide the action against the key that is detected as bursting.
          * Note that whenever this callback throws, the task will be marked as completed immediately (i.e. will be committed)
          * without sending it to the shaping topic nor queueing to the processor.
-         * @param key key of the task
+         * @param record record which have bursted key
          * @param metrics observed metric for the key
          */
-        Action apply(byte[] key, Metrics metrics);
+        Action apply(ConsumerRecord<byte[], byte[]> record, Metrics metrics);
 
         @Override
         default void close() {

@@ -21,6 +21,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 
@@ -29,6 +30,7 @@ import com.linecorp.decaton.processor.metrics.Metrics;
 import com.linecorp.decaton.processor.metrics.Metrics.ShapingMetrics;
 import com.linecorp.decaton.processor.runtime.PerKeyQuotaConfig.QuotaCallback;
 import com.linecorp.decaton.processor.runtime.PerKeyQuotaConfig.QuotaCallback.Action;
+import com.linecorp.decaton.processor.runtime.internal.PerKeyQuotaManager.QuotaUsage;
 import com.linecorp.decaton.processor.runtime.internal.PerKeyQuotaManager.UsageType;
 
 import lombok.extern.slf4j.Slf4j;
@@ -38,7 +40,9 @@ import lombok.extern.slf4j.Slf4j;
  * When per-key-quota feature is not enabled, you should use {@link QuotaApplier.NoopApplier}
  */
 public interface QuotaApplier extends AutoCloseable {
-    boolean apply(TaskRequest request);
+    boolean apply(ConsumerRecord<byte[], byte[]> record,
+                  OffsetState offsetState,
+                  QuotaUsage quotaUsage);
 
     @Override
     default void close() {
@@ -49,7 +53,9 @@ public interface QuotaApplier extends AutoCloseable {
         INSTANCE;
 
         @Override
-        public boolean apply(TaskRequest request) {
+        public boolean apply(ConsumerRecord<byte[], byte[]> record,
+                             OffsetState offsetState,
+                             QuotaUsage quotaUsage) {
             return false;
         }
     }
@@ -76,32 +82,35 @@ public interface QuotaApplier extends AutoCloseable {
          * the {@link QuotaCallback} result and return true.
          * Otherwise, this method will return false.
          * If true is returned, the caller should not enqueue the task to the processor.
-         * @param request the task request to apply quota.
+         * @param record the task record to apply quota.
+         * @param offsetState the offset state of the task.
+         * @param quotaUsage the observed quota usage of the key
          * @return true if quota is applied, false otherwise.
          */
         @Override
-        public boolean apply(TaskRequest request) {
-            if (request.quotaUsage() == null || request.quotaUsage().type() == UsageType.COMPLY) {
+        public boolean apply(ConsumerRecord<byte[], byte[]> record,
+                             OffsetState offsetState,
+                             QuotaUsage quotaUsage) {
+            if (quotaUsage == null || quotaUsage.type() == UsageType.COMPLY) {
                 return false;
             }
 
             final Action action;
-            Completion completion = request.offsetState().completion();
+            Completion completion = offsetState.completion();
             try {
-                action = callback.apply(request.key(), request.quotaUsage().metrics());
+                action = callback.apply(record, quotaUsage.metrics());
             } catch (Exception e) {
-                log.error("Exception thrown from the quota callback for key: {}", Arrays.toString(request.key()), e);
+                log.error("Exception thrown from the quota callback for key: {}", Arrays.toString(record.key()), e);
                 metrics.shapingQueueingFailed.increment();
                 completion.complete();
                 return true;
             }
 
-            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(
-                    action.topic(), null, request.key(), request.rawRequestBytes(), request.headers());
-            request.purgeRawRequestBytes();
+            ProducerRecord<byte[], byte[]> producerRecord = new ProducerRecord<>(
+                    action.topic(), null, record.key(), record.value(), record.headers());
             shapingExecutor.execute(() -> {
                 try {
-                    producer.send(record, (r, e) -> {
+                    producer.send(producerRecord, (r, e) -> {
                         if (e == null) {
                             metrics.shapingQueuedTasks.increment();
                         } else {

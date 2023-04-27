@@ -114,7 +114,7 @@ public class PartitionContextTest {
                 partitionProcessor,
                 MAX_PENDING_RECORDS);
 
-        context.addRecord(record, new OffsetState(42L), NoopTrace.INSTANCE, req -> true);
+        context.addRecord(record, new OffsetState(42L), NoopTrace.INSTANCE, (r, o, q) -> true);
         verify(partitionProcessor, never()).addTask(any());
     }
 
@@ -126,7 +126,7 @@ public class PartitionContextTest {
                 partitionProcessor,
                 MAX_PENDING_RECORDS);
 
-        context.addRecord(record, new OffsetState(42L), NoopTrace.INSTANCE, req -> false);
+        context.addRecord(record, new OffsetState(42L), NoopTrace.INSTANCE, (r, o, q) -> false);
         verify(partitionProcessor, times(1)).addTask(any());
     }
 }
