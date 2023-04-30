@@ -30,7 +30,6 @@ import org.junit.Test;
 
 import com.linecorp.decaton.client.DecatonClient;
 import com.linecorp.decaton.processor.runtime.PerKeyQuotaConfig;
-import com.linecorp.decaton.processor.runtime.PerKeyQuotaConfig.QuotaCallback.Action;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.ProcessorSubscription;
 import com.linecorp.decaton.processor.runtime.ProcessorsBuilder;
@@ -86,7 +85,7 @@ public class PerKeyQuotaTest {
                                                                .window(Duration.ofMillis(50L))
                                                                .callback((key, metric) -> {
                                                                    quotaLatch.countDown();
-                                                                   return Action.builder().topic(shapingTopic).build();
+                                                                   return shapingTopic;
                                                                })
                                                                .build())
                            // Override shaping topic's processing rate to unlimited to speedup test execution
