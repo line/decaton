@@ -44,16 +44,14 @@ import org.mockito.junit.MockitoRule;
 
 import com.linecorp.decaton.processor.runtime.DefaultSubPartitioner;
 import com.linecorp.decaton.processor.runtime.PerKeyQuotaConfig.QuotaCallback;
-import com.linecorp.decaton.processor.runtime.PerKeyQuotaConfig.QuotaCallback.Action;
 import com.linecorp.decaton.processor.runtime.PerKeyQuotaConfig.QuotaCallback.Metrics;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.internal.PerKeyQuotaManager.QuotaUsage;
 import com.linecorp.decaton.processor.runtime.internal.PerKeyQuotaManager.UsageType;
-import com.linecorp.decaton.processor.runtime.internal.QuotaApplier.Impl;
 import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider;
 import com.linecorp.decaton.protocol.Sample.HelloTask;
 
-public class QuotaApplierTest {
+public class QuotaApplierImplTest {
     private final TopicPartition tp = new TopicPartition("topic", 42);
     private final HelloTask task = HelloTask.newBuilder()
                                             .setName("hello")
@@ -72,7 +70,7 @@ public class QuotaApplierTest {
 
     @Before
     public void setUp() {
-        applier = new Impl(
+        applier = new QuotaApplierImpl(
                 producer,
                 callback,
                 new SubscriptionScope("subscription",
@@ -96,7 +94,7 @@ public class QuotaApplierTest {
         OffsetState offsetState = new OffsetState(123);
         ConsumerRecord<byte[], byte[]> record =
                 new ConsumerRecord<>(tp.topic(), tp.partition(), 1, key, task.toByteArray());
-        doReturn(Action.builder().topic("foo").build()).when(callback).apply(eq(record), eq(metrics));
+        doReturn("foo").when(callback).apply(eq(record), eq(metrics));
         doAnswer(inv -> {
             Callback cb = inv.getArgument(1);
             cb.onCompletion(new RecordMetadata(tp, 1, 2, 3, 4, 5), null);

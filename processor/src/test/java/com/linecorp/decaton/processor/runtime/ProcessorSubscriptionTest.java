@@ -67,7 +67,7 @@ import com.linecorp.decaton.processor.TaskMetadata;
 import com.linecorp.decaton.processor.runtime.SubscriptionStateListener.State;
 import com.linecorp.decaton.processor.runtime.internal.AbstractDecatonProperties.Builder;
 import com.linecorp.decaton.processor.runtime.internal.ConsumerSupplier;
-import com.linecorp.decaton.processor.runtime.internal.QuotaApplier;
+import com.linecorp.decaton.processor.runtime.internal.NoopQuotaApplier;
 import com.linecorp.decaton.processor.runtime.internal.SubscriptionScope;
 import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider;
 
@@ -143,7 +143,7 @@ public class ProcessorSubscriptionTest {
         return new ProcessorSubscription(
                 scope,
                 () -> consumer,
-                () -> QuotaApplier.NoopApplier.INSTANCE,
+                () -> NoopQuotaApplier.INSTANCE,
                 builder.build(null),
                 scope.props(),
                 listener);
@@ -267,7 +267,7 @@ public class ProcessorSubscriptionTest {
         final ProcessorSubscription subscription = new ProcessorSubscription(
                 scope,
                 () -> consumer,
-                () -> QuotaApplier.NoopApplier.INSTANCE,
+                () -> NoopQuotaApplier.INSTANCE,
                 ProcessorsBuilder.consuming(scope.topic(),
                                             (byte[] bytes) -> new DecatonTask<>(
                                                     TaskMetadata.builder().build(), "dummy", bytes))

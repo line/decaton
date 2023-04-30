@@ -32,7 +32,7 @@ import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-class PerKeyQuotaManager {
+public class PerKeyQuotaManager {
     /*
      * These count-min parameters are determined to achieve
      * sufficient accuracy for most use cases with reasonable memory footprint.
@@ -49,6 +49,9 @@ class PerKeyQuotaManager {
      */
     private static final double EPSILON = 0.00005;
     private static final double DELTA = 0.00001;
+
+    private static volatile double epsilon = EPSILON;
+    private static volatile double delta = DELTA;
 
     enum UsageType {
         COMPLY,
@@ -77,6 +80,15 @@ class PerKeyQuotaManager {
         this.windowedStat = windowedStat;
         processingRate = scope.props().get(ProcessorProperties.CONFIG_PER_KEY_QUOTA_PROCESSING_RATE);
         windowMs = scope.perKeyQuotaConfig().get().window().toMillis();
+    }
+
+    /**
+     * Set parameters to adjust the accuracy of Count-Min sketch, which {@link KeyCounter} internally uses.
+     * If default parameters don't fit your use case, you can adjust them by calling this method.
+     */
+    public static void setCountMinParameters(double epsilon, double delta) {
+        PerKeyQuotaManager.epsilon = epsilon;
+        PerKeyQuotaManager.delta = delta;
     }
 
     public static PerKeyQuotaManager create(PartitionScope scope) {

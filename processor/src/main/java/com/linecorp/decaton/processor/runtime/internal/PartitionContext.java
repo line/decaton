@@ -156,10 +156,10 @@ public class PartitionContext implements AutoCloseable {
                           OffsetState offsetState,
                           RecordTraceHandle traceHandle,
                           QuotaApplier quotaApplier) {
-        if (!quotaApplier.apply(record, offsetState, quotaUsage(record.key()))) {
+        if (!quotaApplier.apply(record, offsetState, maybeRecordQuotaUsage(record.key()))) {
             TaskRequest request = new TaskRequest(
                     scope.topicPartition(), record.offset(), offsetState, record.key(),
-                    record.headers(), traceHandle, record.value(), quotaUsage(record.key()));
+                    record.headers(), traceHandle, record.value(), maybeRecordQuotaUsage(record.key()));
             partitionProcessor.addTask(request);
         }
 
@@ -201,7 +201,7 @@ public class PartitionContext implements AutoCloseable {
     }
 
     // visible for testing
-    QuotaUsage quotaUsage(byte[] key) {
+    QuotaUsage maybeRecordQuotaUsage(byte[] key) {
         if (perKeyQuotaManager == null) {
             return null;
         }

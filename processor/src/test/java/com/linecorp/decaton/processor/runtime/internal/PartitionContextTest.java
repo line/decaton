@@ -85,25 +85,25 @@ public class PartitionContextTest {
     public void testQuotaUsage() {
         PartitionContext context = new PartitionContext(
                 scope("topic", Optional.of(PerKeyQuotaConfig.shape())), processors, MAX_PENDING_RECORDS);
-        assertEquals(UsageType.COMPLY, context.quotaUsage(new byte[0]).type());
+        assertEquals(UsageType.COMPLY, context.maybeRecordQuotaUsage(new byte[0]).type());
     }
 
     @Test
     public void testQuotaUsageWhenDisabled() {
         PartitionContext context = new PartitionContext(
                 scope("topic", Optional.empty()), processors, MAX_PENDING_RECORDS);
-        assertNull(context.quotaUsage(new byte[0]));
+        assertNull(context.maybeRecordQuotaUsage(new byte[0]));
     }
 
     @Test
     public void testQuotaUsageNonTargetTopic() {
         PartitionContext context = new PartitionContext(
                 scope("topic-shaping", Optional.of(PerKeyQuotaConfig.shape())), processors, MAX_PENDING_RECORDS);
-        assertNull(context.quotaUsage(new byte[0]));
+        assertNull(context.maybeRecordQuotaUsage(new byte[0]));
 
         context = new PartitionContext(
                 scope("topic-retry", Optional.of(PerKeyQuotaConfig.shape())), processors, MAX_PENDING_RECORDS);
-        assertNull(context.quotaUsage(new byte[0]));
+        assertNull(context.maybeRecordQuotaUsage(new byte[0]));
     }
 
     @Test

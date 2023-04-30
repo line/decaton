@@ -16,30 +16,27 @@
 
 package com.linecorp.decaton.processor.runtime.internal;
 
-import java.util.Arrays;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.producer.Producer;
-import org.apache.kafka.clients.producer.ProducerRecord;
 
-import com.linecorp.decaton.processor.Completion;
-import com.linecorp.decaton.processor.metrics.Metrics;
-import com.linecorp.decaton.processor.metrics.Metrics.ShapingMetrics;
 import com.linecorp.decaton.processor.runtime.PerKeyQuotaConfig.QuotaCallback;
-import com.linecorp.decaton.processor.runtime.PerKeyQuotaConfig.QuotaCallback.Action;
 import com.linecorp.decaton.processor.runtime.internal.PerKeyQuotaManager.QuotaUsage;
-import com.linecorp.decaton.processor.runtime.internal.PerKeyQuotaManager.UsageType;
-
-import lombok.extern.slf4j.Slf4j;
 
 /**
  * An interface which is responsible for applying quota to a {@link TaskRequest}.
- * When per-key-quota feature is not enabled, you should use {@link QuotaApplier.NoopApplier}
+ * When per-key-quota feature is not enabled, you should use {@link NoopQuotaApplier}
  */
 public interface QuotaApplier extends AutoCloseable {
+    /**
+     * Maybe applying a quota to the given {@link TaskRequest}.
+     * If quota is applied, this method will handle the task accordingly based on
+     * the {@link QuotaCallback} result and return true.
+     * Otherwise, this method will return false.
+     * If true is returned, the caller should not enqueue the task to the processor.
+     * @param record the task record to apply quota.
+     * @param offsetState the offset state of the task.
+     * @param quotaUsage the observed quota usage of the key
+     * @return true if quota is applied, false otherwise.
+     */
     boolean apply(ConsumerRecord<byte[], byte[]> record,
                   OffsetState offsetState,
                   QuotaUsage quotaUsage);
@@ -47,108 +44,5 @@ public interface QuotaApplier extends AutoCloseable {
     @Override
     default void close() {
         // do nothing
-    };
-
-    enum NoopApplier implements QuotaApplier {
-        INSTANCE;
-
-        @Override
-        public boolean apply(ConsumerRecord<byte[], byte[]> record,
-                             OffsetState offsetState,
-                             QuotaUsage quotaUsage) {
-            return false;
-        }
-    }
-
-    @Slf4j
-    class Impl implements QuotaApplier {
-        private final ExecutorService shapingExecutor;
-        private final Producer<byte[], byte[]> producer;
-        private final QuotaCallback callback;
-        private final ShapingMetrics metrics;
-
-        public Impl(Producer<byte[], byte[]> producer,
-                    QuotaCallback callback,
-                    SubscriptionScope scope) {
-            this.producer = producer;
-            this.callback = callback;
-            shapingExecutor = Executors.newSingleThreadExecutor(Utils.namedThreadFactory("TaskShaper"));
-            metrics = Metrics.withTags("subscription", scope.subscriptionId()).new ShapingMetrics();
-        }
-
-        /**
-         * Maybe applying a quota to the given {@link TaskRequest}.
-         * If quota is applied, this method will handle the task accordingly based on
-         * the {@link QuotaCallback} result and return true.
-         * Otherwise, this method will return false.
-         * If true is returned, the caller should not enqueue the task to the processor.
-         * @param record the task record to apply quota.
-         * @param offsetState the offset state of the task.
-         * @param quotaUsage the observed quota usage of the key
-         * @return true if quota is applied, false otherwise.
-         */
-        @Override
-        public boolean apply(ConsumerRecord<byte[], byte[]> record,
-                             OffsetState offsetState,
-                             QuotaUsage quotaUsage) {
-            if (quotaUsage == null || quotaUsage.type() == UsageType.COMPLY) {
-                return false;
-            }
-
-            final Action action;
-            Completion completion = offsetState.completion();
-            try {
-                action = callback.apply(record, quotaUsage.metrics());
-            } catch (Exception e) {
-                log.error("Exception thrown from the quota callback for key: {}", Arrays.toString(record.key()), e);
-                metrics.shapingQueueingFailed.increment();
-                completion.complete();
-                return true;
-            }
-
-            ProducerRecord<byte[], byte[]> producerRecord = new ProducerRecord<>(
-                    action.topic(), null, record.key(), record.value(), record.headers());
-            shapingExecutor.execute(() -> {
-                try {
-                    producer.send(producerRecord, (r, e) -> {
-                        if (e == null) {
-                            metrics.shapingQueuedTasks.increment();
-                        } else {
-                            metrics.shapingQueueingFailed.increment();
-                            log.error("Failed to send task to the shaping topic", e);
-                        }
-                        completion.complete();
-                    });
-                } catch (Exception e) {
-                    log.error("Exception thrown while sending task to the shaping topic", e);
-                    metrics.shapingQueueingFailed.increment();
-                    completion.complete();
-                }
-            });
-            return true;
-        }
-
-        @Override
-        public void close() {
-            shapingExecutor.shutdown();
-            try {
-                shapingExecutor.awaitTermination(Long.MAX_VALUE, TimeUnit.MILLISECONDS);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                log.error("Interrupted while awaiting shaping tasks are produced", e);
-                // We don't re-throw the exception here to clean-up other resources
-            }
-
-            safeClose(producer, "shaping producer");
-            safeClose(producer, "quota callback");
-        }
-
-        private static void safeClose(AutoCloseable closeable, String name) {
-            try {
-                closeable.close();
-            } catch (Exception e) {
-                log.error("Exception thrown while closing {}", name, e);
-            }
-        }
     }
 }

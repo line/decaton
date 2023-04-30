@@ -31,7 +31,6 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 
-import com.linecorp.decaton.processor.runtime.PerKeyQuotaConfig.QuotaCallback.Action;
 import com.linecorp.decaton.processor.runtime.internal.RateLimiter;
 
 import lombok.Builder;
@@ -95,13 +94,6 @@ public class PerKeyQuotaConfig {
         @Value
         @Builder
         @Accessors(fluent = true)
-        class Action {
-            String topic;
-        }
-
-        @Value
-        @Builder
-        @Accessors(fluent = true)
         class Metrics {
             /**
              * Observed processing rate for the key
@@ -110,13 +102,14 @@ public class PerKeyQuotaConfig {
         }
 
         /**
-         * Decide the action against the key that is detected as bursting.
+         * Decide the destination topic for shaping against the key that is detected as bursting.
          * Note that whenever this callback throws, the task will be marked as completed immediately (i.e. will be committed)
          * without sending it to the shaping topic nor queueing to the processor.
          * @param record record which have bursted key
          * @param metrics observed metric for the key
+         * @return destination topic for shaping
          */
-        Action apply(ConsumerRecord<byte[], byte[]> record, Metrics metrics);
+        String apply(ConsumerRecord<byte[], byte[]> record, Metrics metrics);
 
         @Override
         default void close() {
@@ -133,7 +126,7 @@ public class PerKeyQuotaConfig {
                 .shapingTopicsSupplier(topic -> Collections.singleton(defaultShapingTopic(topic)))
                 .callbackSupplier(topic -> {
                     String shapingTopic = defaultShapingTopic(topic);
-                    return (key, metrics) -> new Action(shapingTopic);
+                    return (key, metrics) -> shapingTopic;
                 })
                 .build();
     }

@@ -38,7 +38,9 @@ import com.linecorp.decaton.client.KafkaProducerSupplier;
 import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.ProcessingContext;
 import com.linecorp.decaton.processor.TaskMetadata;
+import com.linecorp.decaton.processor.runtime.internal.NoopQuotaApplier;
 import com.linecorp.decaton.processor.runtime.internal.QuotaApplier;
+import com.linecorp.decaton.processor.runtime.internal.QuotaApplierImpl;
 import com.linecorp.decaton.processor.tracing.TracingProvider;
 import com.linecorp.decaton.processor.runtime.internal.ConsumerSupplier;
 import com.linecorp.decaton.processor.runtime.internal.DecatonProcessorSupplierImpl;
@@ -299,7 +301,7 @@ public class SubscriptionBuilder {
 
     private Supplier<QuotaApplier> quotaApplierSupplier(SubscriptionScope scope) {
         if (perKeyQuotaConfig == null) {
-            return () -> QuotaApplier.NoopApplier.INSTANCE;
+            return () -> NoopQuotaApplier.INSTANCE;
         }
         Properties producerConfig = new Properties();
         producerConfig.putAll(presetShapingProducerConfig);
@@ -309,7 +311,7 @@ public class SubscriptionBuilder {
                 Optional.ofNullable(perKeyQuotaConfig.producerSupplier())
                         .orElseGet(() -> properties -> new KafkaProducer<>
                                 (properties, new ByteArraySerializer(), new ByteArraySerializer()));
-        return () -> new QuotaApplier.Impl(
+        return () -> new QuotaApplierImpl(
                 producerSupplier.apply(producerConfig),
                 perKeyQuotaConfig.callbackSupplier().apply(scope.topic()),
                 scope);
