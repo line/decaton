@@ -49,6 +49,7 @@ abstract class ProducerAdaptor<K, V> implements Producer<K, V> {
         delegate.beginTransaction();
     }
 
+    @Deprecated
     @Override
     public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets, String consumerGroupId)
             throws ProducerFencedException {
