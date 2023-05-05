@@ -19,9 +19,6 @@ package com.linecorp.decaton.client;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
-import org.apache.kafka.clients.producer.Partitioner;
-import org.apache.kafka.common.Cluster;
-
 import com.linecorp.decaton.common.Serializer;
 
 import lombok.Builder;

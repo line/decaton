@@ -187,7 +187,7 @@ public final class Utils {
 
         ExecutorService executor = Executors.newFixedThreadPool(
                 tasks.size(), namedThreadFactory(i -> subject + '/' + i));
-        CompletableFuture[] results =
+        CompletableFuture<?>[] results =
                 tasks.stream()
                      .map(t -> CompletableFuture.runAsync(() -> {
                          try {

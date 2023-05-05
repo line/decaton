@@ -16,10 +16,10 @@
 
 package com.linecorp.decaton.processor.runtime;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -39,7 +39,7 @@ public class SubPartitionerTest {
     @Before
     public void setUp() {
         for (int i = 0; i < keys.length; i++) {
-            keys[i] = String.valueOf(i).getBytes(StandardCharsets.UTF_8);
+            keys[i] = String.valueOf(i).getBytes(UTF_8);
         }
     }
 
@@ -98,7 +98,7 @@ public class SubPartitionerTest {
             for (byte[] key : keys) {
                 int assign1 = subPartitioner.subPartitionFor(key);
                 int assign2 = subPartitioner.subPartitionFor(key);
-                assertEquals(String.format("[%d] assign of %s", subpartitionCount, key),
+                assertEquals(String.format("[%d] assign of %s", subpartitionCount, new String(key, UTF_8)),
                              assign2, assign1);
             }
         }

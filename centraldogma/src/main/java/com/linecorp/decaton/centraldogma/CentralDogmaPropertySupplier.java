@@ -17,7 +17,6 @@
 package com.linecorp.decaton.centraldogma;
 
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -36,7 +35,6 @@ import com.linecorp.centraldogma.client.CentralDogmaRepository;
 import com.linecorp.centraldogma.client.Watcher;
 import com.linecorp.centraldogma.common.Change;
 import com.linecorp.centraldogma.common.ChangeConflictException;
-import com.linecorp.centraldogma.common.EntryType;
 import com.linecorp.centraldogma.common.PathPattern;
 import com.linecorp.centraldogma.common.Query;
 import com.linecorp.centraldogma.common.Revision;
@@ -291,12 +289,10 @@ public class CentralDogmaPropertySupplier implements PropertySupplier, AutoClose
     static JsonNode convertPropertyListToJsonNode(List<Property<?>> properties) {
         final ObjectNode propertiesObjectNode = objectMapper.createObjectNode();
         properties.forEach(
-                property -> {
-                    propertiesObjectNode.set(
-                            property.definition().name(),
-                            objectMapper.valueToTree(property.value())
-                    );
-                }
+                property -> propertiesObjectNode.set(
+                        property.definition().name(),
+                        objectMapper.valueToTree(property.value())
+                )
         );
         return propertiesObjectNode;
     }

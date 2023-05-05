@@ -99,11 +99,12 @@ public class ConsumeManagerTest {
 
     @Test
     public void poll() {
-        List<ConsumerRecord<String, byte[]>> records = Arrays.asList(
-                new ConsumerRecord<>(TOPIC, 1, 100, "key", new byte[0]),
-                new ConsumerRecord<>(TOPIC, 1, 101, "key", new byte[0]),
-                new ConsumerRecord<>(TOPIC, 1, 102, "key", new byte[0]));
-        ConsumerRecords<String, byte[]> consumerRecords =
+        byte[] key = { 'k', 'e', 'y' };
+        List<ConsumerRecord<byte[], byte[]>> records = Arrays.asList(
+                new ConsumerRecord<>(TOPIC, 1, 100, key, new byte[0]),
+                new ConsumerRecord<>(TOPIC, 1, 101, key, new byte[0]),
+                new ConsumerRecord<>(TOPIC, 1, 102, key, new byte[0]));
+        ConsumerRecords<byte[], byte[]> consumerRecords =
                 new ConsumerRecords<>(Collections.singletonMap(new TopicPartition(TOPIC, 1), records));
         doReturn(consumerRecords).when(consumer).poll(any());
 

@@ -16,9 +16,8 @@
 
 package com.linecorp.decaton.client.kafka;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.Assert.assertArrayEquals;
-
-import java.nio.charset.Charset;
 
 import org.apache.kafka.common.errors.SerializationException;
 import org.junit.Test;
@@ -29,7 +28,7 @@ public class PrintableAsciiStringSerializerTest {
     @Test
     public void testSerializeAsciiString() {
         String text = "abcdef";
-        assertArrayEquals(text.getBytes(Charset.forName("UTF-8")), serializer.serialize(null, text));
+        assertArrayEquals(text.getBytes(UTF_8), serializer.serialize(null, text));
     }
 
     @Test(expected = SerializationException.class)

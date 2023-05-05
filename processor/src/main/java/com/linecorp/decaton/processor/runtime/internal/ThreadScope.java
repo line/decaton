@@ -16,8 +16,6 @@
 
 package com.linecorp.decaton.processor.runtime.internal;
 
-import com.linecorp.decaton.processor.runtime.internal.PartitionScope;
-
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.experimental.Accessors;

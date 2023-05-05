@@ -38,8 +38,6 @@ import org.mockito.junit.MockitoRule;
 
 import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.runtime.ProcessorScope;
-import com.linecorp.decaton.processor.runtime.internal.DecatonProcessingContext;
-import com.linecorp.decaton.processor.runtime.internal.DecatonProcessorSupplierImpl;
 import com.linecorp.decaton.protocol.Sample.HelloTask;
 
 public class DecatonProcessorSupplierImplTest {

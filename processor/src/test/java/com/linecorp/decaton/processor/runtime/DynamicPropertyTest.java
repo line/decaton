@@ -35,9 +35,6 @@ import org.mockito.Spy;
 import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
 
-import com.linecorp.decaton.processor.runtime.DynamicProperty;
-import com.linecorp.decaton.processor.runtime.PropertyDefinition;
-
 public class DynamicPropertyTest {
     @Rule
     public MockitoRule rule = MockitoJUnit.rule();

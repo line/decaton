@@ -41,9 +41,6 @@ import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
 
-import com.linecorp.decaton.processor.runtime.internal.AveragingRateLimiter;
-import com.linecorp.decaton.processor.runtime.internal.RateLimiter;
-
 public class RateLimiterTest {
     @Rule
     public MockitoRule rule = MockitoJUnit.rule();

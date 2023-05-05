@@ -73,9 +73,9 @@ public class CoreFunctionalityTest {
         Random rand = randomRule.random();
         ProcessorTestSuite
                 .builder(rule)
-                .configureProcessorsBuilder(builder -> builder.thenProcess(() -> (ctx, task) -> {
-                    Thread.sleep(rand.nextInt(10));
-                }, ProcessorScope.PARTITION))
+                .configureProcessorsBuilder(
+                        builder -> builder.thenProcess(
+                                () -> (ctx, task) -> Thread.sleep(rand.nextInt(10)), ProcessorScope.PARTITION))
                 .propertySupplier(StaticPropertySupplier.of(
                         Property.ofStatic(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY, 16)
                 ))
@@ -88,9 +88,9 @@ public class CoreFunctionalityTest {
         Random rand = randomRule.random();
         ProcessorTestSuite
                 .builder(rule)
-                .configureProcessorsBuilder(builder -> builder.thenProcess(() -> (ctx, task) -> {
-                    Thread.sleep(rand.nextInt(10));
-                }, ProcessorScope.THREAD))
+                .configureProcessorsBuilder(
+                        builder -> builder.thenProcess(
+                                () -> (ctx, task) -> Thread.sleep(rand.nextInt(10)), ProcessorScope.THREAD))
                 .propertySupplier(StaticPropertySupplier.of(
                         Property.ofStatic(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY, 16)
                 ))
@@ -181,9 +181,9 @@ public class CoreFunctionalityTest {
         Random rand = randomRule.random();
         ProcessorTestSuite
                 .builder(rule)
-                .configureProcessorsBuilder(builder -> builder.thenProcess((ctx, task) -> {
-                    Thread.sleep(rand.nextInt(10));
-                }))
+                .configureProcessorsBuilder(
+                        builder -> builder.thenProcess(
+                                (ctx, task) -> Thread.sleep(rand.nextInt(10))))
                 .propertySupplier(StaticPropertySupplier.of(
                         Property.ofStatic(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY, 1),
                         Property.ofStatic(ProcessorProperties.CONFIG_MAX_PENDING_RECORDS, 100)
