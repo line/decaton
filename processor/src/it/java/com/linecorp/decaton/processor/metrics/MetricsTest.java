@@ -49,6 +49,7 @@ import com.linecorp.decaton.protocol.Sample.HelloTask;
 import com.linecorp.decaton.testing.KafkaClusterRule;
 import com.linecorp.decaton.testing.TestUtils;
 
+import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Meter;
 import io.micrometer.prometheus.PrometheusConfig;
@@ -180,15 +181,21 @@ public class MetricsTest {
             // count all tasks regardless of the result
             TestUtils.awaitCondition("total processed task count should becomes 4",
                     () -> Metrics.registry()
-                                .find("decaton.tasks.processed")
-                                .tags("topic", topicName)
-                                .counters().stream().mapToDouble(cn -> cn.count()).sum() == 4.0);
+                                 .find("decaton.tasks.processed")
+                                 .tags("topic", topicName)
+                                 .counters()
+                                 .stream()
+                                 .mapToDouble(Counter::count)
+                                 .sum() == 4.0);
             // count synchronous failure only
             TestUtils.awaitCondition("total error task count should becomes 1",
                     () -> Metrics.registry()
-                            .find("decaton.tasks.error")
-                            .tags("topic", topicName)
-                            .counters().stream().mapToDouble(cn -> cn.count()).sum() == 1.0);
+                                 .find("decaton.tasks.error")
+                                 .tags("topic", topicName)
+                                 .counters()
+                                 .stream()
+                                 .mapToDouble(Counter::count)
+                                 .sum() == 1.0);
         }
     }
 

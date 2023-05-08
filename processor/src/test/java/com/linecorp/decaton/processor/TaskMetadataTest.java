@@ -20,8 +20,6 @@ import static org.junit.Assert.assertEquals;
 
 import org.junit.Test;
 
-import com.linecorp.decaton.processor.TaskMetadata;
-
 public class TaskMetadataTest {
     @Test
     public void testDefaultValue() {

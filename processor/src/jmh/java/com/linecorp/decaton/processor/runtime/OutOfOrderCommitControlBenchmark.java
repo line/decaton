@@ -36,7 +36,6 @@ import org.openjdk.jmh.annotations.Warmup;
 
 import com.linecorp.decaton.processor.DeferredCompletion;
 import com.linecorp.decaton.processor.metrics.Metrics;
-import com.linecorp.decaton.processor.metrics.internal.AvailableTags;
 import com.linecorp.decaton.processor.runtime.internal.OffsetState;
 import com.linecorp.decaton.processor.runtime.internal.OffsetStateReaper;
 import com.linecorp.decaton.processor.runtime.internal.OutOfOrderCommitControl;

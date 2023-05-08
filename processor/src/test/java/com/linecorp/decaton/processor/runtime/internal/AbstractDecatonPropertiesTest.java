@@ -25,7 +25,6 @@ import java.util.Map;
 
 import org.junit.Test;
 
-import com.linecorp.decaton.processor.runtime.internal.AbstractDecatonProperties;
 import com.linecorp.decaton.processor.runtime.Property;
 import com.linecorp.decaton.processor.runtime.PropertyDefinition;
 import com.linecorp.decaton.processor.runtime.StaticPropertySupplier;

@@ -24,7 +24,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -45,9 +44,9 @@ import org.mockito.junit.MockitoRule;
 
 import com.linecorp.decaton.client.internal.DecatonTaskProducer;
 import com.linecorp.decaton.processor.ProcessingContext;
+import com.linecorp.decaton.processor.TaskMetadata;
 import com.linecorp.decaton.processor.runtime.DefaultSubPartitioner;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
-import com.linecorp.decaton.processor.TaskMetadata;
 import com.linecorp.decaton.processor.runtime.RetryConfig;
 import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider;
 import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;

@@ -158,7 +158,7 @@ public class ProcessingContextImplTest {
 
         AtomicBoolean timeoutCbCalled = new AtomicBoolean();
         Function<Completion, TimeoutChoice> timeoutCb = comp -> {
-            timeoutCbCalled.set(true);;
+            timeoutCbCalled.set(true);
             return TimeoutChoice.GIVE_UP;
         };
         ProcessingContextImpl<HelloTask> context = context(NoopTrace.INSTANCE, (ctx, task) -> {
