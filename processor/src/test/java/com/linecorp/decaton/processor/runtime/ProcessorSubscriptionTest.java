@@ -348,10 +348,13 @@ public class ProcessorSubscriptionTest {
         subscribed.await();
 
         consumer.rebalance(singleton(tp));
-        consumer.addRecord(new ConsumerRecord<>(tp.topic(), tp.partition(), 10, new byte[0], NO_DATA));
 
+        consumer.schedulePollTask(() -> {
+            consumer.rebalanceListener.onPartitionsAssigned(singleton(tp));
+            consumer.addRecord(new ConsumerRecord<>(tp.topic(), tp.partition(), 10, new byte[0], NO_DATA));
+        });
         // records will be returned by this poll
-        consumer.schedulePollTask(() -> consumer.rebalanceListener.onPartitionsAssigned(singleton(tp)));
+        consumer.scheduleNopPollTask();
         consumer.schedulePollTask(() -> {
             try {
                 // after a task is completed (i.e. it will be committed after updating watermark),
