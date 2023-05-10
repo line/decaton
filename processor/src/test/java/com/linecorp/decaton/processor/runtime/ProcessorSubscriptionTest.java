@@ -53,6 +53,7 @@ import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.junit.Rule;
 import org.junit.Test;
 import org.mockito.Mock;
@@ -64,6 +65,7 @@ import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.DeferredCompletion;
 import com.linecorp.decaton.processor.TaskMetadata;
 import com.linecorp.decaton.processor.runtime.SubscriptionStateListener.State;
+import com.linecorp.decaton.processor.runtime.internal.AbstractDecatonProperties.Builder;
 import com.linecorp.decaton.processor.runtime.internal.ConsumerSupplier;
 import com.linecorp.decaton.processor.runtime.internal.SubscriptionScope;
 import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider;
@@ -99,12 +101,24 @@ public class ProcessorSubscriptionTest {
     }
 
     private static SubscriptionScope scope(String topic, long waitForProcessingOnClose) {
+        return scope(topic, waitForProcessingOnClose, null);
+    }
+
+    private static SubscriptionScope scope(String topic,
+                                           long waitForProcessingOnClose,
+                                           PropertySupplier additionalProps) {
+        Builder<ProcessorProperties> propertiesBuilder = ProcessorProperties
+                .builder()
+                .set(Property.ofStatic(
+                        ProcessorProperties.CONFIG_SHUTDOWN_TIMEOUT_MS,
+                        waitForProcessingOnClose));
+        if (additionalProps != null) {
+            propertiesBuilder.setBySupplier(additionalProps);
+        }
         return new SubscriptionScope(
                 "subscription",
                 topic,
-                Optional.empty(),
-                ProcessorProperties.builder().set(Property.ofStatic(
-                        ProcessorProperties.CONFIG_SHUTDOWN_TIMEOUT_MS, waitForProcessingOnClose)).build(),
+                Optional.empty(), propertiesBuilder.build(),
                 NoopTracingProvider.INSTANCE,
                 ConsumerSupplier.DEFAULT_MAX_POLL_RECORDS,
                 DefaultSubPartitioner::new);
@@ -289,5 +303,72 @@ public class ProcessorSubscriptionTest {
         // The main point is that the below close returns within timeout.
         subscription.close();
         verify(consumer).close();
+    }
+
+    @Test(timeout = 10000L)
+    public void testCommitFailureOnPartitionRevocation() throws Exception {
+        TopicPartition tp = new TopicPartition("topic", 0);
+
+        CountDownLatch subscribed = new CountDownLatch(1);
+        CountDownLatch taskCompleted = new CountDownLatch(1);
+        CountDownLatch pollAfterRebalance = new CountDownLatch(1);
+        DecatonMockConsumer consumer = new DecatonMockConsumer() {
+            @Override
+            public synchronized void subscribe(Collection<String> topics, ConsumerRebalanceListener listener) {
+                super.subscribe(topics, listener);
+                subscribed.countDown();
+            }
+
+            @Override
+            public synchronized void commitSync(Map<TopicPartition, OffsetAndMetadata> offsets) {
+                throw new RebalanceInProgressException();
+            }
+        };
+        consumer.updateEndOffsets(singletonMap(tp, 10L));
+        // disable periodic async commit and wait remaining task completion forever for stable test
+        SubscriptionScope scope = scope(tp.topic(), 0L,
+                                        StaticPropertySupplier.of(
+                                                Property.ofStatic(ProcessorProperties.CONFIG_COMMIT_INTERVAL_MS, Long.MAX_VALUE),
+                                                Property.ofStatic(ProcessorProperties.CONFIG_GROUP_REBALANCE_TIMEOUT_MS, Long.MAX_VALUE)
+                                        ));
+        final ProcessorSubscription subscription = new ProcessorSubscription(
+                scope,
+                () -> consumer,
+                ProcessorsBuilder.consuming(scope.topic(),
+                                            (byte[] bytes) -> new DecatonTask<>(
+                                                    TaskMetadata.builder().build(), "dummy", bytes))
+                                 .thenProcess((ctx, task) -> {
+                                     ctx.deferCompletion().complete();
+                                     taskCompleted.countDown();
+                                 })
+                                 .build(null),
+                scope.props(),
+                null);
+        subscription.start();
+        subscribed.await();
+
+        consumer.rebalance(singleton(tp));
+
+        consumer.schedulePollTask(() -> {
+            consumer.rebalanceListener.onPartitionsAssigned(singleton(tp));
+            consumer.addRecord(new ConsumerRecord<>(tp.topic(), tp.partition(), 10, new byte[0], NO_DATA));
+        });
+        // records will be returned by this poll
+        consumer.scheduleNopPollTask();
+        consumer.schedulePollTask(() -> {
+            try {
+                // after a task is completed (i.e. it will be committed after updating watermark),
+                // invoke the rebalance listener to cause commitSync
+                taskCompleted.await();
+                consumer.rebalanceListener.onPartitionsRevoked(consumer.assignment());
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+        });
+        // If the subscription isn't killed, this poll should be called
+        consumer.schedulePollTask(pollAfterRebalance::countDown);
+
+        pollAfterRebalance.await();
+        subscription.close();
     }
 }

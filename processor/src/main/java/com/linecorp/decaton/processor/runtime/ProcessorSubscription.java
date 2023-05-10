@@ -32,6 +32,7 @@ import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.TimeoutException;
 
 import com.linecorp.decaton.processor.metrics.Metrics;
@@ -80,8 +81,14 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
             waitForRemainingTasksCompletion(rebalanceTimeoutMillis.value());
             try {
                 commitManager.commitSync();
-            } catch (CommitFailedException | TimeoutException e) {
+            } catch (CommitFailedException | TimeoutException | RebalanceInProgressException e) {
                 log.warn("Offset commit failed at group rebalance", e);
+            } catch (RuntimeException e) {
+                // Even when offset commit failed due to unknown reason,
+                // we just log error here and don't kill the subscription because
+                // we suppose the only problem to do so is more task-duplications after the rebalance,
+                // which is not considered as fatal in at-least-once processing Decaton guarantees.
+                log.error("Offset commit failed at group rebalance by unexpected reason", e);
             }
 
             contexts.markRevoking(revokingPartitions);
