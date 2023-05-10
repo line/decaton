@@ -83,6 +83,12 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
                 commitManager.commitSync();
             } catch (CommitFailedException | TimeoutException | RebalanceInProgressException e) {
                 log.warn("Offset commit failed at group rebalance", e);
+            } catch (RuntimeException e) {
+                // Even when offset commit failed due to unknown reason,
+                // we just log error here and don't kill the subscription because
+                // we suppose the only problem to do so is more task-duplications after the rebalance,
+                // which is not considered as fatal in at-least-once processing Decaton guarantees.
+                log.error("Offset commit failed at group rebalance by unexpected reason", e);
             }
 
             contexts.markRevoking(revokingPartitions);
