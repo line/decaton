@@ -252,8 +252,8 @@ public class SubscriptionBuilder {
         ConsumerSupplier consumerSupplier = new ConsumerSupplier(consumerConfig);
 
         return new ProcessorSubscription(scope,
-                                         consumerSupplier,
-                                         quotaApplierSupplier(scope),
+                                         consumerSupplier.get(),
+                                         quotaApplier(scope),
                                          processorsBuilder.build(maybeRetryProcessorSupplier(scope)),
                                          props,
                                          stateListener);
@@ -299,9 +299,9 @@ public class SubscriptionBuilder {
         }, ProcessorScope.SINGLETON);
     }
 
-    private Supplier<QuotaApplier> quotaApplierSupplier(SubscriptionScope scope) {
+    private QuotaApplier quotaApplier(SubscriptionScope scope) {
         if (perKeyQuotaConfig == null) {
-            return () -> NoopQuotaApplier.INSTANCE;
+            return NoopQuotaApplier.INSTANCE;
         }
         Properties producerConfig = new Properties();
         producerConfig.putAll(presetShapingProducerConfig);
@@ -311,7 +311,7 @@ public class SubscriptionBuilder {
                 Optional.ofNullable(perKeyQuotaConfig.producerSupplier())
                         .orElseGet(() -> properties -> new KafkaProducer<>
                                 (properties, new ByteArraySerializer(), new ByteArraySerializer()));
-        return () -> new QuotaApplierImpl(
+        return new QuotaApplierImpl(
                 producerSupplier.apply(producerConfig),
                 perKeyQuotaConfig.callbackSupplier().apply(scope.topic()),
                 scope);

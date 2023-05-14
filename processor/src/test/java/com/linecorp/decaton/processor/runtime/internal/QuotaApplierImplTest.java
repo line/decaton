@@ -27,7 +27,10 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.Callback;
@@ -66,7 +69,7 @@ public class QuotaApplierImplTest {
     @Mock
     private QuotaCallback callback;
 
-    private QuotaApplier applier;
+    private QuotaApplierImpl applier;
 
     @Before
     public void setUp() {
@@ -88,8 +91,9 @@ public class QuotaApplierImplTest {
         applier.close();
     }
 
-    @Test
+    @Test(timeout = 10000L)
     public void testViolateQuota() throws Exception {
+        CountDownLatch produceLatch = new CountDownLatch(1);
         Metrics metrics = Metrics.builder().rate(1000).build();
         OffsetState offsetState = new OffsetState(123);
         ConsumerRecord<byte[], byte[]> record =
@@ -98,15 +102,18 @@ public class QuotaApplierImplTest {
         doAnswer(inv -> {
             Callback cb = inv.getArgument(1);
             cb.onCompletion(new RecordMetadata(tp, 1, 2, 3, 4, 5), null);
+            produceLatch.countDown();
             return null;
         }).when(producer).send(any(), any());
         assertTrue(applier.apply(record, offsetState, new QuotaUsage(UsageType.VIOLATE, metrics)));
-        verify(callback, times(1)).apply(eq(record), eq(metrics));
 
-        // close the applier to await executor termination and ensure producer#send is called
-        applier.close();
+        produceLatch.await();
+        verify(callback, times(1)).apply(eq(record), eq(metrics));
         verify(producer, times(1)).send(any(), any());
         assertTrue(offsetState.completion().isComplete());
+
+        applier.close();
+        verify(callback, times(1)).close();
     }
 
     @Test
@@ -115,9 +122,57 @@ public class QuotaApplierImplTest {
         ConsumerRecord<byte[], byte[]> record =
                 new ConsumerRecord<>(tp.topic(), tp.partition(), 1, key, task.toByteArray());
         assertFalse(applier.apply(record, offsetState, QuotaUsage.COMPLY));
+
+        applier.shapingExecutor.shutdown();
+        applier.shapingExecutor.awaitTermination(Long.MAX_VALUE, TimeUnit.MILLISECONDS);
+
         verify(callback, never()).apply(any(), any());
-        applier.close();
         verify(producer, never()).send(any());
         assertFalse(offsetState.completion().isComplete());
+    }
+
+    @Test(timeout = 10000L)
+    public void testIgnoreQueuedTasksAfterClose() throws Exception {
+        CountDownLatch firstTaskLatch = new CountDownLatch(1);
+        CountDownLatch producerCloseLatch = new CountDownLatch(1);
+
+        OffsetState offsetState1 = new OffsetState(123);
+        OffsetState offsetState2 = new OffsetState(124);
+
+        ConsumerRecord<byte[], byte[]> record1 =
+                new ConsumerRecord<>(tp.topic(), tp.partition(), 123, key, task.toByteArray());
+        ConsumerRecord<byte[], byte[]> record2 =
+                new ConsumerRecord<>(tp.topic(), tp.partition(), 124, key, task.toByteArray());
+
+        Metrics metrics = Metrics.builder().rate(1000).build();
+
+        doAnswer(inv -> {
+            producerCloseLatch.countDown();
+            return null;
+        }).when(producer).close(eq(Duration.ZERO));
+
+        doAnswer(inv -> {
+            ConsumerRecord<byte[], byte[]> record = inv.getArgument(0);
+            if (record.offset() == 123L) {
+                firstTaskLatch.countDown();
+                producerCloseLatch.await();
+            }
+            return "foo";
+        }).when(callback).apply(any(), any());
+
+        // queue two shaping tasks. first one will be blocked until we initiate close
+        assertTrue(applier.apply(record1, offsetState1, new QuotaUsage(UsageType.VIOLATE, metrics)));
+        assertTrue(applier.apply(record2, offsetState2, new QuotaUsage(UsageType.VIOLATE, metrics)));
+
+        firstTaskLatch.await();
+
+        applier.close();
+
+        // check the callback is not invoked for 2nd task
+        verify(callback, times(1)).apply(any(), any());
+        verify(producer, never()).send(any());
+
+        assertFalse(offsetState1.completion().isComplete());
+        assertFalse(offsetState2.completion().isComplete());
     }
 }

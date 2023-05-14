@@ -142,8 +142,8 @@ public class ProcessorSubscriptionTest {
         }
         return new ProcessorSubscription(
                 scope,
-                () -> consumer,
-                () -> NoopQuotaApplier.INSTANCE,
+                consumer,
+                NoopQuotaApplier.INSTANCE,
                 builder.build(null),
                 scope.props(),
                 listener);
@@ -266,8 +266,8 @@ public class ProcessorSubscriptionTest {
         SubscriptionScope scope = scope(tp.topic(), 9000L);
         final ProcessorSubscription subscription = new ProcessorSubscription(
                 scope,
-                () -> consumer,
-                () -> NoopQuotaApplier.INSTANCE,
+                consumer,
+                NoopQuotaApplier.INSTANCE,
                 ProcessorsBuilder.consuming(scope.topic(),
                                             (byte[] bytes) -> new DecatonTask<>(
                                                     TaskMetadata.builder().build(), "dummy", bytes))
@@ -338,7 +338,8 @@ public class ProcessorSubscriptionTest {
                                         ));
         final ProcessorSubscription subscription = new ProcessorSubscription(
                 scope,
-                () -> consumer,
+                consumer,
+                NoopQuotaApplier.INSTANCE,
                 ProcessorsBuilder.consuming(scope.topic(),
                                             (byte[] bytes) -> new DecatonTask<>(
                                                     TaskMetadata.builder().build(), "dummy", bytes))

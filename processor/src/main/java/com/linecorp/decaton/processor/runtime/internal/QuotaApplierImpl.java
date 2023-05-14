@@ -16,10 +16,12 @@
 
 package com.linecorp.decaton.processor.runtime.internal;
 
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.Producer;
@@ -36,10 +38,12 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class QuotaApplierImpl implements QuotaApplier {
-    private final ExecutorService shapingExecutor;
+    // visible for testing
+    final ExecutorService shapingExecutor;
     private final Producer<byte[], byte[]> producer;
     private final QuotaCallback callback;
     private final ShapingMetrics metrics;
+    private final AtomicBoolean terminated = new AtomicBoolean(false);
 
     public QuotaApplierImpl(Producer<byte[], byte[]> producer,
                 QuotaCallback callback,
@@ -58,22 +62,35 @@ public class QuotaApplierImpl implements QuotaApplier {
             return false;
         }
 
-        final String topic;
         Completion completion = offsetState.completion();
-        try {
-            topic = callback.apply(record, quotaUsage.metrics());
-        } catch (Exception e) {
-            log.error("Exception thrown from the quota callback for key: {}", Arrays.toString(record.key()), e);
-            metrics.shapingQueueingFailed.increment();
-            completion.complete();
-            return true;
-        }
-
-        ProducerRecord<byte[], byte[]> producerRecord = new ProducerRecord<>(
-                topic, null, record.key(), record.value(), record.headers());
         shapingExecutor.execute(() -> {
+            if (terminated.get()) {
+                return;
+            }
+            final String topic;
+            try {
+                topic = callback.apply(record, quotaUsage.metrics());
+            } catch (Exception e) {
+                log.error("Exception thrown from the quota callback for key: {}", Arrays.toString(record.key()), e);
+                metrics.shapingQueueingFailed.increment();
+                completion.complete();
+                return;
+            }
+
+            ProducerRecord<byte[], byte[]> producerRecord = new ProducerRecord<>(
+                    topic, null, record.key(), record.value(), record.headers());
+            if (terminated.get()) {
+                return;
+            }
             try {
                 producer.send(producerRecord, (r, e) -> {
+                    // Here, processor subscription is about to be closed
+                    // (i.e. no more offsets will be committed), so we don't care the send result.
+                    // Regardless send is succeeded or not, the task will be processed again by other instances after the rebalance.
+                    if (terminated.get()) {
+                        return;
+                    }
+
                     if (e == null) {
                         metrics.shapingQueuedTasks.increment();
                     } else {
@@ -82,17 +99,27 @@ public class QuotaApplierImpl implements QuotaApplier {
                     }
                     completion.complete();
                 });
+            } catch (IllegalStateException e) {
+                // This exception is thrown when send() is called after the producer is closed.
+                // This still can happen if terminated flag is enabled right after we checked before send() call.
+                // This is an expected behavior, so we just ignore the exception.
             } catch (Exception e) {
                 log.error("Exception thrown while sending task to the shaping topic", e);
                 metrics.shapingQueueingFailed.increment();
                 completion.complete();
             }
         });
+
         return true;
     }
 
     @Override
     public void close() {
+        terminated.set(true);
+        // As the subscription is about to be closed, there's no point to wait for the tasks to be produced.
+        // Closing the producer with zero timeout will fail all queued batches.
+        safeClose(() -> producer.close(Duration.ZERO), "shaping producer");
+
         shapingExecutor.shutdown();
         try {
             shapingExecutor.awaitTermination(Long.MAX_VALUE, TimeUnit.MILLISECONDS);
@@ -102,13 +129,12 @@ public class QuotaApplierImpl implements QuotaApplier {
             // We don't re-throw the exception here to clean-up other resources
         }
 
-        safeClose(producer, "shaping producer");
-        safeClose(producer, "quota callback");
+        safeClose(callback::close, "quota callback");
     }
 
-    private static void safeClose(AutoCloseable closeable, String name) {
+    private static void safeClose(Runnable closer, String name) {
         try {
-            closeable.close();
+            closer.run();
         } catch (Exception e) {
             log.error("Exception thrown while closing {}", name, e);
         }

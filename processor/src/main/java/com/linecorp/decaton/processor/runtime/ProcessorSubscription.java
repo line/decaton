@@ -24,7 +24,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -137,8 +136,8 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
     }
 
     ProcessorSubscription(SubscriptionScope scope,
-                          Supplier<Consumer<byte[], byte[]>> consumerSupplier,
-                          Supplier<QuotaApplier> quotaApplierSupplier,
+                          Consumer<byte[], byte[]> consumer,
+                          QuotaApplier quotaApplier,
                           Processors<?> processors,
                           ProcessorProperties props,
                           SubscriptionStateListener stateListener,
@@ -147,13 +146,12 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
         this.processors = processors;
         this.stateListener = stateListener;
         this.contexts = contexts;
+        this.quotaApplier = quotaApplier;
         metrics = Metrics.withTags("subscription", scope.subscriptionId()).new SubscriptionMetrics();
 
-        Consumer<byte[], byte[]> consumer = consumerSupplier.get();
         if (props.get(CONFIG_BIND_CLIENT_METRICS).value()) {
             metrics.bindClientMetrics(consumer);
         }
-        quotaApplier = quotaApplierSupplier.get();
         consumeManager = new ConsumeManager(consumer, contexts, new Handler(), metrics);
         commitManager = new CommitManager(
                 consumer, props.get(ProcessorProperties.CONFIG_COMMIT_INTERVAL_MS), contexts);
@@ -168,12 +166,12 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
     }
 
     public ProcessorSubscription(SubscriptionScope scope,
-                                 Supplier<Consumer<byte[], byte[]>> consumerSupplier,
-                                 Supplier<QuotaApplier> quotaApplierSupplier,
+                                 Consumer<byte[], byte[]> consumer,
+                                 QuotaApplier quotaApplier,
                                  Processors<?> processors,
                                  ProcessorProperties props,
                                  SubscriptionStateListener stateListener) {
-        this(scope, consumerSupplier, quotaApplierSupplier, processors, props, stateListener,
+        this(scope, consumer, quotaApplier, processors, props, stateListener,
              new PartitionContexts(scope, processors));
     }
 

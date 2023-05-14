@@ -27,7 +27,7 @@ import com.linecorp.decaton.processor.runtime.internal.PerKeyQuotaManager.QuotaU
  */
 public interface QuotaApplier extends AutoCloseable {
     /**
-     * Maybe applying a quota to the given {@link TaskRequest}.
+     * Maybe applying a quota to the given {@link ConsumerRecord}.
      * If quota is applied, this method will handle the task accordingly based on
      * the {@link QuotaCallback} result and return true.
      * Otherwise, this method will return false.
