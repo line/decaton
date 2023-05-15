@@ -103,6 +103,7 @@ public class QuotaApplierImpl implements QuotaApplier {
                 // This exception is thrown when send() is called after the producer is closed.
                 // This still can happen if terminated flag is enabled right after we checked before send() call.
                 // This is an expected behavior, so we just ignore the exception.
+                log.debug("Failed to send task to the shaping topic upon close", e);
             } catch (Exception e) {
                 log.error("Exception thrown while sending task to the shaping topic", e);
                 metrics.shapingQueueingFailed.increment();
