@@ -98,7 +98,7 @@ public class PerKeyQuotaManager {
         // All counters should be instantiated from same random seed to
         // generate same hash function family so that calculated hashes can be reused
         // across multiple windows
-        Supplier<KeyCounter> counterSupplier = () -> new KeyCounter(new Random(seed), EPSILON, DELTA);
+        Supplier<KeyCounter> counterSupplier = () -> new KeyCounter(new Random(seed), epsilon, delta);
 
         WindowedKeyStat windowedStat = new WindowedKeyStat(
                 scope.perKeyQuotaConfig().get().window(),
