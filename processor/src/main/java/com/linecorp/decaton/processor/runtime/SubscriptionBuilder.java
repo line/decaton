@@ -22,11 +22,15 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
 
 import com.linecorp.decaton.client.DecatonClientBuilder.DefaultKafkaProducerSupplier;
 import com.linecorp.decaton.client.internal.DecatonTaskProducer;
@@ -34,6 +38,9 @@ import com.linecorp.decaton.client.KafkaProducerSupplier;
 import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.ProcessingContext;
 import com.linecorp.decaton.processor.TaskMetadata;
+import com.linecorp.decaton.processor.runtime.internal.NoopQuotaApplier;
+import com.linecorp.decaton.processor.runtime.internal.QuotaApplier;
+import com.linecorp.decaton.processor.runtime.internal.QuotaApplierImpl;
 import com.linecorp.decaton.processor.tracing.TracingProvider;
 import com.linecorp.decaton.processor.runtime.internal.ConsumerSupplier;
 import com.linecorp.decaton.processor.runtime.internal.DecatonProcessorSupplierImpl;
@@ -49,6 +56,7 @@ import lombok.experimental.Accessors;
 @Accessors(fluent = true)
 public class SubscriptionBuilder {
     private static final Map<String, String> presetRetryProducerConfig;
+    private static final Map<String, String> presetShapingProducerConfig;
 
     static {
         presetRetryProducerConfig = new HashMap<>();
@@ -57,6 +65,11 @@ public class SubscriptionBuilder {
         // Since default producer's linger.ms is 0, this could harm Kafka cluster despite we
         // don't much care about retry task's delivery latency typically. So we set reasonable default here.
         presetRetryProducerConfig.put(ProducerConfig.LINGER_MS_CONFIG, "100");
+
+        presetShapingProducerConfig = new HashMap<>();
+        // This producer is used to produce tasks for bursting keys, so this producer must be
+        // efficient so that shaping itself won't be the bottleneck.
+        presetShapingProducerConfig.put(ProducerConfig.LINGER_MS_CONFIG, "100");
     }
 
     @Setter(AccessLevel.NONE)
@@ -85,6 +98,9 @@ public class SubscriptionBuilder {
 
     @Setter(AccessLevel.NONE)
     private RetryConfig retryConfig;
+
+    @Setter(AccessLevel.NONE)
+    private PerKeyQuotaConfig perKeyQuotaConfig;
 
     /**
      * A {@link TracingProvider} for tracing the execution of record processing
@@ -161,6 +177,48 @@ public class SubscriptionBuilder {
     }
 
     /**
+     * Configure the subscription to enable per-key quota to prevent bursting keys occupy the resources
+     * and causing process for other keys to delay.
+     * <p>
+     * Decaton adopts "shaping" strategy for those bursting keys.
+     * Once a key is detected as bursting, Decaton will queue tasks for this key to the shaping topic and immediately complete it.
+     * <p>
+     * Some prerequisites need to be confirmed in order to use per-key quota feature:
+     * - For shaping tasks queueing, shaping topics need to be prepared on the same Kafka cluster.
+     *   Unless you supply custom shaping topics and callback, the topic name should be {@link ProcessorsBuilder#topic()} + "-shaping".
+     * - By enabling shaping, per-key serial processing of tasks is no longer guaranteed.
+     * - Decaton adopts probabilistic algorithm to account per-key processing rate.
+     *   Currently, the algorithm allows "false-positives" so some keys can be detected as burst
+     *   even when its actual processing rate is not excessive.
+     * - Rate-limit will be applied for shaping topics to process bursting tasks without excessive resource usage.
+     *   {@link ProcessorProperties#CONFIG_PER_KEY_QUOTA_PROCESSING_RATE} will be used as the rate-limit value by default.
+     *   If you need to set rate-limit value per shaping-topic, you can override it via {@link SubscriptionBuilder#overrideShapingRate}.
+     * - Per-key quota doesn't apply to the retry-topic.
+     *
+     * @param config a {@link PerKeyQuotaConfig} instance representing configs.
+     * @return updated instance of {@link SubscriptionBuilder}.
+     */
+    public SubscriptionBuilder enablePerKeyQuota(PerKeyQuotaConfig config) {
+        perKeyQuotaConfig = config;
+        return this;
+    }
+
+    /**
+     * Optionally configure processing rate per-shaping topic using the {@link PropertySupplier}.
+     * @param shapingTopic shaping topic to override the processing rate
+     * @param supplier {@link PropertySupplier} instance to configure get the processing rate property
+     * @return updated instance of {@link SubscriptionBuilder}.
+     */
+    public SubscriptionBuilder overrideShapingRate(String shapingTopic, PropertySupplier supplier) {
+        PropertyDefinition<Long> definition = PerKeyQuotaConfig.shapingRateProperty(shapingTopic);
+        Optional<Property<Long>> property = supplier.getProperty(definition);
+        propertiesBuilder.set(
+                property.orElseThrow(() -> new IllegalArgumentException(definition.name() + " must exist in the supplier")));
+        propertiesBuilder.set(property.get());
+        return this;
+    }
+
+    /**
      * @param tracingProvider Add tracing provider that will be called to trace the execution of processing
      * each record.
      * @return updated instance of {@link SubscriptionBuilder}.
@@ -184,6 +242,7 @@ public class SubscriptionBuilder {
         SubscriptionScope scope = new SubscriptionScope(Objects.requireNonNull(subscriptionId),
                                                         topic,
                                                         Optional.ofNullable(retryConfig),
+                                                        Optional.ofNullable(perKeyQuotaConfig),
                                                         props,
                                                         tracingProvider,
                                                         consumerMaxPollRecords(),
@@ -192,26 +251,10 @@ public class SubscriptionBuilder {
         Properties consumerConfig = Objects.requireNonNull(this.consumerConfig, "consumerConfig");
         ConsumerSupplier consumerSupplier = new ConsumerSupplier(consumerConfig);
 
-        DecatonProcessorSupplier<byte[]> retryProcessorSupplier = null;
-        if (retryConfig != null) {
-            Properties producerConfig = new Properties();
-
-            producerConfig.putAll(presetRetryProducerConfig);
-            producerConfig.putAll(Optional.ofNullable(retryConfig.producerConfig())
-                                          .orElseGet(producerConfigSupplier(consumerConfig)));
-            KafkaProducerSupplier producerSupplier = Optional.ofNullable(retryConfig.producerSupplier())
-                                                             .orElseGet(DefaultKafkaProducerSupplier::new);
-            retryProcessorSupplier = new DecatonProcessorSupplierImpl<>(() -> {
-
-                DecatonTaskProducer producer = new DecatonTaskProducer(
-                        scope.retryTopic().get(), producerConfig, producerSupplier);
-                return new DecatonTaskRetryQueueingProcessor(scope, producer);
-            }, ProcessorScope.SINGLETON);
-        }
-
         return new ProcessorSubscription(scope,
-                                         consumerSupplier,
-                                         processorsBuilder.build(retryProcessorSupplier),
+                                         consumerSupplier.get(),
+                                         quotaApplier(scope),
+                                         processorsBuilder.build(maybeRetryProcessorSupplier(scope)),
                                          props,
                                          stateListener);
     }
@@ -238,5 +281,39 @@ public class SubscriptionBuilder {
                                   propertyName, consumerConfig.getProperty(propertyName)));
             return producerProps;
         };
+    }
+
+    private DecatonProcessorSupplier<byte[]> maybeRetryProcessorSupplier(SubscriptionScope scope) {
+        if (retryConfig == null) {
+            return null;
+        }
+        Properties producerConfig = new Properties();
+        producerConfig.putAll(presetRetryProducerConfig);
+        producerConfig.putAll(Optional.ofNullable(retryConfig.producerConfig())
+                                      .orElseGet(producerConfigSupplier(consumerConfig)));
+        KafkaProducerSupplier producerSupplier = Optional.ofNullable(retryConfig.producerSupplier())
+                                                         .orElseGet(DefaultKafkaProducerSupplier::new);
+        return new DecatonProcessorSupplierImpl<>(() -> {
+            DecatonTaskProducer producer = new DecatonTaskProducer(scope.retryTopic().get(), producerConfig, producerSupplier);
+            return new DecatonTaskRetryQueueingProcessor(scope, producer);
+        }, ProcessorScope.SINGLETON);
+    }
+
+    private QuotaApplier quotaApplier(SubscriptionScope scope) {
+        if (perKeyQuotaConfig == null) {
+            return NoopQuotaApplier.INSTANCE;
+        }
+        Properties producerConfig = new Properties();
+        producerConfig.putAll(presetShapingProducerConfig);
+        producerConfig.putAll(Optional.ofNullable(perKeyQuotaConfig.producerConfig())
+                                      .orElseGet(producerConfigSupplier(consumerConfig)));
+        Function<Properties, Producer<byte[], byte[]>> producerSupplier =
+                Optional.ofNullable(perKeyQuotaConfig.producerSupplier())
+                        .orElseGet(() -> properties -> new KafkaProducer<>
+                                (properties, new ByteArraySerializer(), new ByteArraySerializer()));
+        return new QuotaApplierImpl(
+                producerSupplier.apply(producerConfig),
+                perKeyQuotaConfig.callbackSupplier().apply(scope.topic()),
+                scope);
     }
 }

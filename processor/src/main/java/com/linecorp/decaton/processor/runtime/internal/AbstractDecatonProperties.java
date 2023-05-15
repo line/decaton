@@ -20,6 +20,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Function;
 
 import com.linecorp.decaton.processor.runtime.Property;
@@ -76,11 +77,11 @@ public abstract class AbstractDecatonProperties implements DecatonProperties {
     }
 
     @Override
-    public <T> Property<T> get(PropertyDefinition<T> definition) {
+    public <T> Optional<Property<T>> tryGet(PropertyDefinition<T> definition) {
         Property<?> prop = properties.get(definition);
-        if (prop == null) {
-            throw new IllegalArgumentException("no such property: " + definition);
+        if (prop != null) {
+            return Optional.of(safeCast(prop));
         }
-        return safeCast(prop);
+        return Optional.empty();
     }
 }

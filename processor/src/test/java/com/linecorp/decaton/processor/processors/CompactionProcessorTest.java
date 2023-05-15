@@ -102,7 +102,7 @@ public class CompactionProcessorTest {
                 taskData,
                 taskData.toByteArray());
         TaskRequest request = new TaskRequest(
-                new TopicPartition("topic", 1), 1, null, name.getBytes(StandardCharsets.UTF_8), null, NoopTrace.INSTANCE, null);
+                new TopicPartition("topic", 1), 1, null, name.getBytes(StandardCharsets.UTF_8), null, NoopTrace.INSTANCE, null, null);
         ProcessingContext<HelloTask> context =
                 spy(new ProcessingContextImpl<>("subscription", request, task,
                                                 Arrays.asList(processor, downstream), null,

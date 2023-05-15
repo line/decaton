@@ -24,7 +24,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -47,8 +46,8 @@ import com.linecorp.decaton.processor.runtime.internal.OffsetState;
 import com.linecorp.decaton.processor.runtime.internal.PartitionContext;
 import com.linecorp.decaton.processor.runtime.internal.PartitionContexts;
 import com.linecorp.decaton.processor.runtime.internal.Processors;
+import com.linecorp.decaton.processor.runtime.internal.QuotaApplier;
 import com.linecorp.decaton.processor.runtime.internal.SubscriptionScope;
-import com.linecorp.decaton.processor.runtime.internal.TaskRequest;
 import com.linecorp.decaton.processor.runtime.internal.Utils;
 import com.linecorp.decaton.processor.runtime.internal.Utils.Timer;
 import com.linecorp.decaton.processor.tracing.TracingProvider;
@@ -68,6 +67,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
     private final CommitManager commitManager;
     private final AssignmentManager assignManager;
     private final ConsumeManager consumeManager;
+    private final QuotaApplier quotaApplier;
     private final CompletableFuture<Void> loopTerminateFuture;
     private final CompletableFuture<Void> shutdownFuture;
     private volatile boolean started;
@@ -128,10 +128,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
             });
 
             if (blacklistedKeysFilter.shouldTake(record)) {
-                TaskRequest taskRequest =
-                        new TaskRequest(tp, record.offset(), offsetState, record.key(),
-                                        record.headers(), trace, record.value());
-                context.addRequest(taskRequest);
+                context.addRecord(record, offsetState, trace, quotaApplier);
             } else {
                 offsetState.completion().complete();
             }
@@ -139,7 +136,8 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
     }
 
     ProcessorSubscription(SubscriptionScope scope,
-                          Supplier<Consumer<byte[], byte[]>> consumerSupplier,
+                          Consumer<byte[], byte[]> consumer,
+                          QuotaApplier quotaApplier,
                           Processors<?> processors,
                           ProcessorProperties props,
                           SubscriptionStateListener stateListener,
@@ -148,9 +146,9 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
         this.processors = processors;
         this.stateListener = stateListener;
         this.contexts = contexts;
+        this.quotaApplier = quotaApplier;
         metrics = Metrics.withTags("subscription", scope.subscriptionId()).new SubscriptionMetrics();
 
-        Consumer<byte[], byte[]> consumer = consumerSupplier.get();
         if (props.get(CONFIG_BIND_CLIENT_METRICS).value()) {
             metrics.bindClientMetrics(consumer);
         }
@@ -168,11 +166,12 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
     }
 
     public ProcessorSubscription(SubscriptionScope scope,
-                                 Supplier<Consumer<byte[], byte[]>> consumerSupplier,
+                                 Consumer<byte[], byte[]> consumer,
+                                 QuotaApplier quotaApplier,
                                  Processors<?> processors,
                                  ProcessorProperties props,
                                  SubscriptionStateListener stateListener) {
-        this(scope, consumerSupplier, processors, props, stateListener,
+        this(scope, consumer, quotaApplier, processors, props, stateListener,
              new PartitionContexts(scope, processors));
     }
 
@@ -220,11 +219,11 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
     }
 
     private Set<String> subscribeTopics() {
-        return Stream.of(Optional.of(scope.topic()),
-                         scope.retryTopic())
-                     .filter(Optional::isPresent)
-                     .map(Optional::get)
-                     .collect(Collectors.toSet());
+        return Stream.concat(
+                Stream.of(Optional.of(scope.topic()), scope.retryTopic())
+                      .filter(Optional::isPresent)
+                      .map(Optional::get),
+                scope.shapingTopics().stream()).collect(Collectors.toSet());
     }
 
     @Override
@@ -292,6 +291,7 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
     private void cleanUp() {
         contexts.close();
         consumeManager.close();
+        quotaApplier.close();
         metrics.close();
         updateState(SubscriptionStateListener.State.TERMINATED);
     }

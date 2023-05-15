@@ -29,13 +29,17 @@ public class PartitionScope extends SubscriptionScope {
     private final TopicPartition topicPartition;
 
     PartitionScope(SubscriptionScope parent, TopicPartition topicPartition) {
-        super(parent.subscriptionId(), parent.topic(), parent.retryConfig(), parent.props(),
+        super(parent.subscriptionId(), parent.topic(), parent.retryConfig(), parent.perKeyQuotaConfig(), parent.props(),
               parent.tracingProvider(), parent.maxPollRecords(), parent.subPartitionerSupplier());
         this.topicPartition = topicPartition;
     }
 
     boolean isRetryTopic() {
         return retryTopic().map(t -> t.equals(topicPartition.topic())).orElse(false);
+    }
+
+    boolean isShapingTopic() {
+        return shapingTopics().stream().anyMatch(t -> t.equals(topicPartition.topic()));
     }
 
     @Override

@@ -34,6 +34,7 @@ import org.slf4j.LoggerFactory;
 
 import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.runtime.AsyncShutdownable;
+import com.linecorp.decaton.processor.runtime.PerKeyQuotaConfig;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.metrics.Metrics;
 import com.linecorp.decaton.processor.runtime.Property;
@@ -109,7 +110,7 @@ public class PartitionProcessor implements AsyncShutdownable {
         int concurrency = scope.props().get(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY).value();
         units = new ArrayList<>(concurrency);
         subPartitioner = scope.subPartitionerSupplier().get(concurrency);
-        rateLimiter = new DynamicRateLimiter(scope.props().get(ProcessorProperties.CONFIG_PROCESSING_RATE));
+        rateLimiter = new DynamicRateLimiter(rateProperty(scope));
         processorThreadTerminationTimeoutMillis = scope.props()
                                                        .get(CONFIG_PROCESSOR_THREADS_TERMINATION_TIMEOUT_MS);
 
@@ -147,6 +148,16 @@ public class PartitionProcessor implements AsyncShutdownable {
 
         ProcessPipeline<?> pipeline = processors.newPipeline(threadScope, scheduler, metrics);
         return new ProcessorUnit(threadScope, pipeline);
+    }
+
+    // visible for testing
+    static Property<Long> rateProperty(PartitionScope scope) {
+        if (scope.isShapingTopic()) {
+            return scope.props()
+                        .tryGet(PerKeyQuotaConfig.shapingRateProperty(scope.topicPartition().topic()))
+                        .orElse(scope.props().get(ProcessorProperties.CONFIG_PER_KEY_QUOTA_PROCESSING_RATE));
+        }
+        return scope.props().get(ProcessorProperties.CONFIG_PROCESSING_RATE);
     }
 
     public void addTask(TaskRequest request) {

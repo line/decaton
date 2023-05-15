@@ -80,7 +80,7 @@ public class ProcessPipelineTest {
     private final ThreadScope scope = new ThreadScope(
             new PartitionScope(
                     new SubscriptionScope("subscription", "topic",
-                                          Optional.empty(),
+                                          Optional.empty(), Optional.empty(),
                                           ProcessorProperties.builder().set(completionTimeoutMsProp).build(),
                                           NoopTracingProvider.INSTANCE,
                                           ConsumerSupplier.DEFAULT_MAX_POLL_RECORDS,
@@ -95,7 +95,7 @@ public class ProcessPipelineTest {
 
     private static TaskRequest taskRequest() {
         return new TaskRequest(
-                new TopicPartition("topic", 1), 1, new OffsetState(1234), "TEST".getBytes(StandardCharsets.UTF_8), null, NoopTrace.INSTANCE, REQUEST.toByteArray());
+                new TopicPartition("topic", 1), 1, new OffsetState(1234), "TEST".getBytes(StandardCharsets.UTF_8), null, NoopTrace.INSTANCE, REQUEST.toByteArray(), null);
     }
 
     @Rule

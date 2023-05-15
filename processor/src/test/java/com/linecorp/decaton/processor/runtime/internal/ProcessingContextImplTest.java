@@ -112,7 +112,7 @@ public class ProcessingContextImplTest {
                                                             DecatonProcessor<HelloTask>... processors) {
         TaskRequest request = new TaskRequest(
                 new TopicPartition("topic", 1), 1, null, "TEST".getBytes(StandardCharsets.UTF_8),
-                null, traceHandle, REQUEST.toByteArray());
+                null, traceHandle, REQUEST.toByteArray(), null);
         DecatonTask<HelloTask> task = new DecatonTask<>(
                 TaskMetadata.fromProto(REQUEST.getMetadata()), TASK, TASK.toByteArray());
         return new ProcessingContextImpl<>("subscription", request, task, Arrays.asList(processors),
@@ -362,7 +362,7 @@ public class ProcessingContextImplTest {
                     }
                 });
         TaskRequest request = new TaskRequest(
-                new TopicPartition("topic", 1), 1, null, "TEST".getBytes(StandardCharsets.UTF_8), null, null, REQUEST.toByteArray());
+                new TopicPartition("topic", 1), 1, null, "TEST".getBytes(StandardCharsets.UTF_8), null, null, REQUEST.toByteArray(), null);
         DecatonTask<byte[]> task = new DecatonTask<>(
                 TaskMetadata.fromProto(REQUEST.getMetadata()), TASK.toByteArray(), TASK.toByteArray());
 
@@ -406,7 +406,7 @@ public class ProcessingContextImplTest {
                     }
                 });
         TaskRequest request = new TaskRequest(
-                new TopicPartition("topic", 1), 1, null, "TEST".getBytes(StandardCharsets.UTF_8), null, null, REQUEST.toByteArray());
+                new TopicPartition("topic", 1), 1, null, "TEST".getBytes(StandardCharsets.UTF_8), null, null, REQUEST.toByteArray(), null);
         DecatonTask<byte[]> task = new DecatonTask<>(
                 TaskMetadata.fromProto(REQUEST.getMetadata()), TASK.toByteArray(), TASK.toByteArray());
 

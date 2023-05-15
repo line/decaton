@@ -67,6 +67,7 @@ import com.linecorp.decaton.processor.TaskMetadata;
 import com.linecorp.decaton.processor.runtime.SubscriptionStateListener.State;
 import com.linecorp.decaton.processor.runtime.internal.AbstractDecatonProperties.Builder;
 import com.linecorp.decaton.processor.runtime.internal.ConsumerSupplier;
+import com.linecorp.decaton.processor.runtime.internal.NoopQuotaApplier;
 import com.linecorp.decaton.processor.runtime.internal.SubscriptionScope;
 import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider;
 
@@ -118,7 +119,9 @@ public class ProcessorSubscriptionTest {
         return new SubscriptionScope(
                 "subscription",
                 topic,
-                Optional.empty(), propertiesBuilder.build(),
+                Optional.empty(),
+                Optional.empty(),
+                propertiesBuilder.build(),
                 NoopTracingProvider.INSTANCE,
                 ConsumerSupplier.DEFAULT_MAX_POLL_RECORDS,
                 DefaultSubPartitioner::new);
@@ -139,7 +142,8 @@ public class ProcessorSubscriptionTest {
         }
         return new ProcessorSubscription(
                 scope,
-                () -> consumer,
+                consumer,
+                NoopQuotaApplier.INSTANCE,
                 builder.build(null),
                 scope.props(),
                 listener);
@@ -262,7 +266,8 @@ public class ProcessorSubscriptionTest {
         SubscriptionScope scope = scope(tp.topic(), 9000L);
         final ProcessorSubscription subscription = new ProcessorSubscription(
                 scope,
-                () -> consumer,
+                consumer,
+                NoopQuotaApplier.INSTANCE,
                 ProcessorsBuilder.consuming(scope.topic(),
                                             (byte[] bytes) -> new DecatonTask<>(
                                                     TaskMetadata.builder().build(), "dummy", bytes))
@@ -333,7 +338,8 @@ public class ProcessorSubscriptionTest {
                                         ));
         final ProcessorSubscription subscription = new ProcessorSubscription(
                 scope,
-                () -> consumer,
+                consumer,
+                NoopQuotaApplier.INSTANCE,
                 ProcessorsBuilder.consuming(scope.topic(),
                                             (byte[] bytes) -> new DecatonTask<>(
                                                     TaskMetadata.builder().build(), "dummy", bytes))

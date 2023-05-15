@@ -72,19 +72,19 @@ public class ProcessorsBuilder<T> {
      * @return an instance of {@link ProcessorsBuilder}.
      */
     public static <T> ProcessorsBuilder<T> consuming(String topic, TaskExtractor<T> taskExtractor) {
-        DefaultTaskExtractor<byte[]> innerExtractor = new DefaultTaskExtractor<>(bytes -> bytes);
+        DefaultTaskExtractor<byte[]> outerExtractor = new DefaultTaskExtractor<>(bytes -> bytes);
         TaskExtractor<T> retryTaskExtractor = bytes -> {
             // Retry tasks are serialized as PB DecatonTaskRequest.
             // First, deserialize PB from raw bytes.
-            DecatonTask<byte[]> retryTask = innerExtractor.extract(bytes);
+            DecatonTask<byte[]> wrappedTask = outerExtractor.extract(bytes);
 
             // Original raw task bytes is stored in DecatonTaskRequest#serializedTask.
             // Extract DecatonTask from DecatonTaskRequest#serializedTask using given taskExtractor.
-            DecatonTask<T> task = taskExtractor.extract(retryTask.taskData());
+            DecatonTask<T> task = taskExtractor.extract(wrappedTask.taskData());
 
             // Instantiate DecatonTask.
-            // Use retryTask#metadata because retry count is stored in retryTask#metada not task#metadata
-            return new DecatonTask<>(retryTask.metadata(), task.taskData(), task.taskDataBytes());
+            // Use wrappedTask#metadata because retry count is stored in wrappedTask#metada not task#metadata
+            return new DecatonTask<>(wrappedTask.metadata(), task.taskData(), task.taskDataBytes());
         };
 
         return new ProcessorsBuilder<>(topic, taskExtractor, retryTaskExtractor);
@@ -130,7 +130,7 @@ public class ProcessorsBuilder<T> {
         return thenProcess(new DecatonProcessorSupplierImpl<>(() -> processor, ProcessorScope.PROVIDED));
     }
 
-    public Processors<T> build(DecatonProcessorSupplier<byte[]> retryProcessorSupplier) {
+    Processors<T> build(DecatonProcessorSupplier<byte[]> retryProcessorSupplier) {
         return new Processors<>(suppliers, retryProcessorSupplier, taskExtractor, retryTaskExtractor);
     }
 }

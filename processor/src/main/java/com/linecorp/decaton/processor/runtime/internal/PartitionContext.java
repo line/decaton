@@ -21,11 +21,14 @@ import java.util.OptionalLong;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 
 import com.linecorp.decaton.processor.metrics.Metrics;
 import com.linecorp.decaton.processor.metrics.Metrics.PartitionStateMetrics;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
+import com.linecorp.decaton.processor.runtime.internal.PerKeyQuotaManager.QuotaUsage;
+import com.linecorp.decaton.processor.tracing.TracingProvider.RecordTraceHandle;
 
 import lombok.Getter;
 import lombok.Setter;
@@ -39,6 +42,7 @@ public class PartitionContext implements AutoCloseable {
     private final PartitionScope scope;
     private final PartitionProcessor partitionProcessor;
     private final OutOfOrderCommitControl commitControl;
+    private final PerKeyQuotaManager perKeyQuotaManager;
     private final Processors<?> processors;
     private final PartitionStateMetrics metrics;
 
@@ -66,9 +70,17 @@ public class PartitionContext implements AutoCloseable {
     private volatile boolean reloadRequested;
 
     public PartitionContext(PartitionScope scope, Processors<?> processors, int maxPendingRecords) {
+        this(scope, processors, new PartitionProcessor(scope, processors), maxPendingRecords);
+    }
+
+    // visible for testing
+    PartitionContext(PartitionScope scope,
+                     Processors<?> processors,
+                     PartitionProcessor partitionProcessor,
+                     int maxPendingRecords) {
         this.scope = scope;
         this.processors = processors;
-        partitionProcessor = new PartitionProcessor(scope, processors);
+        this.partitionProcessor = partitionProcessor;
 
         int capacity = maxPendingRecords + scope.maxPollRecords();
         TopicPartition tp = scope.topicPartition();
@@ -79,6 +91,11 @@ public class PartitionContext implements AutoCloseable {
                 scope.props().get(ProcessorProperties.CONFIG_DEFERRED_COMPLETE_TIMEOUT_MS),
                 metricsCtor.new CommitControlMetrics());
         commitControl = new OutOfOrderCommitControl(scope.topicPartition(), capacity, offsetStateReaper);
+        if (scope.perKeyQuotaConfig().isPresent() && scope.topic().equals(scope.topicPartition().topic())) {
+            perKeyQuotaManager = PerKeyQuotaManager.create(scope);
+        } else {
+            perKeyQuotaManager = null;
+        }
 
         metrics = metricsCtor.new PartitionStateMetrics(
                 commitControl::pendingOffsetsCount, () -> paused() ? 1 : 0,
@@ -135,8 +152,17 @@ public class PartitionContext implements AutoCloseable {
         metrics.close();
     }
 
-    public void addRequest(TaskRequest request) {
-        partitionProcessor.addTask(request);
+    public void addRecord(ConsumerRecord<byte[], byte[]> record,
+                          OffsetState offsetState,
+                          RecordTraceHandle traceHandle,
+                          QuotaApplier quotaApplier) {
+        if (!quotaApplier.apply(record, offsetState, maybeRecordQuotaUsage(record.key()))) {
+            TaskRequest request = new TaskRequest(
+                    scope.topicPartition(), record.offset(), offsetState, record.key(),
+                    record.headers(), traceHandle, record.value(), maybeRecordQuotaUsage(record.key()));
+            partitionProcessor.addTask(request);
+        }
+
         if (lastQueueStarvedTime > 0) {
             metrics.queueStarvedTime.record(System.nanoTime() - lastQueueStarvedTime, TimeUnit.NANOSECONDS);
             lastQueueStarvedTime = -1;
@@ -172,5 +198,13 @@ public class PartitionContext implements AutoCloseable {
     public void close() throws Exception {
         resume();
         commitControl.close();
+    }
+
+    // visible for testing
+    QuotaUsage maybeRecordQuotaUsage(byte[] key) {
+        if (perKeyQuotaManager == null) {
+            return null;
+        }
+        return perKeyQuotaManager.record(key);
     }
 }

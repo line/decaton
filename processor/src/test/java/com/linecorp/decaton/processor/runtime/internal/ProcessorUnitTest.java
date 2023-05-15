@@ -63,7 +63,7 @@ public class ProcessorUnitTest {
         ThreadScope scope = new ThreadScope(
                 new PartitionScope(
                         new SubscriptionScope("subscription", "topic",
-                                              Optional.empty(), ProcessorProperties.builder().build(),
+                                              Optional.empty(), Optional.empty(), ProcessorProperties.builder().build(),
                                               NoopTracingProvider.INSTANCE,
                                               ConsumerSupplier.DEFAULT_MAX_POLL_RECORDS,
                                               DefaultSubPartitioner::new),
@@ -77,7 +77,7 @@ public class ProcessorUnitTest {
                                   .setSerializedTask(HelloTask.getDefaultInstance().toByteString())
                                   .build();
 
-        taskRequest = new TaskRequest(topicPartition, 1, new OffsetState(1234), null, null, null, request.toByteArray());
+        taskRequest = new TaskRequest(topicPartition, 1, new OffsetState(1234), null, null, null, request.toByteArray(), null);
     }
 
     @Test(timeout = 1000)

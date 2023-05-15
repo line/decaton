@@ -60,7 +60,7 @@ public class DecatonTaskRetryQueueingProcessorTest {
 
     private static final SubscriptionScope scope = new SubscriptionScope(
             "subscription", "topic",
-            Optional.of(RetryConfig.builder().backoff(RETRY_BACKOFF).build()),
+            Optional.of(RetryConfig.builder().backoff(RETRY_BACKOFF).build()), Optional.empty(),
             ProcessorProperties.builder().build(), NoopTracingProvider.INSTANCE,
             ConsumerSupplier.DEFAULT_MAX_POLL_RECORDS,
             DefaultSubPartitioner::new);

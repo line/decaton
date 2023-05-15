@@ -52,7 +52,7 @@ public class ProcessorsTest {
     private static final ThreadScope scope = new ThreadScope(
             new PartitionScope(
                     new SubscriptionScope(SUBSC_ID, topicPartition.topic(),
-                                          Optional.empty(), ProcessorProperties.builder().build(),
+                                          Optional.empty(), Optional.empty(), ProcessorProperties.builder().build(),
                                           NoopTracingProvider.INSTANCE,
                                           ConsumerSupplier.DEFAULT_MAX_POLL_RECORDS,
                                           DefaultSubPartitioner::new),

@@ -18,12 +18,17 @@ package com.linecorp.decaton.processor.runtime.internal;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 import java.util.Optional;
 import java.util.OptionalLong;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
-import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.mockito.Mock;
@@ -31,35 +36,38 @@ import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
 
 import com.linecorp.decaton.processor.runtime.DefaultSubPartitioner;
+import com.linecorp.decaton.processor.runtime.PerKeyQuotaConfig;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
+import com.linecorp.decaton.processor.runtime.internal.PerKeyQuotaManager.UsageType;
 import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider;
+import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider.NoopTrace;
 
 public class PartitionContextTest {
     @Rule
     public MockitoRule rule = MockitoJUnit.rule();
 
-    private final PartitionScope scope = new PartitionScope(
-            new SubscriptionScope("subscription", "topic",
-                                  Optional.empty(), ProcessorProperties.builder().build(),
-                                  NoopTracingProvider.INSTANCE,
-                                  ConsumerSupplier.DEFAULT_MAX_POLL_RECORDS,
-                                  DefaultSubPartitioner::new),
-            new TopicPartition("topic", 0));
+    private static PartitionScope scope(String topic, Optional<PerKeyQuotaConfig> perKeyQuotaConfig) {
+        return new PartitionScope(
+                new SubscriptionScope("subscription", "topic",
+                                      Optional.empty(), perKeyQuotaConfig, ProcessorProperties.builder().build(),
+                                      NoopTracingProvider.INSTANCE,
+                                      ConsumerSupplier.DEFAULT_MAX_POLL_RECORDS,
+                                      DefaultSubPartitioner::new),
+                new TopicPartition(topic, 0));
+    }
 
     @Mock
     private Processors<?> processors;
+    @Mock
+    private PartitionProcessor partitionProcessor;
+    @Mock
+    ConsumerRecord<byte[], byte[]> record;
 
     private static final int MAX_PENDING_RECORDS = 100;
 
-    private PartitionContext context;
-
-    @Before
-    public void setUp() {
-        context = new PartitionContext(scope, processors, MAX_PENDING_RECORDS);
-    }
-
     @Test
     public void testOffsetWaitingCommit() {
+        PartitionContext context = new PartitionContext(scope("topic", Optional.empty()), processors, MAX_PENDING_RECORDS);
         assertFalse(context.offsetWaitingCommit().isPresent());
 
         OffsetState state = context.registerOffset(100);
@@ -71,5 +79,54 @@ public class PartitionContextTest {
 
         context.updateCommittedOffset(100);
         assertFalse(context.offsetWaitingCommit().isPresent());
+    }
+
+    @Test
+    public void testQuotaUsage() {
+        PartitionContext context = new PartitionContext(
+                scope("topic", Optional.of(PerKeyQuotaConfig.shape())), processors, MAX_PENDING_RECORDS);
+        assertEquals(UsageType.COMPLY, context.maybeRecordQuotaUsage(new byte[0]).type());
+    }
+
+    @Test
+    public void testQuotaUsageWhenDisabled() {
+        PartitionContext context = new PartitionContext(
+                scope("topic", Optional.empty()), processors, MAX_PENDING_RECORDS);
+        assertNull(context.maybeRecordQuotaUsage(new byte[0]));
+    }
+
+    @Test
+    public void testQuotaUsageNonTargetTopic() {
+        PartitionContext context = new PartitionContext(
+                scope("topic-shaping", Optional.of(PerKeyQuotaConfig.shape())), processors, MAX_PENDING_RECORDS);
+        assertNull(context.maybeRecordQuotaUsage(new byte[0]));
+
+        context = new PartitionContext(
+                scope("topic-retry", Optional.of(PerKeyQuotaConfig.shape())), processors, MAX_PENDING_RECORDS);
+        assertNull(context.maybeRecordQuotaUsage(new byte[0]));
+    }
+
+    @Test
+    public void testQuotaApplied() {
+        PartitionContext context = new PartitionContext(
+                scope("topic-shaping", Optional.of(PerKeyQuotaConfig.shape())),
+                processors,
+                partitionProcessor,
+                MAX_PENDING_RECORDS);
+
+        context.addRecord(record, new OffsetState(42L), NoopTrace.INSTANCE, (r, o, q) -> true);
+        verify(partitionProcessor, never()).addTask(any());
+    }
+
+    @Test
+    public void testQuotaNotApplied() {
+        PartitionContext context = new PartitionContext(
+                scope("topic-shaping", Optional.of(PerKeyQuotaConfig.shape())),
+                processors,
+                partitionProcessor,
+                MAX_PENDING_RECORDS);
+
+        context.addRecord(record, new OffsetState(42L), NoopTrace.INSTANCE, (r, o, q) -> false);
+        verify(partitionProcessor, times(1)).addTask(any());
     }
 }

@@ -283,6 +283,20 @@ public class Metrics {
                                                .register(registry));
     }
 
+    public class ShapingMetrics extends AbstractMetrics {
+        public final Counter shapingQueuedTasks =
+                meter(() -> Counter.builder("shaping.queued.tasks")
+                                   .description("The number of tasks queued to shaping topic")
+                                   .tags(availableTags.subscriptionScope())
+                                   .register(registry));
+
+        public final Counter shapingQueueingFailed =
+                meter(() -> Counter.builder("shaping.queueing.failed")
+                                   .description("The number of tasks failed to enqueue in shaping topic")
+                                   .tags(availableTags.subscriptionScope())
+                                   .register(registry));
+    }
+
     public static Metrics withTags(String... keyValues) {
         return new Metrics(AvailableTags.of(keyValues));
     }
