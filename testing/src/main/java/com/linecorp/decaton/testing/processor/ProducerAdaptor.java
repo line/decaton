@@ -33,7 +33,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ProducerFencedException;
 
-abstract class ProducerAdaptor<K, V> implements Producer<K, V> {
+public abstract class ProducerAdaptor<K, V> implements Producer<K, V> {
     protected final Producer<K, V> delegate;
     protected ProducerAdaptor(Producer<K, V> delegate) {
         this.delegate = delegate;
