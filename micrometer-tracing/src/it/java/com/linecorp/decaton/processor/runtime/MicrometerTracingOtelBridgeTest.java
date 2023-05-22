@@ -16,33 +16,33 @@
 
 package com.linecorp.decaton.processor.runtime;
 
+import static org.junit.Assert.assertEquals;
+
 import java.time.Duration;
-import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Future;
 import java.util.concurrent.ThreadLocalRandom;
 
-import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
-import org.apache.kafka.common.Metric;
-import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.PartitionInfo;
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.ProducerFencedException;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Test;
 
 import com.linecorp.decaton.client.DecatonClientBuilder.DefaultKafkaProducerSupplier;
+import com.linecorp.decaton.processor.TaskMetadata;
 import com.linecorp.decaton.testing.KafkaClusterRule;
 import com.linecorp.decaton.testing.TestUtils;
+import com.linecorp.decaton.testing.processor.ProcessedRecord;
+import com.linecorp.decaton.testing.processor.ProcessingGuarantee;
 import com.linecorp.decaton.testing.processor.ProcessingGuarantee.GuaranteeType;
 import com.linecorp.decaton.testing.processor.ProcessorTestSuite;
+import com.linecorp.decaton.testing.processor.ProducedRecord;
+import com.linecorp.decaton.testing.processor.ProducerAdaptor;
 
 import io.micrometer.tracing.Tracer;
 import io.micrometer.tracing.otel.bridge.OtelCurrentTraceContext;
@@ -117,18 +117,42 @@ public class MicrometerTracingOtelBridgeTest {
                 .run();
     }
 
-    private static class WithParentSpanProducer<K, V> implements Producer<K, V> {
-        private final Producer<K, V> delegate;
+    private static class TracePropagationGuarantee implements ProcessingGuarantee {
+        private final Map<String, String> producedTraceIds = new ConcurrentHashMap<>();
+        private final Map<String, String> consumedTraceIds = new ConcurrentHashMap<>();
+        private final Tracer tracer;
+
+        TracePropagationGuarantee(Tracer tracer) {
+            this.tracer = tracer;
+        }
+
+        @Override
+        public void onProduce(ProducedRecord record) {
+            producedTraceIds.put(record.task().getId(), tracer.currentTraceContext().context().traceId());
+        }
+
+        @Override
+        public void onProcess(TaskMetadata metadata, ProcessedRecord record) {
+            consumedTraceIds.put(record.task().getId(), tracer.currentTraceContext().context().traceId());
+        }
+
+        @Override
+        public void doAssert() {
+            assertEquals(producedTraceIds, consumedTraceIds);
+        }
+    }
+
+    private static class WithParentSpanProducer<K, V> extends ProducerAdaptor<K, V> {
         private final io.opentelemetry.api.trace.Tracer otelTracer;
 
         WithParentSpanProducer(Producer<K, V> delegate, io.opentelemetry.api.trace.Tracer otelTracer) {
-            this.delegate = delegate;
+            super(delegate);
             this.otelTracer = otelTracer;
         }
 
         @Override
         public Future<RecordMetadata> send(ProducerRecord<K, V> record) {
-            return this.send(record, null);
+            return send(record, null);
         }
 
         // Since the context of parent is injected in Callback of `producer.send`, create the span manually.
@@ -141,65 +165,6 @@ public class MicrometerTracingOtelBridgeTest {
             } finally {
                 span.end();
             }
-        }
-
-        @Override
-        public void initTransactions() {
-            delegate.initTransactions();
-        }
-
-        @Override
-        public void beginTransaction() throws ProducerFencedException {
-            delegate.beginTransaction();
-        }
-
-        @Deprecated
-        @Override
-        public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
-                                             String consumerGroupId) throws ProducerFencedException {
-            delegate.sendOffsetsToTransaction(offsets, consumerGroupId);
-        }
-
-        @Override
-        public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
-                                             ConsumerGroupMetadata groupMetadata)
-                throws ProducerFencedException {
-            delegate.sendOffsetsToTransaction(offsets, groupMetadata);
-        }
-
-        @Override
-        public void commitTransaction() throws ProducerFencedException {
-            delegate.commitTransaction();
-        }
-
-        @Override
-        public void abortTransaction() throws ProducerFencedException {
-            delegate.abortTransaction();
-        }
-
-        @Override
-        public void flush() {
-            delegate.flush();
-        }
-
-        @Override
-        public List<PartitionInfo> partitionsFor(String topic) {
-            return delegate.partitionsFor(topic);
-        }
-
-        @Override
-        public Map<MetricName, ? extends Metric> metrics() {
-            return delegate.metrics();
-        }
-
-        @Override
-        public void close() {
-            delegate.close();
-        }
-
-        @Override
-        public void close(Duration timeout) {
-            delegate.close();
         }
     }
 }
