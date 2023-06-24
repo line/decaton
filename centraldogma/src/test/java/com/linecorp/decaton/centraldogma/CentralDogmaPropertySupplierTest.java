@@ -167,7 +167,7 @@ public class CentralDogmaPropertySupplierTest {
 
         CentralDogmaPropertySupplier.register(centralDogmaRepository, FILENAME);
         verify(centralDogmaRepository).commit(
-                any(String.class),
+                anyString(),
                 eq(Change.ofJsonUpsert(FILENAME, defaultPropertiesAsJsonNode()))
         );
     }
@@ -212,13 +212,13 @@ public class CentralDogmaPropertySupplierTest {
         when(filesRequest.list(Revision.HEAD)).thenReturn(CompletableFuture.completedFuture(Collections.emptyMap()));
 
         final CommitRequest commitRequest = mock(CommitRequest.class);
-        when(centralDogmaRepository.commit(any(String.class), eq(Change.ofJsonUpsert(FILENAME, jsonNodeProperties)))).thenReturn(commitRequest);
+        when(centralDogmaRepository.commit(anyString(), eq(Change.ofJsonUpsert(FILENAME, jsonNodeProperties)))).thenReturn(commitRequest);
         when(commitRequest.push(Revision.HEAD)).thenReturn(CompletableFuture.completedFuture(new PushResult(Revision.HEAD, whenCentralDogmaPushed)));
 
         CentralDogmaPropertySupplier.register(centralDogmaRepository, FILENAME, supplier);
 
         verify(centralDogmaRepository).commit(
-                any(String.class),
+                anyString(),
                 eq(Change.ofJsonUpsert(FILENAME, jsonNodeProperties))
         );
     }

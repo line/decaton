@@ -69,20 +69,20 @@ public class PartitionContext implements AutoCloseable {
     @Setter
     private volatile boolean reloadRequested;
 
-    public PartitionContext(PartitionScope scope, Processors<?> processors, int maxPendingRecords) {
-        this(scope, processors, new PartitionProcessor(scope, processors), maxPendingRecords);
+    public PartitionContext(PartitionScope scope, Processors<?> processors) {
+        this(scope, processors, new PartitionProcessor(scope, processors));
     }
 
     // visible for testing
     PartitionContext(PartitionScope scope,
                      Processors<?> processors,
-                     PartitionProcessor partitionProcessor,
-                     int maxPendingRecords) {
+                     PartitionProcessor partitionProcessor) {
         this.scope = scope;
         this.processors = processors;
         this.partitionProcessor = partitionProcessor;
 
-        int capacity = maxPendingRecords + scope.maxPollRecords();
+        int capacity = scope.props().get(ProcessorProperties.CONFIG_MAX_PENDING_RECORDS).value() +
+                       scope.maxPollRecords();
         TopicPartition tp = scope.topicPartition();
         Metrics metricsCtor = Metrics.withTags("subscription", scope.subscriptionId(),
                                                "topic", tp.topic(),
@@ -107,7 +107,7 @@ public class PartitionContext implements AutoCloseable {
 
     /**
      * Returns the largest offset waiting to be committed, if exists.
-     *
+     * <p>
      * It returns non-empty value with offset which is larger than the offset
      * reported last by {@link #updateCommittedOffset(long)}.
      *

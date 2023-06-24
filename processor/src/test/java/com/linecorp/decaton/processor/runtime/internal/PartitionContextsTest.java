@@ -16,6 +16,7 @@
 
 package com.linecorp.decaton.processor.runtime.internal;
 
+import static com.linecorp.decaton.processor.runtime.ProcessorProperties.CONFIG_MAX_PENDING_RECORDS;
 import static com.linecorp.decaton.processor.runtime.ProcessorProperties.CONFIG_PARTITION_CONCURRENCY;
 import static com.linecorp.decaton.processor.runtime.ProcessorProperties.CONFIG_PROCESSING_RATE;
 import static java.util.Arrays.asList;
@@ -56,7 +57,6 @@ import org.mockito.junit.MockitoRule;
 import com.linecorp.decaton.processor.runtime.DefaultSubPartitioner;
 import com.linecorp.decaton.processor.runtime.DynamicProperty;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
-import com.linecorp.decaton.processor.runtime.Property;
 import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider;
 
 public class PartitionContextsTest {
@@ -68,12 +68,15 @@ public class PartitionContextsTest {
     private final DynamicProperty<Integer> partitionConcurrencyProperty =
             new DynamicProperty<>(CONFIG_PARTITION_CONCURRENCY);
 
+    private final DynamicProperty<Integer> maxPendingRecordsProperty =
+            new DynamicProperty<>(CONFIG_MAX_PENDING_RECORDS);
+
     private final DynamicProperty<Long> processingRateProp = new DynamicProperty<>(CONFIG_PROCESSING_RATE);
 
     private final ProcessorProperties props = ProcessorProperties
             .builder()
-            .set(Property.ofStatic(ProcessorProperties.CONFIG_MAX_PENDING_RECORDS, PENDING_RECORDS_TO_PAUSE))
             .set(partitionConcurrencyProperty)
+            .set(maxPendingRecordsProperty)
             .set(processingRateProp)
             .build();
 
@@ -108,6 +111,7 @@ public class PartitionContextsTest {
     @Before
     public void setup() {
         partitionConcurrencyProperty.set(1);
+        maxPendingRecordsProperty.set(PENDING_RECORDS_TO_PAUSE);
         contexts = spy(new PartitionContexts(scope, processors));
     }
 
@@ -193,7 +197,7 @@ public class PartitionContextsTest {
         assertEquals(1, needPause.size());
         assertEquals(cts.get(0).topicPartition(), needPause.iterator().next());
 
-        // Mark as paused so it should disappear from the response.
+        // Mark as paused, so it should disappear from the response.
         doReturn(true).when(cts.get(0)).paused();
         needPause = contexts.partitionsNeedsPause();
         assertTrue(needPause.isEmpty());
@@ -237,20 +241,26 @@ public class PartitionContextsTest {
         needsResume = contexts.partitionsNeedsResume();
         assertTrue(needsResume.isEmpty());
 
-        // Task count is now lower than threshold. Should appear in resume response.
+        // Task count is now lower, but so is the threshold. Still shouldn't appear in resume list.
+        maxPendingRecordsProperty.set(PENDING_RECORDS_TO_PAUSE - 1);
         doReturn(PENDING_RECORDS_TO_PAUSE - 1).when(cts.get(0)).pendingTasksCount();
+        needsResume = contexts.partitionsNeedsResume();
+        assertTrue(needsResume.isEmpty());
+
+        // Task count is now lower than the threshold. Should appear in resume response.
+        doReturn(PENDING_RECORDS_TO_PAUSE - 2).when(cts.get(0)).pendingTasksCount();
         needsResume = contexts.partitionsNeedsResume();
         assertEquals(1, needsResume.size());
         assertEquals(cts.get(0).topicPartition(), needsResume.iterator().next());
 
         // All processing paused by rate limiting.
-        // All partitions should be disappear from resume response.
+        // All partitions should disappear from resume response.
         doReturn(true).when(contexts).pausingAllProcessing();
         doReturn(true).when(cts.get(1)).paused();
         needsResume = contexts.partitionsNeedsResume();
         assertTrue(needsResume.isEmpty());
 
-        // All pause finished. Now only partitions should be appear in resume response.
+        // All pause finished. Now all partitions should appear in resume response.
         doReturn(false).when(contexts).pausingAllProcessing();
         needsResume = contexts.partitionsNeedsResume();
         assertEquals(cts.stream().map(PartitionContext::topicPartition).collect(Collectors.toSet()),
@@ -281,6 +291,8 @@ public class PartitionContextsTest {
     public void testShouldNotBePausingAllProcessingByPropertyReload() {
         assertFalse(contexts.pausingAllProcessing());
         partitionConcurrencyProperty.set(42);
+        assertFalse(contexts.pausingAllProcessing());
+        maxPendingRecordsProperty.set(42);
         assertFalse(contexts.pausingAllProcessing());
     }
 

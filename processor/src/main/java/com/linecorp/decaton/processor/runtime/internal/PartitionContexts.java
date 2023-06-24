@@ -36,6 +36,7 @@ import org.slf4j.LoggerFactory;
 
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.Property;
+import com.linecorp.decaton.processor.runtime.PropertyDefinition;
 import com.linecorp.decaton.processor.runtime.internal.AssignmentManager.AssignmentConfig;
 import com.linecorp.decaton.processor.runtime.internal.AssignmentManager.AssignmentStore;
 import com.linecorp.decaton.processor.runtime.internal.CommitManager.OffsetsStore;
@@ -48,7 +49,7 @@ public class PartitionContexts implements OffsetsStore, AssignmentStore, Partiti
     private final SubscriptionScope scope;
     private final Processors<?> processors;
     private final Property<Long> processingRateProp;
-    private final int maxPendingRecords;
+    private final Property<Integer> maxPendingRecordsProp;
     private final Map<TopicPartition, PartitionContext> contexts;
 
     private final ReentrantLock propertyReloadLock;
@@ -58,26 +59,12 @@ public class PartitionContexts implements OffsetsStore, AssignmentStore, Partiti
         this.processors = processors;
 
         processingRateProp = scope.props().get(ProcessorProperties.CONFIG_PROCESSING_RATE);
-        // We don't support dynamic reload of this value so fix at the time of boot-up.
-        maxPendingRecords = scope.props().get(ProcessorProperties.CONFIG_MAX_PENDING_RECORDS).value();
+        maxPendingRecordsProp = scope.props().get(ProcessorProperties.CONFIG_MAX_PENDING_RECORDS);
         contexts = new HashMap<>();
         propertyReloadLock = new ReentrantLock();
 
-        scope.props().get(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY).listen((oldVal, newVal) -> {
-            // This listener will be called at listener registration.
-            // It's not necessary to reload contexts at listener registration because PartitionContexts hasn't been instantiated at that time.
-            if (oldVal == null) {
-                return;
-            }
-
-            propertyReloadLock.lock();
-            try {
-                contexts.values().forEach(context -> context.reloadRequested(true));
-                logger.info("Requested reload partition.concurrency oldValue={}, newValue={}", oldVal, newVal);
-            } finally {
-                propertyReloadLock.unlock();
-            }
-        });
+        registerReloadListener(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY);
+        registerReloadListener(ProcessorProperties.CONFIG_MAX_PENDING_RECORDS);
     }
 
     public PartitionContext get(TopicPartition tp) {
@@ -212,13 +199,13 @@ public class PartitionContexts implements OffsetsStore, AssignmentStore, Partiti
     }
 
     private boolean shouldPartitionPaused(int pendingRecords) {
-        return pendingRecords >= maxPendingRecords;
+        return pendingRecords >= maxPendingRecordsProp.value();
     }
 
     // visible for testing
     PartitionContext instantiateContext(TopicPartition tp) {
         PartitionScope partitionScope = new PartitionScope(scope, tp);
-        return new PartitionContext(partitionScope, processors, maxPendingRecords);
+        return new PartitionContext(partitionScope, processors);
     }
 
     // visible for testing
@@ -301,6 +288,26 @@ public class PartitionContexts implements OffsetsStore, AssignmentStore, Partiti
         }
     }
 
+    private <T> void registerReloadListener(PropertyDefinition<T> property) {
+        scope.props().get(property).listen((oldVal, newVal) -> {
+            // This listener will also be called at listener registration.
+            // It's not necessary to reload contexts at listener registration,
+            // because PartitionContexts hasn't been instantiated at that time.
+            if (oldVal == null) {
+                return;
+            }
+
+            propertyReloadLock.lock();
+            try {
+                contexts.values().forEach(context -> context.reloadRequested(true));
+                logger.info("Requested reload of `{}`: oldValue={}, newValue={}",
+                            property.name(), oldVal, newVal);
+            } finally {
+                propertyReloadLock.unlock();
+            }
+        });
+    }
+
     private void reloadContexts(Collection<TopicPartition> topicPartitions) {
         logger.info("Start dropping partition contexts({})", topicPartitions);
         removePartition(topicPartitions);
@@ -317,7 +324,8 @@ public class PartitionContexts implements OffsetsStore, AssignmentStore, Partiti
                                 try {
                                     context.destroyProcessors();
                                 } catch (Exception e) {
-                                    logger.error("Failed to close partition context for {}", context.topicPartition(), e);
+                                    logger.error("Failed to close partition context for {}",
+                                                 context.topicPartition(), e);
                                 }
                             }).collect(toList()))
              .join();

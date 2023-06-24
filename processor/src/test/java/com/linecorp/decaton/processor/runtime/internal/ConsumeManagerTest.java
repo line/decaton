@@ -22,6 +22,7 @@ import static java.util.Collections.singletonList;
 import static java.util.stream.Collectors.toSet;
 import static org.junit.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.times;
@@ -29,7 +30,6 @@ import static org.mockito.Mockito.verify;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -85,7 +85,7 @@ public class ConsumeManagerTest {
         doAnswer(invocation -> {
             rebalanceListener = invocation.getArgument(1);
             return null;
-        }).when(consumer).subscribe(any(Collection.class), any(ConsumerRebalanceListener.class));
+        }).when(consumer).subscribe(anyCollection(), any(ConsumerRebalanceListener.class));
         consumeManager.init(singletonList(TOPIC));
     }
 
