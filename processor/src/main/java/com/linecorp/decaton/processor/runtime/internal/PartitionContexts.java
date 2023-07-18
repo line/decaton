@@ -49,7 +49,6 @@ public class PartitionContexts implements OffsetsStore, AssignmentStore, Partiti
     private final SubscriptionScope scope;
     private final Processors<?> processors;
     private final Property<Long> processingRateProp;
-    private final Property<Integer> maxPendingRecordsProp;
     private final Map<TopicPartition, PartitionContext> contexts;
 
     private final ReentrantLock propertyReloadLock;
@@ -59,7 +58,6 @@ public class PartitionContexts implements OffsetsStore, AssignmentStore, Partiti
         this.processors = processors;
 
         processingRateProp = scope.props().get(ProcessorProperties.CONFIG_PROCESSING_RATE);
-        maxPendingRecordsProp = scope.props().get(ProcessorProperties.CONFIG_MAX_PENDING_RECORDS);
         contexts = new HashMap<>();
         propertyReloadLock = new ReentrantLock();
 
@@ -198,10 +196,6 @@ public class PartitionContexts implements OffsetsStore, AssignmentStore, Partiti
         contexts.values().forEach(PartitionContext::updateHighWatermark);
     }
 
-    private boolean shouldPartitionPaused(int pendingRecords) {
-        return pendingRecords >= maxPendingRecordsProp.value();
-    }
-
     // visible for testing
     PartitionContext instantiateContext(TopicPartition tp) {
         PartitionScope partitionScope = new PartitionScope(scope, tp);
@@ -226,7 +220,7 @@ public class PartitionContexts implements OffsetsStore, AssignmentStore, Partiti
                        .filter(c -> !c.paused())
                        .filter(c -> pausingAll
                                     || c.reloadRequested()
-                                    || shouldPartitionPaused(c.pendingTasksCount()))
+                                    || c.shouldPausePartition())
                        .map(PartitionContext::topicPartition)
                        .collect(toList());
     }
@@ -239,7 +233,7 @@ public class PartitionContexts implements OffsetsStore, AssignmentStore, Partiti
                        .filter(PartitionContext::paused)
                        .filter(c -> !pausingAll
                                     && !c.reloadRequested()
-                                    && !shouldPartitionPaused(c.pendingTasksCount()))
+                                    && !c.shouldPausePartition())
                        .map(PartitionContext::topicPartition)
                        .collect(toList());
     }

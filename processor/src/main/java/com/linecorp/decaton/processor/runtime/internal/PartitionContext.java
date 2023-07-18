@@ -45,6 +45,7 @@ public class PartitionContext implements AutoCloseable {
     private final PerKeyQuotaManager perKeyQuotaManager;
     private final Processors<?> processors;
     private final PartitionStateMetrics metrics;
+    private final int maxPendingRecords;
 
     // The offset committed successfully at last commit
     private volatile long lastCommittedOffset;
@@ -80,9 +81,9 @@ public class PartitionContext implements AutoCloseable {
         this.scope = scope;
         this.processors = processors;
         this.partitionProcessor = partitionProcessor;
+        maxPendingRecords = scope.props().get(ProcessorProperties.CONFIG_MAX_PENDING_RECORDS).value();
 
-        int capacity = scope.props().get(ProcessorProperties.CONFIG_MAX_PENDING_RECORDS).value() +
-                       scope.maxPollRecords();
+        int capacity = maxPendingRecords + scope.maxPollRecords();
         TopicPartition tp = scope.topicPartition();
         Metrics metricsCtor = Metrics.withTags("subscription", scope.subscriptionId(),
                                                "topic", tp.topic(),
@@ -144,6 +145,10 @@ public class PartitionContext implements AutoCloseable {
 
     public int pendingTasksCount() {
         return commitControl.pendingOffsetsCount();
+    }
+
+    public boolean shouldPausePartition() {
+        return pendingTasksCount() >= maxPendingRecords;
     }
 
     public void destroyProcessors() throws Exception {

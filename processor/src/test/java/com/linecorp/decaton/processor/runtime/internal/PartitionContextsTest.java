@@ -63,8 +63,6 @@ public class PartitionContextsTest {
     @Rule
     public MockitoRule rule = MockitoJUnit.rule();
 
-    private static final int PENDING_RECORDS_TO_PAUSE = 10;
-
     private final DynamicProperty<Integer> partitionConcurrencyProperty =
             new DynamicProperty<>(CONFIG_PARTITION_CONCURRENCY);
 
@@ -111,7 +109,7 @@ public class PartitionContextsTest {
     @Before
     public void setup() {
         partitionConcurrencyProperty.set(1);
-        maxPendingRecordsProperty.set(PENDING_RECORDS_TO_PAUSE);
+        maxPendingRecordsProperty.set(10);
         contexts = spy(new PartitionContexts(scope, processors));
     }
 
@@ -165,8 +163,6 @@ public class PartitionContextsTest {
     public void testPartitionsNeedsPause() {
         List<PartitionContext> cts = putContexts(2);
 
-        doReturn(0).when(cts.get(0)).pendingTasksCount();
-        doReturn(0).when(cts.get(1)).pendingTasksCount();
         doReturn(false).when(cts.get(0)).reloadRequested();
         doReturn(false).when(cts.get(1)).reloadRequested();
 
@@ -192,7 +188,7 @@ public class PartitionContextsTest {
         assertTrue(needPause.isEmpty());
 
         // Pause 1 partition.
-        doReturn(PENDING_RECORDS_TO_PAUSE).when(cts.get(0)).pendingTasksCount();
+        doReturn(true).when(cts.get(0)).shouldPausePartition();
         needPause = contexts.partitionsNeedsPause();
         assertEquals(1, needPause.size());
         assertEquals(cts.get(0).topicPartition(), needPause.iterator().next());
@@ -225,14 +221,11 @@ public class PartitionContextsTest {
     public void testPartitionsNeedsResume() {
         List<PartitionContext> cts = putContexts(2);
 
-        doReturn(0).when(cts.get(0)).pendingTasksCount();
-        doReturn(0).when(cts.get(1)).pendingTasksCount();
-
         Collection<TopicPartition> needsResume = contexts.partitionsNeedsResume();
         assertTrue(needsResume.isEmpty());
 
         // Pause 1 partition.
-        doReturn(PENDING_RECORDS_TO_PAUSE).when(cts.get(0)).pendingTasksCount();
+        doReturn(true).when(cts.get(0)).shouldPausePartition();
         needsResume = contexts.partitionsNeedsResume();
         assertTrue(needsResume.isEmpty());
 
@@ -241,14 +234,8 @@ public class PartitionContextsTest {
         needsResume = contexts.partitionsNeedsResume();
         assertTrue(needsResume.isEmpty());
 
-        // Task count is now lower, but so is the threshold. Still shouldn't appear in resume list.
-        maxPendingRecordsProperty.set(PENDING_RECORDS_TO_PAUSE - 1);
-        doReturn(PENDING_RECORDS_TO_PAUSE - 1).when(cts.get(0)).pendingTasksCount();
-        needsResume = contexts.partitionsNeedsResume();
-        assertTrue(needsResume.isEmpty());
-
-        // Task count is now lower than the threshold. Should appear in resume response.
-        doReturn(PENDING_RECORDS_TO_PAUSE - 2).when(cts.get(0)).pendingTasksCount();
+        // Partition no longer needs to be paused. Should appear in resume response.
+        doReturn(false).when(cts.get(0)).shouldPausePartition();
         needsResume = contexts.partitionsNeedsResume();
         assertEquals(1, needsResume.size());
         assertEquals(cts.get(0).topicPartition(), needsResume.iterator().next());

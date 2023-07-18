@@ -19,11 +19,14 @@ package com.linecorp.decaton.processor.runtime.internal;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.OptionalLong;
 
@@ -48,7 +51,7 @@ public class PartitionContextTest {
     public MockitoRule rule = MockitoJUnit.rule();
 
     private static final Property<Integer> MAX_PENDING_RECORDS =
-            Property.ofStatic(ProcessorProperties.CONFIG_MAX_PENDING_RECORDS, 100);
+            Property.ofStatic(ProcessorProperties.CONFIG_MAX_PENDING_RECORDS, 10);
 
     private static PartitionScope scope(String topic, Optional<PerKeyQuotaConfig> perKeyQuotaConfig) {
         return new PartitionScope(
@@ -82,6 +85,38 @@ public class PartitionContextTest {
 
         context.updateCommittedOffset(100);
         assertFalse(context.offsetWaitingCommit().isPresent());
+    }
+
+    @Test
+    public void testShouldPausePartition() {
+        PartitionContext context = new PartitionContext(scope("topic", Optional.empty()), processors);
+        assertFalse(context.shouldPausePartition());
+
+        // Register MAX-1 records, which should not pause the partition.
+        int limit = MAX_PENDING_RECORDS.value();
+        List<OffsetState> states = new ArrayList<>();
+        for (int i = 0; i < limit - 1; i++) {
+            states.add(context.registerOffset(100 + i));
+        }
+        assertEquals(limit - 1, context.pendingTasksCount());
+        assertFalse(context.shouldPausePartition());
+
+        // Register one more record, requiring to pause the partition.
+        states.add(context.registerOffset(200));
+        assertEquals(limit, context.pendingTasksCount());
+        assertTrue(context.shouldPausePartition());
+
+        // Complete the first record, allowing resume.
+        states.get(0).completion().complete();
+        context.updateHighWatermark();
+        assertEquals(limit - 1, context.pendingTasksCount());
+        assertFalse(context.shouldPausePartition());
+
+        // Complete all records.
+        states.forEach(state -> state.completion().complete());
+        context.updateHighWatermark();
+        assertEquals(0, context.pendingTasksCount());
+        assertFalse(context.shouldPausePartition());
     }
 
     @Test
