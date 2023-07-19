@@ -88,8 +88,7 @@ public class PropertyReloadRequestTest {
                                                                         new ProtocolBuffersDeserializer<>(
                                                                                 HelloTask.parser()))
                                                              .thenProcess(processor))
-                                  .addProperties(StaticPropertySupplier.of(concurrencyProp),
-                                                 StaticPropertySupplier.of(recordsProp)));
+                                  .addProperties(StaticPropertySupplier.of(concurrencyProp, recordsProp)));
              DecatonClient<HelloTask> client = TestUtils.client(topicName, rule.bootstrapServers())) {
 
             int count = 0;
