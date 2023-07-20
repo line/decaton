@@ -33,20 +33,22 @@ import com.linecorp.decaton.processor.runtime.internal.RateLimiter;
 
 /**
  * Collection of properties that can be configured to adjust {@link DecatonProcessor}'s behavior.
- *
- * Description of each attributes:
- * - Reloadable : Whether update on the property can be applied to running instance without restarting it.
- *                Note that for properties enabled for this attribute, updating its value may take certain
- *                latency.
+ * <p>
+ * Description of each attribute:
+ * <ul>
+ * <li>Reloadable: Whether update on the property can be applied to running instance without restarting it.
+ *                 Note that for properties enabled for this attribute, updating its value may take certain
+ *                 latency.</li>
+ * </ul>
  */
 public class ProcessorProperties extends AbstractDecatonProperties {
     /**
      * List of keys of task to skip processing.
-     *
+     * <p>
      * Note that this property accepts only String keys, while Decaton consumer supports consuming
      * keys of arbitrary type. This means that records with non-String keys may just pass through
      * this filter.
-     *
+     * <p>
      * Reloadable: yes
      */
     public static final PropertyDefinition<List<String>> CONFIG_IGNORE_KEYS =
@@ -54,16 +56,18 @@ public class ProcessorProperties extends AbstractDecatonProperties {
                                       PropertyDefinition.checkListElement(String.class));
     /**
      * Maximum rate of processing tasks per-partition in second.
-     *
-     * If the value N is
-     *   - (0, 1,000,000]: Do the best to process tasks as much as N per second.
-     *       N may not be kept well if a task takes over a second to process or N is greater than
-     *       actual throughput per second.
-     *   -  0: Stop all processing but the task currently being processed isn`t interrupted
-     *   - -1: Unlimited
-     *
+     * <p>
+     * If the value N is:
+     * <ul>
+     * <li>(0, 1,000,000]: Do the best to process tasks as much as N per second.
+     *     N may not be kept well if a task takes over a second to process or N is greater than
+     *     actual throughput per second.</li>
+     * <li>0: Stop all processing but the task currently being processed isn`t interrupted</li>
+     * <li>-1: Unlimited</li>
+     * </ul>
+     * <p>
      * See also {@link RateLimiter}.
-     *
+     * <p>
      * Reloadable: yes
      */
     public static final PropertyDefinition<Long> CONFIG_PROCESSING_RATE =
@@ -74,9 +78,10 @@ public class ProcessorProperties extends AbstractDecatonProperties {
                                            && (long) v <= RateLimiter.MAX_RATE);
     /**
      * Concurrency used to process tasks coming from single partition.
+     * <p>
      * Reloading this property will be performed for each assigned partition as soon as
      * the current pending tasks of the assigned partition have done.
-     *
+     * <p>
      * Reloadable: yes
      */
     public static final PropertyDefinition<Integer> CONFIG_PARTITION_CONCURRENCY =
@@ -84,17 +89,21 @@ public class ProcessorProperties extends AbstractDecatonProperties {
                                       v -> v instanceof Integer && (Integer) v > 0);
     /**
      * Number of records to pause source partition if pending count exceeds this number.
-     *
-     * Reloadable: no
+     * <p>
+     * Reloading this property will be performed for each assigned partition as soon as
+     * the current pending tasks of the assigned partition have done.
+     * <p>
+     * Reloadable: yes
      */
     public static final PropertyDefinition<Integer> CONFIG_MAX_PENDING_RECORDS =
             PropertyDefinition.define("decaton.max.pending.records", Integer.class, 10_000,
                                       v -> v instanceof Integer && (Integer) v > 0);
     /**
      * Interval in milliseconds to put in between offset commits.
-     * Too frequent offset commit would cause high load on brokers while it doesn't essentially prevents
+     * <p>
+     * Too frequent offset commit would cause high load on brokers while it doesn't essentially prevent
      * duplicate processing.
-     *
+     * <p>
      * Reloadable: yes
      */
     public static final PropertyDefinition<Long> CONFIG_COMMIT_INTERVAL_MS =
@@ -102,16 +111,19 @@ public class ProcessorProperties extends AbstractDecatonProperties {
                                       v -> v instanceof Long && (Long) v >= 0);
     /**
      * Timeout for consumer group rebalance.
+     * <p>
      * Decaton waits up to this time for tasks currently pending or in-progress to finish before allowing a
      * rebalance to proceed.
+     * <p>
      * Any tasks that do not complete within this timeout will not have their offsets committed before the
      * rebalance, meaning they may be processed multiple times (as they will be processed again after the
      * rebalance). If {@link #CONFIG_PARTITION_CONCURRENCY} is greater than 1, this situation might also cause
      * other records from the same partition to be processed multiple times (see
      * {@link OutOfOrderCommitControl}).
+     * <p>
      * Generally, this should be set such that {@link #CONFIG_MAX_PENDING_RECORDS} can be comfortably processed
      * within this timeout.
-     *
+     * <p>
      * Reloadable: yes
      */
     public static final PropertyDefinition<Long> CONFIG_GROUP_REBALANCE_TIMEOUT_MS =
@@ -124,9 +136,10 @@ public class ProcessorProperties extends AbstractDecatonProperties {
      * still be running even after {@link ProcessorSubscription#close()} returns, which might lead to errors
      * from e.g. shutting down dependencies of this {@link ProcessorSubscription} that are still in use from
      * async tasks.
+     * <p>
      * Generally, this should be set such that {@link #CONFIG_MAX_PENDING_RECORDS} can be comfortably processed
      * within this timeout.
-     *
+     * <p>
      * Reloadable: yes
      */
     public static final PropertyDefinition<Long> CONFIG_SHUTDOWN_TIMEOUT_MS =
@@ -134,11 +147,11 @@ public class ProcessorProperties extends AbstractDecatonProperties {
                                       v -> v instanceof Long && (Long) v >= 0);
 
     /**
-     * Control whether to enable or disable decaton specific information store in slf4j's {@link MDC}.
+     * Control whether to enable or disable decaton specific information store in SLF4J's {@link MDC}.
      * This option is enabled by default, but it is known to cause some object allocations which could become
      * a problem in massive scale traffic. This option intend to provide an option for users to disable MDC
      * properties where not necessary to reduce GC pressure.
-     *
+     * <p>
      * Reloadable: yes
      */
     public static final PropertyDefinition<Boolean> CONFIG_LOGGING_MDC_ENABLED =
@@ -146,9 +159,9 @@ public class ProcessorProperties extends AbstractDecatonProperties {
                                       v -> v instanceof Boolean);
     /**
      * Controls whether to enable or disable binding Micrometer's KafkaClientMetrics to decaton consumers.
-     * This is disabled for backwards compatiblity, but recommended if you rely on Micrometer
+     * This is disabled for backwards compatibility, but recommended if you rely on Micrometer
      * since JMX metrics are deprecated. The downside is a possible increase in metrics count.
-     *
+     * <p>
      * Reloadable: no
      */
     public static final PropertyDefinition<Boolean> CONFIG_BIND_CLIENT_METRICS =
@@ -156,24 +169,26 @@ public class ProcessorProperties extends AbstractDecatonProperties {
                                       v -> v instanceof Boolean);
     /**
      * Control time to "timeout" a deferred completion.
+     * <p>
      * Decaton allows {@link DecatonProcessor}s to defer completion of a task by calling
      * {@link ProcessingContext#deferCompletion()}, which is useful for processors which integrates with
      * asynchronous processing frameworks that sends the processing context to somewhere else and get back
      * later.
+     * <p>
      * However, since leaking {@link Completion} returned by {@link ProcessingContext#deferCompletion()} means
      * to create a never-completed task, that causes consumption to suck completely after
      * {@link #CONFIG_MAX_PENDING_RECORDS} records stacked up, which is not desirable for some use cases.
-     *
+     * <p>
      * By setting this timeout, Decaton will try to "timeout" a deferred completion after the specified period.
      * By setting the timeout to sufficiently large value, which you can be sure that none of normal processing
      * to take, some potentially leaked completion will be forcefully completed and decaton can continue to
      * consume the following tasks.
-     *
-     * Be very careful when using this feature since forcefully completing a timed out completion might leads
-     * you some data loss if the corresponding processing hasn't yet complete.
-     *
+     * <p>
+     * Be very careful when using this feature since forcefully completing a timed out completion might lead
+     * to some data loss if the corresponding processing hasn't yet complete.
+     * <p>
      * This timeout can be disabled by setting -1, and it is the default.
-     *
+     * <p>
      * Reloadable: yes
      */
     public static final PropertyDefinition<Long> CONFIG_DEFERRED_COMPLETE_TIMEOUT_MS =
@@ -194,14 +209,15 @@ public class ProcessorProperties extends AbstractDecatonProperties {
 
     /**
      * Timeout for processor threads termination.
+     * <p>
      * When a partition is revoked for rebalance or a subscription is about to be shutdown,
      * all processors will be destroyed.
      * At this time, Decaton waits synchronously for the running tasks to finish until this timeout.
-     *
+     * <p>
      * Even if timeout occurs, Decaton will continue other clean-up tasks.
      * Therefore, you can set this timeout only if unexpected behavior is acceptable in the middle of the last
      * {@link DecatonProcessor#process(ProcessingContext, Object)} which timed out.
-     *
+     * <p>
      * Reloadable: yes
      */
     public static final PropertyDefinition<Long> CONFIG_PROCESSOR_THREADS_TERMINATION_TIMEOUT_MS =

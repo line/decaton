@@ -45,6 +45,7 @@ public class PartitionContext implements AutoCloseable {
     private final PerKeyQuotaManager perKeyQuotaManager;
     private final Processors<?> processors;
     private final PartitionStateMetrics metrics;
+    private final int maxPendingRecords;
 
     // The offset committed successfully at last commit
     private volatile long lastCommittedOffset;
@@ -69,18 +70,18 @@ public class PartitionContext implements AutoCloseable {
     @Setter
     private volatile boolean reloadRequested;
 
-    public PartitionContext(PartitionScope scope, Processors<?> processors, int maxPendingRecords) {
-        this(scope, processors, new PartitionProcessor(scope, processors), maxPendingRecords);
+    public PartitionContext(PartitionScope scope, Processors<?> processors) {
+        this(scope, processors, new PartitionProcessor(scope, processors));
     }
 
     // visible for testing
     PartitionContext(PartitionScope scope,
                      Processors<?> processors,
-                     PartitionProcessor partitionProcessor,
-                     int maxPendingRecords) {
+                     PartitionProcessor partitionProcessor) {
         this.scope = scope;
         this.processors = processors;
         this.partitionProcessor = partitionProcessor;
+        maxPendingRecords = scope.props().get(ProcessorProperties.CONFIG_MAX_PENDING_RECORDS).value();
 
         int capacity = maxPendingRecords + scope.maxPollRecords();
         TopicPartition tp = scope.topicPartition();
@@ -107,7 +108,7 @@ public class PartitionContext implements AutoCloseable {
 
     /**
      * Returns the largest offset waiting to be committed, if exists.
-     *
+     * <p>
      * It returns non-empty value with offset which is larger than the offset
      * reported last by {@link #updateCommittedOffset(long)}.
      *
@@ -144,6 +145,10 @@ public class PartitionContext implements AutoCloseable {
 
     public int pendingTasksCount() {
         return commitControl.pendingOffsetsCount();
+    }
+
+    public boolean shouldPausePartition() {
+        return pendingTasksCount() >= maxPendingRecords;
     }
 
     public void destroyProcessors() throws Exception {

@@ -19,6 +19,7 @@ package com.linecorp.decaton.processor.runtime.internal;
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonMap;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
@@ -68,7 +69,6 @@ public class CommitManagerTest {
     public void setUp() {
         commitManager = spy(new CommitManager(consumer, commitIntervalMillis, store, clock));
     }
-    @SuppressWarnings("unchecked")
     @Test(timeout = 5000)
     public void testCommitCompletedOffsetsSync() {
         // When committed ended up successfully update committed offsets
@@ -77,29 +77,27 @@ public class CommitManagerTest {
         doReturn(offsets).when(store).commitReadyOffsets();
 
         commitManager.commitSync();
-        verify(consumer, times(1)).commitSync(any(Map.class));
+        verify(consumer, times(1)).commitSync(anyMap());
         verify(store, times(1)).storeCommittedOffsets(offsets);
     }
 
-    @SuppressWarnings("unchecked")
     @Test(timeout = 5000)
     public void testCommitCompletedOffsetsSync_NO_COMMIT() {
         // When target offsets is empty do not attempt any commit
         doReturn(emptyMap()).when(store).commitReadyOffsets();
 
         commitManager.commitSync();
-        verify(consumer, never()).commitSync(any(Map.class));
-        verify(consumer, never()).commitAsync(any(Map.class), any());
+        verify(consumer, never()).commitSync(anyMap());
+        verify(consumer, never()).commitAsync(anyMap(), any());
     }
 
-    @SuppressWarnings("unchecked")
     @Test(timeout = 5000)
     public void testCommitCompletedOffsetsSync_FAIL() {
         // When commit raised an exception do not update committed offsets
         Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(
                 new TopicPartition("topic", 0), new OffsetAndMetadata(1234, null));
         doReturn(offsets).when(store).commitReadyOffsets();
-        doThrow(new RuntimeException("error")).when(consumer).commitSync(any(Map.class));
+        doThrow(new RuntimeException("error")).when(consumer).commitSync(anyMap());
         try {
             commitManager.commitSync();
         } catch (RuntimeException ignored) {
@@ -108,9 +106,8 @@ public class CommitManagerTest {
         verify(store, never()).storeCommittedOffsets(any());
     }
 
-    @SuppressWarnings("unchecked")
     @Test(timeout = 5000)
-    public void testCommitCompletedOffsetsAsync() throws InterruptedException {
+    public void testCommitCompletedOffsetsAsync() {
         Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(
                 new TopicPartition("topic", 0), new OffsetAndMetadata(1234, null));
         doReturn(offsets).when(store).commitReadyOffsets();
@@ -119,17 +116,17 @@ public class CommitManagerTest {
             OffsetCommitCallback cb = invocation.getArgument(1);
             cbRef.set(cb);
             return null;
-        }).when(consumer).commitAsync(any(Map.class), any());
+        }).when(consumer).commitAsync(anyMap(), any());
 
         commitManager.commitAsync();
 
         // Committed offsets should not be updated yet here
-        verify(consumer, times(1)).commitAsync(any(Map.class), any());
+        verify(consumer, times(1)).commitAsync(anyMap(), any());
         verify(store, never()).storeCommittedOffsets(any());
 
         // Subsequent async commit attempt should be ignored until the in-flight one completes
         commitManager.commitAsync();
-        verify(consumer, times(1)).commitAsync(any(Map.class), any());
+        verify(consumer, times(1)).commitAsync(anyMap(), any());
         verify(store, never()).storeCommittedOffsets(any());
 
         // Committed offset should be updated once the in-flight request completes
@@ -137,9 +134,8 @@ public class CommitManagerTest {
         verify(store, times(1)).storeCommittedOffsets(offsets);
     }
 
-    @SuppressWarnings("unchecked")
     @Test(timeout = 5000)
-    public void testCommitCompletedOffsetsAsync_FAIL() throws InterruptedException {
+    public void testCommitCompletedOffsetsAsync_FAIL() {
         Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(
                 new TopicPartition("topic", 0), new OffsetAndMetadata(1234, null));
         doReturn(offsets).when(store).commitReadyOffsets();
@@ -148,7 +144,7 @@ public class CommitManagerTest {
             OffsetCommitCallback cb = invocation.getArgument(1);
             cbRef.set(cb);
             return null;
-        }).when(consumer).commitAsync(any(Map.class), any());
+        }).when(consumer).commitAsync(anyMap(), any());
 
         commitManager.commitAsync();
         // If async commit fails it should never update committed offset
@@ -156,7 +152,6 @@ public class CommitManagerTest {
         verify(store, never()).storeCommittedOffsets(any());
     }
 
-    @SuppressWarnings("unchecked")
     @Test(timeout = 5000)
     public void testCommitCompletedOffsetsAsync_SUBSEQUENT_SYNC() {
         Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(
@@ -168,7 +163,7 @@ public class CommitManagerTest {
 
         // Subsequent sync commit can proceed regardless of in-flight async commit
         commitManager.commitSync();
-        verify(consumer, times(1)).commitSync(any(Map.class));
+        verify(consumer, times(1)).commitSync(anyMap());
     }
 
     @Test

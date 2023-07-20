@@ -76,6 +76,11 @@ public class PropertyReloadRequestTest {
         DynamicProperty<Integer> concurrencyProp =
                 new DynamicProperty<>(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY);
         concurrencyProp.set(1);
+
+        DynamicProperty<Integer> recordsProp =
+                new DynamicProperty<>(ProcessorProperties.CONFIG_MAX_PENDING_RECORDS);
+        recordsProp.set(10);
+
         try (ProcessorSubscription subscription = TestUtils.subscription(
                 rule.bootstrapServers(),
                 builder -> builder.processorsBuilder(ProcessorsBuilder
@@ -83,7 +88,7 @@ public class PropertyReloadRequestTest {
                                                                         new ProtocolBuffersDeserializer<>(
                                                                                 HelloTask.parser()))
                                                              .thenProcess(processor))
-                                  .addProperties(StaticPropertySupplier.of(concurrencyProp)));
+                                  .addProperties(StaticPropertySupplier.of(concurrencyProp, recordsProp)));
              DecatonClient<HelloTask> client = TestUtils.client(topicName, rule.bootstrapServers())) {
 
             int count = 0;
@@ -92,12 +97,19 @@ public class PropertyReloadRequestTest {
                 if (count == 1000) {
                     TimeUnit.SECONDS.sleep(1);
                     concurrencyProp.set(3);
+                } else if (count == 3000) {
+                    TimeUnit.SECONDS.sleep(1);
+                    recordsProp.set(20);
                 } else if (count == 5000) {
                     TimeUnit.SECONDS.sleep(1);
                     concurrencyProp.set(1);
+                    recordsProp.set(5);
                 } else if (count == 7500) {
                     TimeUnit.SECONDS.sleep(1);
                     concurrencyProp.set(5);
+                } else if (count == 9000) {
+                    TimeUnit.SECONDS.sleep(1);
+                    recordsProp.set(15);
                 }
                 client.put(key, HelloTask.getDefaultInstance());
             }

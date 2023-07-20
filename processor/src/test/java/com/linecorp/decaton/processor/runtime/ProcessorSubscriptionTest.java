@@ -21,6 +21,8 @@ import static java.util.Collections.singletonMap;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.verify;
@@ -183,7 +185,7 @@ public class ProcessorSubscriptionTest {
         doAnswer(invocation -> {
             listener.set(invocation.getArgument(1));
             return null;
-        }).when(consumer).subscribe(any(Collection.class), any(ConsumerRebalanceListener.class));
+        }).when(consumer).subscribe(anyCollection(), any(ConsumerRebalanceListener.class));
 
         BlockingQueue<Long> feedOffsets = new ArrayBlockingQueue<>(4);
         feedOffsets.add(100L);
@@ -203,8 +205,8 @@ public class ProcessorSubscriptionTest {
             committedOffsets.putAll(invocation.getArgument(0));
             return null;
         };
-        doAnswer(storeCommitOffsets).when(consumer).commitSync(any(Map.class));
-        doAnswer(storeCommitOffsets).when(consumer).commitAsync(any(Map.class), any());
+        doAnswer(storeCommitOffsets).when(consumer).commitSync(anyMap());
+        doAnswer(storeCommitOffsets).when(consumer).commitAsync(anyMap(), any());
 
         AtomicBoolean first = new AtomicBoolean();
         doAnswer(invocation -> {
