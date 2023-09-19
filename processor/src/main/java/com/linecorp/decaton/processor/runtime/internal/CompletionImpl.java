@@ -79,6 +79,8 @@ public class CompletionImpl implements Completion {
         try {
             return cb.apply(this) == TimeoutChoice.GIVE_UP;
         } catch (Exception e) {
+            // Catching Exception instead of RuntimeException, since
+            // Kotlin-implemented callback would throw checked exceptions
             log.warn("Completion timeout callback threw an exception", e);
             return false;
         }

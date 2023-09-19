@@ -80,6 +80,9 @@ public class ProcessPipeline<T> implements AutoCloseable {
         try {
             extracted = extract(request);
         } catch (Exception e) {
+            // Catching Exception instead of RuntimeException, since
+            // Kotlin-implemented extractor would throw checked exceptions
+
             // Complete the offset to forward offsets
             offsetState.completion().complete();
 

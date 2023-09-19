@@ -124,6 +124,8 @@ public class CentralDogmaPropertySupplier implements PropertySupplier, AutoClose
             try {
                 setValue(prop, node);
             } catch (Exception e) {
+                // Catching Exception instead of RuntimeException, since
+                // Kotlin-implemented DynamicProperty would throw checked exceptions
                 logger.warn("Failed to set value updated from CentralDogma for {}", definition.name(), e);
             }
         });
@@ -131,6 +133,8 @@ public class CentralDogmaPropertySupplier implements PropertySupplier, AutoClose
             JsonNode node = child.initialValueFuture().join().value(); //doesn't fail since it's a child watcher
             setValue(prop, node);
         } catch (Exception e) {
+            // Catching Exception instead of RuntimeException, since
+            // Kotlin-implemented DynamicProperty would throw checked exceptions
             logger.warn("Failed to set initial value from CentralDogma for {}", definition.name(), e);
         }
 

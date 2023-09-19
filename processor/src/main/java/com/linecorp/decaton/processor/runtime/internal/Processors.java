@@ -80,6 +80,9 @@ public class Processors<T> {
             logger.info("Creating partition processor core: {}", scope);
             return new ProcessPipeline<>(scope, processors, retryProcessor, taskExtractor, scheduler, metrics);
         } catch (Exception e) {
+            // Catching Exception instead of RuntimeException, since
+            // Kotlin-implemented processor-supplier would throw checked exceptions
+
             // If exception occurred in the middle of instantiating processors, we have to make sure
             // all the previously created processors are destroyed before bubbling up the exception.
             try {
@@ -87,6 +90,9 @@ public class Processors<T> {
                                    scope.topicPartition(),
                                    scope.threadId());
             } catch (Exception e1) {
+                // Catching Exception instead of RuntimeException, since
+                // Kotlin-implemented processor-supplier would throw checked exceptions
+
                 logger.warn("processor supplier threw exception while leaving thread scope", e1);
             }
             throw e;
