@@ -119,7 +119,7 @@ public interface DecatonClient<T> extends AutoCloseable {
         result.exceptionally(e -> {
             try {
                 errorCallback.accept(e);
-            } catch (RuntimeException ignored) {
+            } catch (Exception ignored) {
                 // noop
             }
             return null;

@@ -123,14 +123,14 @@ public class CentralDogmaPropertySupplier implements PropertySupplier, AutoClose
         child.watch(node -> {
             try {
                 setValue(prop, node);
-            } catch (RuntimeException e) {
+            } catch (Exception e) {
                 logger.warn("Failed to set value updated from CentralDogma for {}", definition.name(), e);
             }
         });
         try {
             JsonNode node = child.initialValueFuture().join().value(); //doesn't fail since it's a child watcher
             setValue(prop, node);
-        } catch (RuntimeException e) {
+        } catch (Exception e) {
             logger.warn("Failed to set initial value from CentralDogma for {}", definition.name(), e);
         }
 

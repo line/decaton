@@ -79,14 +79,14 @@ public class Processors<T> {
                              .collect(Collectors.toList());
             logger.info("Creating partition processor core: {}", scope);
             return new ProcessPipeline<>(scope, processors, retryProcessor, taskExtractor, scheduler, metrics);
-        } catch (RuntimeException e) {
+        } catch (Exception e) {
             // If exception occurred in the middle of instantiating processors, we have to make sure
             // all the previously created processors are destroyed before bubbling up the exception.
             try {
                 destroyThreadScope(scope.subscriptionId(),
                                    scope.topicPartition(),
                                    scope.threadId());
-            } catch (RuntimeException e1) {
+            } catch (Exception e1) {
                 logger.warn("processor supplier threw exception while leaving thread scope", e1);
             }
             throw e;

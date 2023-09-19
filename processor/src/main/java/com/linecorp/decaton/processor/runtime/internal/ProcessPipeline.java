@@ -79,7 +79,7 @@ public class ProcessPipeline<T> implements AutoCloseable {
         final DecatonTask<T> extracted;
         try {
             extracted = extract(request);
-        } catch (RuntimeException e) {
+        } catch (Exception e) {
             // Complete the offset to forward offsets
             offsetState.completion().complete();
 
