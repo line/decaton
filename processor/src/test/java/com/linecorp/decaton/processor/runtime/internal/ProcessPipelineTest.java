@@ -187,6 +187,21 @@ public class ProcessPipelineTest {
     }
 
     @Test
+    public void testExtract_ThrowsNonRuntimeException() throws InterruptedException {
+        // thenThrow cannot be used with checked exception
+        when(extractorMock.extract(any())).thenAnswer(inv -> {
+            throw new Exception();
+        });
+
+        TaskRequest request = taskRequest();
+        // Checking exception doesn't bubble up
+        pipeline.scheduleThenProcess(request);
+        verify(schedulerMock, never()).schedule(any());
+        verify(processorMock, never()).process(any(), any());
+        assertTrue(request.offsetState().completion().isComplete());
+    }
+
+    @Test
     public void testScheduleThenProcess_ExtractThrows() throws InterruptedException {
         when(extractorMock.extract(any())).thenThrow(new RuntimeException());
 

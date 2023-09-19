@@ -119,7 +119,10 @@ public interface DecatonClient<T> extends AutoCloseable {
         result.exceptionally(e -> {
             try {
                 errorCallback.accept(e);
-            } catch (RuntimeException ignored) {
+            } catch (Exception ignored) {
+                // Catching Exception instead of RuntimeException, since
+                // Kotlin-implemented callback would throw checked exceptions
+
                 // noop
             }
             return null;
