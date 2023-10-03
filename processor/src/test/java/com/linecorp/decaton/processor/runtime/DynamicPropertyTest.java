@@ -16,8 +16,9 @@
 
 package com.linecorp.decaton.processor.runtime;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
@@ -28,17 +29,14 @@ import static org.mockito.Mockito.verify;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiConsumer;
 
-import org.junit.Rule;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.Spy;
-import org.mockito.junit.MockitoJUnit;
-import org.mockito.junit.MockitoRule;
+import org.mockito.junit.jupiter.MockitoExtension;
 
+@ExtendWith(MockitoExtension.class)
 public class DynamicPropertyTest {
-    @Rule
-    public MockitoRule rule = MockitoJUnit.rule();
-
     private static final PropertyDefinition<Long> LONG_PROPERTY =
             PropertyDefinition.define("num.property", Long.class, 0L,
                                       v -> v instanceof Long && (Long) v >= 0L);
@@ -71,9 +69,9 @@ public class DynamicPropertyTest {
         verify(longPropertyListener, never()).accept(any(), any());
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testSetInvalidValue() {
-        prop.set(-1L);
+        assertThrows(IllegalArgumentException.class, () -> prop.set(-1L));
     }
 
     @Test
@@ -98,8 +96,8 @@ public class DynamicPropertyTest {
         assertEquals(10L, prop.value().longValue());
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testCheckingSetInvalidType() {
-        prop.checkingSet("string");
+        assertThrows(IllegalArgumentException.class, () -> prop.checkingSet("string"));
     }
 }

@@ -16,13 +16,13 @@
 
 package com.linecorp.decaton.processor.runtime.internal;
 
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import org.junit.jupiter.api.Test;
 
 import com.linecorp.decaton.processor.runtime.DecatonTask;
 import com.linecorp.decaton.protobuf.ProtocolBuffersDeserializer;
-import org.junit.Test;
-
 import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
 import com.linecorp.decaton.protocol.Decaton.TaskMetadataProto;
 import com.linecorp.decaton.protocol.Sample.HelloTask;

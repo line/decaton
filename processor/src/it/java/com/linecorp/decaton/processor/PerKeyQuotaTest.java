@@ -23,10 +23,11 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
-import org.junit.After;
-import org.junit.Before;
-import org.junit.ClassRule;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.extension.RegisterExtension;
 
 import com.linecorp.decaton.client.DecatonClient;
 import com.linecorp.decaton.processor.runtime.PerKeyQuotaConfig;
@@ -38,31 +39,32 @@ import com.linecorp.decaton.processor.runtime.StaticPropertySupplier;
 import com.linecorp.decaton.processor.runtime.internal.RateLimiter;
 import com.linecorp.decaton.protobuf.ProtocolBuffersDeserializer;
 import com.linecorp.decaton.protocol.Sample.HelloTask;
-import com.linecorp.decaton.testing.KafkaClusterRule;
+import com.linecorp.decaton.testing.KafkaClusterExtension;
 import com.linecorp.decaton.testing.TestUtils;
 import com.linecorp.decaton.testing.processor.ProcessingGuarantee.GuaranteeType;
 import com.linecorp.decaton.testing.processor.ProcessorTestSuite;
 
 public class PerKeyQuotaTest {
-    @ClassRule
-    public static KafkaClusterRule rule = new KafkaClusterRule();
+    @RegisterExtension
+    public static KafkaClusterExtension rule = new KafkaClusterExtension();
 
     private String topic;
     private String shapingTopic;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         topic = rule.admin().createRandomTopic(3, 3);
         shapingTopic = topic + "-shaping";
         rule.admin().createTopic(shapingTopic, 3, 3);
     }
 
-    @After
+    @AfterEach
     public void tearDown() {
         rule.admin().deleteTopics(true, topic, shapingTopic);
     }
 
-    @Test(timeout = 30000)
+    @Test
+    @Timeout(30000)
     public void testShaping() throws Exception {
         Set<String> keys = new HashSet<>();
         for (int i = 0; i < 10000; i++) {
@@ -108,7 +110,8 @@ public class PerKeyQuotaTest {
         }
     }
 
-    @Test(timeout = 30000)
+    @Test
+    @Timeout(30000)
     public void testShaping_processingGuarantee() throws Exception {
         ProcessorTestSuite
                 .builder(rule)

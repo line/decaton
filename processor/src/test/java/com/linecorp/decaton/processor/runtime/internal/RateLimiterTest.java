@@ -20,9 +20,9 @@ import static java.util.concurrent.TimeUnit.HOURS;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.spy;
 
@@ -35,20 +35,19 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.LongSupplier;
 import java.util.function.LongUnaryOperator;
 
-import org.junit.Rule;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnit;
-import org.mockito.junit.MockitoRule;
+import org.mockito.junit.jupiter.MockitoExtension;
 
+@ExtendWith(MockitoExtension.class)
 public class RateLimiterTest {
-    @Rule
-    public MockitoRule rule = MockitoJUnit.rule();
-
     @Mock
     private LongSupplier timeSupplier;
 
-    @Test(timeout = 2000)
+    @Test
+    @Timeout(2000)
     public void testBasic() throws InterruptedException {
         RateLimiter limiter = RateLimiter.create(1L);
         long mustBeZero = limiter.acquire();
@@ -58,7 +57,8 @@ public class RateLimiterTest {
         assertNotEquals(0L, mustBeThrottled);
     }
 
-    @Test(timeout = 2000)
+    @Test
+    @Timeout(2000)
     public void testTooLargeRateMeansUnlimited() throws InterruptedException {
         TimeUnit currentResolution = TimeUnit.MICROSECONDS;
         long maxRatePerSecond = currentResolution.convert(1L, SECONDS);
@@ -67,7 +67,8 @@ public class RateLimiterTest {
         assertEquals(0L, limiter.acquire());
     }
 
-    @Test(timeout = 2000)
+    @Test
+    @Timeout(2000)
     public void testMinusRateMeansUnlimited() throws InterruptedException {
         new Random().longs(10L, Long.MIN_VALUE, 0L)
                     .forEach(rate -> {
@@ -81,7 +82,8 @@ public class RateLimiterTest {
                     );
     }
 
-    @Test(timeout = 1000)
+    @Test
+    @Timeout(1000)
     public void testUnlimited() throws InterruptedException {
         RateLimiter limiter = RateLimiter.create(-1L);
         for (int i = 0; i < 50; ++i) {
@@ -90,7 +92,8 @@ public class RateLimiterTest {
         }
     }
 
-    @Test(timeout = 2000)
+    @Test
+    @Timeout(2000)
     public void testAveragingThrottling() throws InterruptedException {
         final long rate = 10L;
         final long permitIntervalNanos = SECONDS.toNanos(1L) / rate;
@@ -126,7 +129,8 @@ public class RateLimiterTest {
         assertEquals(expectedThrottlingMicros.applyAsLong(currentNanos), limiter.reserve(1));
     }
 
-    @Test(timeout = 2000)
+    @Test
+    @Timeout(2000)
     public void testInfinitelyBlockedUntilClosed() throws Exception {
         RateLimiter limiter = RateLimiter.create(0L);
 
@@ -155,7 +159,8 @@ public class RateLimiterTest {
         assertEquals(threadsCount, closedWell.get());
     }
 
-    @Test(timeout = 2000)
+    @Test
+    @Timeout(2000)
     public void testThrottlingIncludingBlocking() throws InterruptedException {
         RateLimiter limiter = spy(new AveragingRateLimiter(10L, 1.0d, timeSupplier));
 
@@ -175,7 +180,8 @@ public class RateLimiterTest {
         assertNotEquals(0L, limiter.acquire());
     }
 
-    @Test(timeout = 3000)
+    @Test
+    @Timeout(3000)
     public void testTooSlowTask() throws Exception {
         final double maxBurstSeconds = 0.0d;
 
@@ -191,7 +197,8 @@ public class RateLimiterTest {
         assertNotEquals(0L, limiter.acquire());
     }
 
-    @Test(timeout = 3000)
+    @Test
+    @Timeout(3000)
     public void testTooSlowTaskWithBursty() throws Exception {
         final double maxBurstSeconds = 1.0d;
 

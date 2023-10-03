@@ -20,7 +20,7 @@ import static java.util.Collections.emptySet;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static java.util.stream.Collectors.toSet;
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.Mockito.doAnswer;
@@ -40,24 +40,21 @@ import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.common.TopicPartition;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnit;
-import org.mockito.junit.MockitoRule;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.linecorp.decaton.processor.metrics.Metrics;
 import com.linecorp.decaton.processor.metrics.Metrics.SubscriptionMetrics;
 import com.linecorp.decaton.processor.runtime.internal.ConsumeManager.ConsumerHandler;
 import com.linecorp.decaton.processor.runtime.internal.ConsumeManager.PartitionStates;
 
+@ExtendWith(MockitoExtension.class)
 public class ConsumeManagerTest {
-    @Rule
-    public MockitoRule rule = MockitoJUnit.rule();
-
     static final String TOPIC = "topic";
 
     @Mock
@@ -78,7 +75,7 @@ public class ConsumeManagerTest {
 
     private ConsumeManager consumeManager;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         metrics = Metrics.withTags("subscription", "subsc").new SubscriptionMetrics();
         consumeManager = new ConsumeManager(consumer, states, handler, metrics);

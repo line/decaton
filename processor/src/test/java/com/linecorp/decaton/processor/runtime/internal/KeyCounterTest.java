@@ -16,13 +16,13 @@
 
 package com.linecorp.decaton.processor.runtime.internal;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Random;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import com.linecorp.decaton.processor.runtime.internal.KeyCounter.Key;
 
@@ -37,11 +37,11 @@ public class KeyCounterTest {
         for (int i = 0; i < numKeys; i++) {
             keys[i] = counter.createKey(String.valueOf(i).getBytes(StandardCharsets.UTF_8));
             long cnt = counter.incrementAndGet(keys[i], i + 42);
-            assertEquals("count for key: " + i, i + 42, cnt);
+            assertEquals(i + 42, cnt, "count for key: " + i);
         }
 
         for (int i = 0; i < numKeys; i++) {
-            assertEquals("count for key: " + i, i + 42, counter.get(keys[i]));
+            assertEquals(i + 42, counter.get(keys[i]), "count for key: " + i);
         }
     }
 
@@ -58,7 +58,7 @@ public class KeyCounterTest {
 
         counter.reset();
         for (int i = 0; i < numKeys; i++) {
-            assertEquals("count for key: " + i, 0, counter.get(keys[i]));
+            assertEquals(0, counter.get(keys[i]), "count for key: " + i);
         }
     }
 
@@ -108,6 +108,6 @@ public class KeyCounterTest {
         }
 
         double epsilonN = totalCount * errorFactor;
-        assertTrue("estimation error for key: " + maxErrorKey, maxError <= epsilonN);
+        assertTrue(maxError <= epsilonN, "estimation error for key: " + maxErrorKey);
     }
 }

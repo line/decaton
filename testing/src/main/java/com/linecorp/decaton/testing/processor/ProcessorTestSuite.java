@@ -69,7 +69,7 @@ import com.linecorp.decaton.processor.runtime.internal.RateLimiter;
 import com.linecorp.decaton.processor.tracing.TracingProvider;
 import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
 import com.linecorp.decaton.protocol.Decaton.TaskMetadataProto;
-import com.linecorp.decaton.testing.KafkaClusterRule;
+import com.linecorp.decaton.testing.KafkaClusterExtension;
 import com.linecorp.decaton.testing.TestUtils;
 import com.linecorp.decaton.testing.processor.ProcessingGuarantee.GuaranteeType;
 import com.linecorp.decaton.testing.processor.TestTask.TestTaskDeserializer;
@@ -96,7 +96,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @RequiredArgsConstructor
 public class ProcessorTestSuite {
-    private final KafkaClusterRule rule;
+    private final KafkaClusterExtension rule;
     private final int numTasks;
     private final Function<ProcessorsBuilder<TestTask>, ProcessorsBuilder<TestTask>> configureProcessorsBuilder;
     private final RetryConfig retryConfig;
@@ -130,7 +130,7 @@ public class ProcessorTestSuite {
     @Setter
     @Accessors(fluent = true)
     public static class Builder {
-        private final KafkaClusterRule rule;
+        private final KafkaClusterExtension rule;
 
         private final Set<GuaranteeType> defaultSemantics = EnumSet.allOf(GuaranteeType.class);
         private final Set<ProcessingGuarantee> customSemantics = new HashSet<>();
@@ -197,7 +197,7 @@ public class ProcessorTestSuite {
             return this;
         }
 
-        private Builder(KafkaClusterRule rule) {
+        private Builder(KafkaClusterExtension rule) {
             this.rule = rule;
         }
 
@@ -227,7 +227,7 @@ public class ProcessorTestSuite {
         }
     }
 
-    public static Builder builder(KafkaClusterRule rule) {
+    public static Builder builder(KafkaClusterExtension rule) {
         return new Builder(rule);
     }
 

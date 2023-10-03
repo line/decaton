@@ -16,14 +16,16 @@
 
 package com.linecorp.decaton.processor.runtime.internal;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 
 import java.time.Clock;
 
 import org.apache.kafka.common.TopicPartition;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import com.linecorp.decaton.processor.metrics.Metrics;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
@@ -98,12 +100,13 @@ public class OutOfOrderCommitControlTest {
         state1.completion().complete(); // nothing happens
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testReportingTooLargeOffset() {
         partitionState.reportFetchedOffset(1); // now earliest=1
-        for (int i = 0; i < STATES_CAPACITY; i++) {
-            partitionState.reportFetchedOffset(1 + i); // throws
+        for (int i = 0; i < STATES_CAPACITY - 1; i++) {
+            partitionState.reportFetchedOffset(1 + i);
         }
+        assertThrows(IllegalArgumentException.class, () -> partitionState.reportFetchedOffset(STATES_CAPACITY));
     }
 
     @Test
@@ -150,7 +153,8 @@ public class OutOfOrderCommitControlTest {
         assertEquals(0, partitionState.pendingOffsetsCount());
     }
 
-    @Test(timeout = 5000)
+    @Test
+    @Timeout(5000)
     public void testTimeoutOffsetReaping() {
         Clock clock = mock(Clock.class);
         doReturn(10L).when(clock).millis();

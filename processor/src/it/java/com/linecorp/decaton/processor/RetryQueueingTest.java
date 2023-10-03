@@ -27,10 +27,11 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import org.junit.After;
-import org.junit.Before;
-import org.junit.ClassRule;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.extension.RegisterExtension;
 
 import com.linecorp.decaton.processor.Completion.TimeoutChoice;
 import com.linecorp.decaton.processor.runtime.DecatonTask;
@@ -40,7 +41,7 @@ import com.linecorp.decaton.processor.runtime.RetryConfig;
 import com.linecorp.decaton.processor.runtime.StaticPropertySupplier;
 import com.linecorp.decaton.processor.runtime.TaskExtractor;
 import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
-import com.linecorp.decaton.testing.KafkaClusterRule;
+import com.linecorp.decaton.testing.KafkaClusterExtension;
 import com.linecorp.decaton.testing.TestUtils;
 import com.linecorp.decaton.testing.processor.ProcessedRecord;
 import com.linecorp.decaton.testing.processor.ProcessingGuarantee;
@@ -50,8 +51,8 @@ import com.linecorp.decaton.testing.processor.ProducedRecord;
 import com.linecorp.decaton.testing.processor.TestTask;
 
 public class RetryQueueingTest {
-    @ClassRule
-    public static KafkaClusterRule rule = new KafkaClusterRule(brokerProperties());
+    @RegisterExtension
+    public static KafkaClusterExtension rule = new KafkaClusterExtension(brokerProperties());
 
     private String retryTopic;
 
@@ -67,12 +68,12 @@ public class RetryQueueingTest {
         return props;
     }
 
-    @Before
+    @BeforeEach
     public void setUp() {
         retryTopic = rule.admin().createRandomTopic(3, 3);
     }
 
-    @After
+    @AfterEach
     public void tearDown() {
         rule.admin().deleteTopics(true, retryTopic);
     }
@@ -115,7 +116,8 @@ public class RetryQueueingTest {
         }
     }
 
-    @Test(timeout = 30000)
+    @Test
+    @Timeout(30000)
     public void testRetryQueuing() throws Exception {
         // scenario:
         //   * all arrived tasks are retried once
@@ -141,7 +143,8 @@ public class RetryQueueingTest {
                 .run();
     }
 
-    @Test(timeout = 30000)
+    @Test
+    @Timeout(30000)
     public void testRetryQueuingOnAsyncProcessor() throws Exception {
         ExecutorService executorService = Executors.newFixedThreadPool(16);
         ProcessorTestSuite
@@ -183,7 +186,8 @@ public class RetryQueueingTest {
      *       but processing throughput is not sufficient", which is typical situation that causes
      *       message delivery loss due to decaton#101.
      */
-    @Test(timeout = 60000)
+    @Test
+    @Timeout(60000)
     public void testRetryQueuingExtractingWithDefaultMeta() throws Exception {
         // LogManager waits to start clean-up process until InitialTaskDelayMs (30sec) elapses.
         // https://github.com/apache/kafka/blob/2.4.0/core/src/main/scala/kafka/log/LogManager.scala#L70
@@ -220,7 +224,8 @@ public class RetryQueueingTest {
                 .run();
     }
 
-    @Test(timeout = 60000)
+    @Test
+    @Timeout(60000)
     public void testRetryQueueingFromCompletionTimeoutCallback() throws Exception {
         ProcessorTestSuite
                 .builder(rule)

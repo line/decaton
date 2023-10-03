@@ -16,10 +16,10 @@
 
 package com.linecorp.decaton.processor.runtime.internal;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
@@ -34,13 +34,14 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 import org.apache.kafka.common.KafkaException;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnit;
-import org.mockito.junit.MockitoRule;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import com.linecorp.decaton.client.internal.DecatonTaskProducer;
 import com.linecorp.decaton.processor.ProcessingContext;
@@ -52,10 +53,9 @@ import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider;
 import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
 import com.linecorp.decaton.protocol.Sample.HelloTask;
 
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 public class DecatonTaskRetryQueueingProcessorTest {
-    @Rule
-    public MockitoRule rule = MockitoJUnit.rule();
-
     private static final Duration RETRY_BACKOFF = Duration.ofMillis(10);
 
     private static final SubscriptionScope scope = new SubscriptionScope(
@@ -73,7 +73,7 @@ public class DecatonTaskRetryQueueingProcessorTest {
 
     private DecatonTaskRetryQueueingProcessor processor;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         processor = new DecatonTaskRetryQueueingProcessor(scope, producer);
         doReturn(CompletableFuture.completedFuture(null)).when(producer).sendRequest(any(), any(), any());

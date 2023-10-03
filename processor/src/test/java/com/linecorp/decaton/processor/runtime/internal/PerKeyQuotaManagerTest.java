@@ -16,7 +16,7 @@
 
 package com.linecorp.decaton.processor.runtime.internal;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
@@ -29,11 +29,10 @@ import java.util.Optional;
 import java.util.function.LongSupplier;
 
 import org.apache.kafka.common.TopicPartition;
-import org.junit.Rule;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnit;
-import org.mockito.junit.MockitoRule;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.linecorp.decaton.processor.runtime.DefaultSubPartitioner;
 import com.linecorp.decaton.processor.runtime.PerKeyQuotaConfig;
@@ -45,12 +44,10 @@ import com.linecorp.decaton.processor.runtime.internal.PerKeyQuotaManager.UsageT
 import com.linecorp.decaton.processor.runtime.internal.WindowedKeyStat.Stat;
 import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider;
 
+@ExtendWith(MockitoExtension.class)
 public class PerKeyQuotaManagerTest {
     private final byte[] key = "key".getBytes(StandardCharsets.UTF_8);
     private final long timestamp = 1677420878461L;
-
-    @Rule
-    public MockitoRule rule = MockitoJUnit.rule();
 
     @Mock
     private LongSupplier timestampSupplier;

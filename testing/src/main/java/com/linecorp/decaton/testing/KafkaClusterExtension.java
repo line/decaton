@@ -18,8 +18,9 @@ package com.linecorp.decaton.testing;
 
 import java.util.Properties;
 
-import org.junit.Rule;
-import org.junit.rules.ExternalResource;
+import org.junit.jupiter.api.extension.AfterAllCallback;
+import org.junit.jupiter.api.extension.BeforeAllCallback;
+import org.junit.jupiter.api.extension.ExtensionContext;
 
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -27,11 +28,11 @@ import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * JUnit {@link Rule} that starts an embedded Kafka cluster.
+ * JUnit extension that starts an embedded Kafka cluster.
  */
 @Slf4j
 @RequiredArgsConstructor
-public class KafkaClusterRule extends ExternalResource {
+public class KafkaClusterExtension implements BeforeAllCallback, AfterAllCallback {
     private static final int KAFKA_CLUSTER_SIZE = 3;
 
     private EmbeddedZooKeeper zooKeeper;
@@ -41,31 +42,12 @@ public class KafkaClusterRule extends ExternalResource {
     private KafkaAdmin admin;
     private final Properties brokerProperties;
 
-    public KafkaClusterRule() {
+    public KafkaClusterExtension() {
         this(new Properties());
     }
 
     public String bootstrapServers() {
         return kafkaCluster.bootstrapServers();
-    }
-
-    @Override
-    protected void before() throws Throwable {
-        super.before();
-
-        zooKeeper = new EmbeddedZooKeeper();
-        kafkaCluster = new EmbeddedKafkaCluster(KAFKA_CLUSTER_SIZE,
-                                                zooKeeper.zkConnectAsString(),
-                                                brokerProperties);
-        admin = new KafkaAdmin(kafkaCluster.bootstrapServers());
-    }
-
-    @Override
-    protected void after() {
-        safeClose(admin);
-        safeClose(kafkaCluster);
-        safeClose(zooKeeper);
-        super.after();
     }
 
     private static void safeClose(AutoCloseable resource) {
@@ -74,5 +56,21 @@ public class KafkaClusterRule extends ExternalResource {
         } catch (Exception e) {
             log.warn("Failed to close the resource", e);
         }
+    }
+
+    @Override
+    public void afterAll(ExtensionContext extensionContext) throws Exception {
+        safeClose(admin);
+        safeClose(kafkaCluster);
+        safeClose(zooKeeper);
+    }
+
+    @Override
+    public void beforeAll(ExtensionContext extensionContext) throws Exception {
+        zooKeeper = new EmbeddedZooKeeper();
+        kafkaCluster = new EmbeddedKafkaCluster(KAFKA_CLUSTER_SIZE,
+                                                zooKeeper.zkConnectAsString(),
+                                                brokerProperties);
+        admin = new KafkaAdmin(kafkaCluster.bootstrapServers());
     }
 }

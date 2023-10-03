@@ -17,10 +17,11 @@
 package com.linecorp.decaton.client.kafka;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
-import static org.junit.Assert.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import org.apache.kafka.common.errors.SerializationException;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 public class PrintableAsciiStringSerializerTest {
     private final PrintableAsciiStringSerializer serializer = new PrintableAsciiStringSerializer();
@@ -31,15 +32,15 @@ public class PrintableAsciiStringSerializerTest {
         assertArrayEquals(text.getBytes(UTF_8), serializer.serialize(null, text));
     }
 
-    @Test(expected = SerializationException.class)
+    @Test
     public void testSerializeMultiByteString() {
         String text = "abcdえf";
-        serializer.serialize(null, text);
+        assertThrows(SerializationException.class, () -> serializer.serialize(null, text));
     }
 
-    @Test(expected = SerializationException.class)
+    @Test
     public void testSerializeStringContainingNotPrintableChar() {
         String text = "abc" + (char) -1;
-        serializer.serialize(null, text);
+        assertThrows(SerializationException.class, () -> serializer.serialize(null, text));
     }
 }

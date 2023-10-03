@@ -16,15 +16,16 @@
 
 package com.linecorp.decaton.processor.runtime.internal;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertSame;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import com.linecorp.decaton.processor.runtime.Property;
 import com.linecorp.decaton.processor.runtime.PropertyDefinition;
@@ -63,9 +64,10 @@ public class AbstractDecatonPropertiesTest {
         assertSame(longProperty, prop);
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testGetAbsentProperty() {
-        props.get(PropertyDefinition.define("absent.key", Long.class, 0L));
+        assertThrows(IllegalArgumentException.class, () ->
+                props.get(PropertyDefinition.define("absent.key", Long.class, 0L)));
     }
 
     @Test

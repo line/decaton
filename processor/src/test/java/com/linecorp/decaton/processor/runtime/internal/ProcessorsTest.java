@@ -16,7 +16,7 @@
 
 package com.linecorp.decaton.processor.runtime.internal;
 
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.doThrow;
@@ -30,21 +30,18 @@ import java.util.List;
 import java.util.Optional;
 
 import org.apache.kafka.common.TopicPartition;
-import org.junit.Rule;
-import org.junit.Test;
-import org.mockito.junit.MockitoJUnit;
-import org.mockito.junit.MockitoRule;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.linecorp.decaton.processor.runtime.DecatonProcessorSupplier;
 import com.linecorp.decaton.processor.runtime.DefaultSubPartitioner;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
-import com.linecorp.decaton.processor.runtime.DecatonProcessorSupplier;
 import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider;
 import com.linecorp.decaton.protocol.Sample.HelloTask;
 
+@ExtendWith(MockitoExtension.class)
 public class ProcessorsTest {
-    @Rule
-    public MockitoRule rule = MockitoJUnit.rule();
-
     private static final String SUBSC_ID = "subscription";
 
     private static final TopicPartition topicPartition = new TopicPartition("topic", 1);

@@ -16,14 +16,13 @@
 
 package com.linecorp.decaton.processor.runtime;
 
-import org.junit.Test;
-
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.util.Properties;
 
-public class SubscriptionBuilderTest {
+import org.junit.jupiter.api.Test;
 
+public class SubscriptionBuilderTest {
     @Test
     public void testProducerConfigSupplier() {
         Properties consumerConfig = new Properties();

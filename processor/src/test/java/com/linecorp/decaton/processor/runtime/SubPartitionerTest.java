@@ -17,16 +17,16 @@
 package com.linecorp.decaton.processor.runtime;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
 import org.apache.kafka.common.utils.Utils;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 public class SubPartitionerTest {
     static final int DIST_KEYS_COUNT = 10000;
@@ -36,7 +36,7 @@ public class SubPartitionerTest {
 
     static final byte[][] keys = new byte[DIST_KEYS_COUNT][];
 
-    @Before
+    @BeforeEach
     public void setUp() {
         for (int i = 0; i < keys.length; i++) {
             keys[i] = String.valueOf(i).getBytes(UTF_8);
@@ -82,10 +82,10 @@ public class SubPartitionerTest {
                     System.err.printf("[%d/%d] stddev = %f, counts = %s\n",
                                       partitionCount, subpartitionCount, stddev, Arrays.toString(counts));
 
-                    assertTrue(String.format("[%d/%d] %f (stddev) < %d * %f",
+                    assertTrue(stddev < partition.size() * TARGET_STDDEV_RATIO,
+                               String.format("[%d/%d] %f (stddev) < %d * %f",
                                              partitionCount, subpartitionCount,
-                                             stddev, partitionCount, TARGET_STDDEV_RATIO),
-                               stddev < partition.size() * TARGET_STDDEV_RATIO);
+                                             stddev, partitionCount, TARGET_STDDEV_RATIO));
                 }
             }
         }
@@ -98,8 +98,8 @@ public class SubPartitionerTest {
             for (byte[] key : keys) {
                 int assign1 = subPartitioner.subPartitionFor(key);
                 int assign2 = subPartitioner.subPartitionFor(key);
-                assertEquals(String.format("[%d] assign of %s", subpartitionCount, new String(key, UTF_8)),
-                             assign2, assign1);
+                assertEquals(assign2, assign1,
+                             String.format("[%d] assign of %s", subpartitionCount, new String(key, UTF_8)));
             }
         }
     }
@@ -111,8 +111,8 @@ public class SubPartitionerTest {
             for (byte[] key : keys) {
                 int assign1 = subPartitioner.subPartitionFor(key);
                 int assign2 = subPartitioner.subPartitionFor(key);
-                assertEquals(String.format("[%d] first assign: %d; second assign: %d", subpartitionCount, assign1, assign2),
-                             assign2, (assign1 + 1) % subpartitionCount);
+                assertEquals(assign2, (assign1 + 1) % subpartitionCount,
+                             String.format("[%d] first assign: %d; second assign: %d", subpartitionCount, assign1, assign2));
             }
         }
     }

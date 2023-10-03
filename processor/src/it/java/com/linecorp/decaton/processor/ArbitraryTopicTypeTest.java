@@ -29,10 +29,11 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serializer;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.ClassRule;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.extension.RegisterExtension;
 
 import com.linecorp.decaton.processor.runtime.DecatonTask;
 import com.linecorp.decaton.processor.runtime.ProcessorSubscription;
@@ -40,7 +41,7 @@ import com.linecorp.decaton.processor.runtime.ProcessorsBuilder;
 import com.linecorp.decaton.processor.runtime.RetryConfig;
 import com.linecorp.decaton.processor.runtime.SubscriptionBuilder;
 import com.linecorp.decaton.processor.runtime.TaskExtractor;
-import com.linecorp.decaton.testing.KafkaClusterRule;
+import com.linecorp.decaton.testing.KafkaClusterExtension;
 import com.linecorp.decaton.testing.TestUtils;
 
 /**
@@ -49,19 +50,19 @@ import com.linecorp.decaton.testing.TestUtils;
  *   - any record types other than {@link DecatonTask}
  */
 public class ArbitraryTopicTypeTest {
-    @ClassRule
-    public static final KafkaClusterRule rule = new KafkaClusterRule();
+    @RegisterExtension
+    public static final KafkaClusterExtension rule = new KafkaClusterExtension();
 
     private String topic;
     private String retryTopic;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         topic = rule.admin().createRandomTopic(3, 3);
         retryTopic = rule.admin().createRandomTopic(3, 3);
     }
 
-    @After
+    @AfterEach
     public void tearDown() {
         rule.admin().deleteTopics(true, topic, retryTopic);
     }
@@ -108,7 +109,8 @@ public class ArbitraryTopicTypeTest {
         }
     }
 
-    @Test(timeout = 30000)
+    @Test
+    @Timeout(30000)
     public void testBytesKeyValue() throws Exception {
         testRetryWithKeyValue(
                 new ByteArraySerializer(),
@@ -119,7 +121,8 @@ public class ArbitraryTopicTypeTest {
         );
     }
 
-    @Test(timeout = 30000)
+    @Test
+    @Timeout(30000)
     public void testLongKeyValue() throws Exception {
         testRetryWithKeyValue(
                 new LongSerializer(),

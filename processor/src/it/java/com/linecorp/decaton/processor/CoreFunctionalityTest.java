@@ -16,7 +16,7 @@
 
 package com.linecorp.decaton.processor;
 
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -29,17 +29,17 @@ import java.util.concurrent.Executors;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.CooperativeStickyAssignor;
-import org.junit.ClassRule;
-import org.junit.Rule;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.extension.RegisterExtension;
 
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.ProcessorScope;
 import com.linecorp.decaton.processor.runtime.Property;
 import com.linecorp.decaton.processor.runtime.StaticPropertySupplier;
 import com.linecorp.decaton.processor.internal.HashableByteArray;
-import com.linecorp.decaton.testing.KafkaClusterRule;
-import com.linecorp.decaton.testing.RandomRule;
+import com.linecorp.decaton.testing.KafkaClusterExtension;
+import com.linecorp.decaton.testing.RandomExtension;
 import com.linecorp.decaton.testing.processor.ProcessedRecord;
 import com.linecorp.decaton.testing.processor.ProcessingGuarantee;
 import com.linecorp.decaton.testing.processor.ProcessorTestSuite;
@@ -47,14 +47,15 @@ import com.linecorp.decaton.testing.processor.ProducedRecord;
 import com.linecorp.decaton.testing.processor.TestTask;
 
 public class CoreFunctionalityTest {
-    @ClassRule
-    public static KafkaClusterRule rule = new KafkaClusterRule();
-    @Rule
-    public RandomRule randomRule = new RandomRule();
+    @RegisterExtension
+    public static KafkaClusterExtension rule = new KafkaClusterExtension();
+    @RegisterExtension
+    public RandomExtension randomExtension = new RandomExtension();
 
-    @Test(timeout = 30000)
+    @Test
+    @Timeout(30000)
     public void testProcessConcurrent() throws Exception {
-        Random rand = randomRule.random();
+        Random rand = randomExtension.random();
         ProcessorTestSuite
                 .builder(rule)
                 .configureProcessorsBuilder(builder -> builder.thenProcess((ctx, task) -> {
@@ -68,9 +69,10 @@ public class CoreFunctionalityTest {
                 .run();
     }
 
-    @Test(timeout = 30000)
+    @Test
+    @Timeout(30000)
     public void testProcessConcurrent_PartitionScopeProcessor() throws Exception {
-        Random rand = randomRule.random();
+        Random rand = randomExtension.random();
         ProcessorTestSuite
                 .builder(rule)
                 .configureProcessorsBuilder(
@@ -83,9 +85,10 @@ public class CoreFunctionalityTest {
                 .run();
     }
 
-    @Test(timeout = 30000)
+    @Test
+    @Timeout(30000)
     public void testProcessConcurrent_ThreadScopeProcessor() throws Exception {
-        Random rand = randomRule.random();
+        Random rand = randomExtension.random();
         ProcessorTestSuite
                 .builder(rule)
                 .configureProcessorsBuilder(
@@ -98,10 +101,11 @@ public class CoreFunctionalityTest {
                 .run();
     }
 
-    @Test(timeout = 30000)
+    @Test
+    @Timeout(30000)
     public void testAsyncTaskCompletion() throws Exception {
         ExecutorService executorService = Executors.newFixedThreadPool(16);
-        Random rand = randomRule.random();
+        Random rand = randomExtension.random();
         ProcessorTestSuite
                 .builder(rule)
                 .configureProcessorsBuilder(builder -> builder.thenProcess((ctx, task) -> {
@@ -129,10 +133,11 @@ public class CoreFunctionalityTest {
      * it's recommended holding only `Completion` instance if possible to avoid unnecessary
      * heap pressure by holding entire ProcessingContext instance.
      */
-    @Test(timeout = 30000)
+    @Test
+    @Timeout(30000)
     public void testGetCompletionInstanceLater() throws Exception {
         ExecutorService executorService = Executors.newFixedThreadPool(16);
-        Random rand = randomRule.random();
+        Random rand = randomExtension.random();
         ProcessorTestSuite
                 .builder(rule)
                 .configureProcessorsBuilder(builder -> builder.thenProcess((ctx, task) -> {
@@ -152,7 +157,8 @@ public class CoreFunctionalityTest {
                 .run();
     }
 
-    @Test(timeout = 60000)
+    @Test
+    @Timeout(60000)
     public void testSingleThreadProcessing() throws Exception {
         // Note that this processing semantics is not be considered as Decaton specification which users can rely on.
         // Rather, this is just a expected behavior based on current implementation when we set concurrency to 1.
@@ -178,7 +184,7 @@ public class CoreFunctionalityTest {
             }
         };
 
-        Random rand = randomRule.random();
+        Random rand = randomExtension.random();
         ProcessorTestSuite
                 .builder(rule)
                 .configureProcessorsBuilder(
@@ -193,9 +199,10 @@ public class CoreFunctionalityTest {
                 .run();
     }
 
-    @Test(timeout = 30000)
+    @Test
+    @Timeout(30000)
     public void testAsyncCompletionWithLeakAndTimeout() throws Exception {
-        Random rand = randomRule.random();
+        Random rand = randomExtension.random();
         ProcessorTestSuite
                 .builder(rule)
                 .numTasks(1000)
@@ -211,9 +218,10 @@ public class CoreFunctionalityTest {
                 .run();
     }
 
-    @Test(timeout = 30000)
+    @Test
+    @Timeout(30000)
     public void testCooperativeRebalancing() throws Exception {
-        Random rand = randomRule.random();
+        Random rand = randomExtension.random();
         Properties consumerConfig = new Properties();
         consumerConfig.setProperty(
                 ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG,

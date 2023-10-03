@@ -16,8 +16,8 @@
 
 package com.linecorp.decaton.spring;
 
-import static org.junit.Assert.assertNotSame;
-import static org.junit.Assert.assertSame;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
@@ -27,12 +27,11 @@ import static org.mockito.Mockito.verify;
 import java.util.function.Supplier;
 
 import org.apache.kafka.common.TopicPartition;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Spy;
-import org.mockito.junit.MockitoJUnit;
-import org.mockito.junit.MockitoRule;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
@@ -47,10 +46,8 @@ import com.linecorp.decaton.protocol.Sample.HelloTask;
  * This unit tests practically tests not only the custom scopes developed in this project, but also
  * Sprint itself's behavior to confirm our expectation is correct and for potential future breaking changes.
  */
+@ExtendWith(MockitoExtension.class)
 public class SpringProcessorSupplierTest {
-    @Rule
-    public MockitoRule rule = MockitoJUnit.rule();
-
     private static class TheProcessor implements DecatonProcessor<HelloTask> {
         private final AutoCloseable singletonScoped;
         private final AutoCloseable partitionScoped;
@@ -114,7 +111,7 @@ public class SpringProcessorSupplierTest {
 
     private SpringProcessorSupplier<HelloTask> subpartitionProcessorSupplier;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         doReturn("subscription").when(partitionScope).processingSubscription();
 

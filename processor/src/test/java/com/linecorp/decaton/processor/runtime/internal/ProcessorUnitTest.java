@@ -27,12 +27,12 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 
 import org.apache.kafka.common.TopicPartition;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnit;
-import org.mockito.junit.MockitoRule;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.linecorp.decaton.processor.DeferredCompletion;
 import com.linecorp.decaton.processor.runtime.DefaultSubPartitioner;
@@ -42,10 +42,8 @@ import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
 import com.linecorp.decaton.protocol.Decaton.TaskMetadataProto;
 import com.linecorp.decaton.protocol.Sample.HelloTask;
 
+@ExtendWith(MockitoExtension.class)
 public class ProcessorUnitTest {
-    @Rule
-    public MockitoRule rule = MockitoJUnit.rule();
-
     private static final TopicPartition topicPartition = new TopicPartition("topic", 1);
 
     @Mock
@@ -58,7 +56,7 @@ public class ProcessorUnitTest {
 
     private ProcessorUnit unit;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         ThreadScope scope = new ThreadScope(
                 new PartitionScope(
@@ -80,7 +78,8 @@ public class ProcessorUnitTest {
         taskRequest = new TaskRequest(topicPartition, 1, new OffsetState(1234), null, null, null, request.toByteArray(), null);
     }
 
-    @Test(timeout = 1000)
+    @Test
+    @Timeout(1000)
     public void testProcessNormally() throws Exception {
         CountDownLatch latch = new CountDownLatch(1);
         doAnswer(invocation -> {
@@ -95,7 +94,8 @@ public class ProcessorUnitTest {
         verify(pipeline, times(1)).scheduleThenProcess(taskRequest);
     }
 
-    @Test(timeout = 1000)
+    @Test
+    @Timeout(1000)
     public void testProcess_PIPELINE_THREW() throws Exception {
         CountDownLatch processLatch = new CountDownLatch(2);
         doAnswer(invocation -> {

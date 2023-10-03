@@ -17,8 +17,8 @@
 package com.linecorp.decaton.processor.metrics;
 
 import static java.util.Collections.emptyList;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import java.util.List;
 import java.util.Properties;
@@ -29,10 +29,11 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.ClassRule;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.extension.RegisterExtension;
 
 import com.linecorp.decaton.client.DecatonClient;
 import com.linecorp.decaton.client.kafka.PrintableAsciiStringSerializer;
@@ -46,7 +47,7 @@ import com.linecorp.decaton.processor.runtime.StaticPropertySupplier;
 import com.linecorp.decaton.protobuf.ProtocolBuffersDeserializer;
 import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
 import com.linecorp.decaton.protocol.Sample.HelloTask;
-import com.linecorp.decaton.testing.KafkaClusterRule;
+import com.linecorp.decaton.testing.KafkaClusterExtension;
 import com.linecorp.decaton.testing.TestUtils;
 
 import io.micrometer.core.instrument.Counter;
@@ -56,24 +57,25 @@ import io.micrometer.prometheus.PrometheusConfig;
 import io.micrometer.prometheus.PrometheusMeterRegistry;
 
 public class MetricsTest {
-    @ClassRule
-    public static KafkaClusterRule rule = new KafkaClusterRule();
+    @RegisterExtension
+    public static KafkaClusterExtension rule = new KafkaClusterExtension();
 
     private static final int PARTITIONS = 3;
 
     private String topicName;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         topicName = rule.admin().createRandomTopic(PARTITIONS, 3);
     }
 
-    @After
+    @AfterEach
     public void tearDown() {
         rule.admin().deleteTopics(true, topicName);
     }
 
-    @Test(timeout = 30000)
+    @Test
+    @Timeout(30000)
     public void testMetricsCleanup() throws Exception {
         // Any neighbor integration tests that ran in the same JVM could leak subscription unclosed
         // (e.g, test timeout) and that causes this test to fail unless we clear the registry here.
@@ -95,7 +97,8 @@ public class MetricsTest {
         assertEquals(emptyList(), meters);
     }
 
-    @Test(timeout = 30000)
+    @Test
+    @Timeout(30000)
     public void testDetectStuckPartitions() throws Exception {
         // Micrometer doesn't track values without at least one register implementation added
         Metrics.register(new PrometheusMeterRegistry(PrometheusConfig.DEFAULT));
@@ -144,7 +147,8 @@ public class MetricsTest {
         }
     }
 
-    @Test(timeout = 30000)
+    @Test
+    @Timeout(30000)
     public void testTasksMetrics() throws Exception {
         Metrics.register(new PrometheusMeterRegistry(PrometheusConfig.DEFAULT));
         CountDownLatch processLatch = new CountDownLatch(4);
@@ -199,7 +203,8 @@ public class MetricsTest {
         }
     }
 
-    @Test(timeout = 30000)
+    @Test
+    @Timeout(30000)
     public void testDeferredCompletionLeak() throws Exception {
         Metrics.register(new PrometheusMeterRegistry(PrometheusConfig.DEFAULT));
 

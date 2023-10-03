@@ -16,8 +16,8 @@
 
 package com.linecorp.decaton.processor.runtime.internal;
 
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
@@ -37,13 +37,13 @@ import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnit;
-import org.mockito.junit.MockitoRule;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.linecorp.decaton.processor.runtime.DefaultSubPartitioner;
 import com.linecorp.decaton.processor.runtime.PerKeyQuotaConfig.QuotaCallback;
@@ -54,15 +54,13 @@ import com.linecorp.decaton.processor.runtime.internal.PerKeyQuotaManager.UsageT
 import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider;
 import com.linecorp.decaton.protocol.Sample.HelloTask;
 
+@ExtendWith(MockitoExtension.class)
 public class QuotaApplierImplTest {
     private final TopicPartition tp = new TopicPartition("topic", 42);
     private final HelloTask task = HelloTask.newBuilder()
                                             .setName("hello")
                                             .build();
     private final byte[] key = "key".getBytes(StandardCharsets.UTF_8);
-
-    @Rule
-    public MockitoRule rule = MockitoJUnit.rule();
 
     @Mock
     private Producer<byte[], byte[]> producer;
@@ -71,7 +69,7 @@ public class QuotaApplierImplTest {
 
     private QuotaApplierImpl applier;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         applier = new QuotaApplierImpl(
                 producer,
@@ -86,12 +84,13 @@ public class QuotaApplierImplTest {
                                       DefaultSubPartitioner::new));
     }
 
-    @After
+    @AfterEach
     public void tearDown() {
         applier.close();
     }
 
-    @Test(timeout = 10000L)
+    @Test
+    @Timeout(10000L)
     public void testViolateQuota() throws Exception {
         CountDownLatch produceLatch = new CountDownLatch(1);
         Metrics metrics = Metrics.builder().rate(1000).build();
@@ -131,7 +130,8 @@ public class QuotaApplierImplTest {
         assertFalse(offsetState.completion().isComplete());
     }
 
-    @Test(timeout = 10000L)
+    @Test
+    @Timeout(10000L)
     public void testIgnoreQueuedTasksAfterClose() throws Exception {
         CountDownLatch firstTaskLatch = new CountDownLatch(1);
         CountDownLatch producerCloseLatch = new CountDownLatch(1);

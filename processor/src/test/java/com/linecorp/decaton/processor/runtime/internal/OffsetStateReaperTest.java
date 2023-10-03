@@ -16,9 +16,9 @@
 
 package com.linecorp.decaton.processor.runtime.internal;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.spy;
@@ -28,22 +28,20 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnit;
-import org.mockito.junit.MockitoRule;
+import org.mockito.junit.jupiter.MockitoExtension;
 
-import com.linecorp.decaton.processor.metrics.Metrics;
 import com.linecorp.decaton.processor.Completion.TimeoutChoice;
+import com.linecorp.decaton.processor.metrics.Metrics;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.Property;
 
+@ExtendWith(MockitoExtension.class)
 public class OffsetStateReaperTest {
-    @Rule
-    public final MockitoRule mockitoRule = MockitoJUnit.rule();
-
     private static final long COMPLETION_TIMEOUT_MS = 1000;
 
     private final AtomicLong timeMillis = new AtomicLong();
@@ -51,7 +49,7 @@ public class OffsetStateReaperTest {
     private Clock clock;
     private OffsetStateReaper reaper;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         doAnswer(invocation -> timeMillis.get()).when(clock).millis();
         reaper = new OffsetStateReaper(
@@ -64,7 +62,8 @@ public class OffsetStateReaperTest {
                 clock);
     }
 
-    @Test(timeout = 5000)
+    @Test
+    @Timeout(5000)
     public void maybeReapOffset() throws InterruptedException {
         OffsetState state = spy(new OffsetState(100));
         AtomicInteger cbCount = new AtomicInteger();
