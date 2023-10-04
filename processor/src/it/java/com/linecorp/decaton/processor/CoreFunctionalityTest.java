@@ -53,7 +53,7 @@ public class CoreFunctionalityTest {
     public RandomExtension randomExtension = new RandomExtension();
 
     @Test
-    @Timeout(30000)
+    @Timeout(30)
     public void testProcessConcurrent() throws Exception {
         Random rand = randomExtension.random();
         ProcessorTestSuite
@@ -70,7 +70,7 @@ public class CoreFunctionalityTest {
     }
 
     @Test
-    @Timeout(30000)
+    @Timeout(30)
     public void testProcessConcurrent_PartitionScopeProcessor() throws Exception {
         Random rand = randomExtension.random();
         ProcessorTestSuite
@@ -86,7 +86,7 @@ public class CoreFunctionalityTest {
     }
 
     @Test
-    @Timeout(30000)
+    @Timeout(30)
     public void testProcessConcurrent_ThreadScopeProcessor() throws Exception {
         Random rand = randomExtension.random();
         ProcessorTestSuite
@@ -102,7 +102,7 @@ public class CoreFunctionalityTest {
     }
 
     @Test
-    @Timeout(30000)
+    @Timeout(30)
     public void testAsyncTaskCompletion() throws Exception {
         ExecutorService executorService = Executors.newFixedThreadPool(16);
         Random rand = randomExtension.random();
@@ -134,7 +134,7 @@ public class CoreFunctionalityTest {
      * heap pressure by holding entire ProcessingContext instance.
      */
     @Test
-    @Timeout(30000)
+    @Timeout(30)
     public void testGetCompletionInstanceLater() throws Exception {
         ExecutorService executorService = Executors.newFixedThreadPool(16);
         Random rand = randomExtension.random();
@@ -158,7 +158,7 @@ public class CoreFunctionalityTest {
     }
 
     @Test
-    @Timeout(60000)
+    @Timeout(60)
     public void testSingleThreadProcessing() throws Exception {
         // Note that this processing semantics is not be considered as Decaton specification which users can rely on.
         // Rather, this is just a expected behavior based on current implementation when we set concurrency to 1.
@@ -200,7 +200,7 @@ public class CoreFunctionalityTest {
     }
 
     @Test
-    @Timeout(30000)
+    @Timeout(30)
     public void testAsyncCompletionWithLeakAndTimeout() throws Exception {
         Random rand = randomExtension.random();
         ProcessorTestSuite
@@ -219,7 +219,7 @@ public class CoreFunctionalityTest {
     }
 
     @Test
-    @Timeout(30000)
+    @Timeout(30)
     public void testCooperativeRebalancing() throws Exception {
         Random rand = randomExtension.random();
         Properties consumerConfig = new Properties();

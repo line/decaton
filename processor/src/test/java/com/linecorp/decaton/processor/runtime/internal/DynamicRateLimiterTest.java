@@ -56,7 +56,7 @@ public class DynamicRateLimiterTest {
     }
 
     @Test
-    @Timeout(10000)
+    @Timeout(10)
     public void testAcquireOnSwitch() throws InterruptedException {
         // First setup limiter to pause all execution
         listener.accept(null, RateLimiter.PAUSED);

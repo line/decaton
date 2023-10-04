@@ -64,7 +64,7 @@ public class PerKeyQuotaTest {
     }
 
     @Test
-    @Timeout(30000)
+    @Timeout(30)
     public void testShaping() throws Exception {
         Set<String> keys = new HashSet<>();
         for (int i = 0; i < 10000; i++) {
@@ -111,7 +111,7 @@ public class PerKeyQuotaTest {
     }
 
     @Test
-    @Timeout(30000)
+    @Timeout(30)
     public void testShaping_processingGuarantee() throws Exception {
         ProcessorTestSuite
                 .builder(rule)

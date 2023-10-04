@@ -143,7 +143,7 @@ public class ProcessingContextImplTest {
     }
 
     @Test
-    @Timeout(5000)
+    @Timeout(5)
     public void testPush_Level1_Sync() throws InterruptedException {
         ProcessingContextImpl<HelloTask> context = context(NoopTrace.INSTANCE, (ctx, task) -> { /* noop */ });
 
@@ -152,7 +152,7 @@ public class ProcessingContextImplTest {
     }
 
     @Test
-    @Timeout(5000)
+    @Timeout(5)
     public void testPush_Level1_Async() throws InterruptedException {
         CountDownLatch latch = new CountDownLatch(1);
         ExecutorService executor = Executors.newSingleThreadExecutor();
@@ -187,7 +187,7 @@ public class ProcessingContextImplTest {
      * works consistently to what we expect.
      */
     @Test
-    @Timeout(5000)
+    @Timeout(5)
     public void testPush_Level1_MultiPush_BothSync() throws InterruptedException {
         ProcessingContextImpl<HelloTask> context = context(NoopTrace.INSTANCE, (ctx, task) -> { /* noop */ });
 
@@ -207,7 +207,7 @@ public class ProcessingContextImplTest {
      * works consistently to what we expect.
      */
     @Test
-    @Timeout(5000)
+    @Timeout(5)
     public void testPush_Level1_MultiPush_BothAsync() throws InterruptedException {
         CountDownLatch[] latches = latches(2);
         ExecutorService[] executors = executors(2);
@@ -239,7 +239,7 @@ public class ProcessingContextImplTest {
     }
 
     @Test
-    @Timeout(5000)
+    @Timeout(5)
     public void testPush_Level2_Sync() throws InterruptedException {
         ProcessingContextImpl<HelloTask> context = context(NoopTrace.INSTANCE, ProcessingContext::push,
                                                            processorMock);
@@ -250,7 +250,7 @@ public class ProcessingContextImplTest {
     }
 
     @Test
-    @Timeout(5000)
+    @Timeout(5)
     public void testPush_Level2_Sync_ThenAsync() throws InterruptedException {
         CountDownLatch latch = new CountDownLatch(1);
         ExecutorService executor = Executors.newSingleThreadExecutor();
@@ -273,7 +273,7 @@ public class ProcessingContextImplTest {
     }
 
     @Test
-    @Timeout(5000)
+    @Timeout(5)
     public void testPush_Level2_Async_ThenAsync() throws InterruptedException {
         CountDownLatch latch = new CountDownLatch(1);
         ExecutorService executor = Executors.newSingleThreadExecutor();
@@ -307,7 +307,7 @@ public class ProcessingContextImplTest {
      * works consistently to what we expect.
      */
     @Test
-    @Timeout(5000)
+    @Timeout(5)
     public void testPush_Level2_MultiPush_SyncAndAsync() throws InterruptedException {
         CountDownLatch latch = new CountDownLatch(1);
         ExecutorService executor = Executors.newSingleThreadExecutor();
@@ -351,7 +351,7 @@ public class ProcessingContextImplTest {
     }
 
     @Test
-    @Timeout(5000)
+    @Timeout(5)
     public void testRetry() throws InterruptedException {
         CountDownLatch retryLatch = new CountDownLatch(1);
         DecatonProcessor<byte[]> retryProcessor = spy(
@@ -396,7 +396,7 @@ public class ProcessingContextImplTest {
     }
 
     @Test
-    @Timeout(5000)
+    @Timeout(5)
     public void testRetryAtCompletionTimeout() throws InterruptedException {
         CountDownLatch retryLatch = new CountDownLatch(1);
         DecatonProcessor<byte[]> retryProcessor = spy(
@@ -446,7 +446,7 @@ public class ProcessingContextImplTest {
     }
 
     @Test
-    @Timeout(5000)
+    @Timeout(5)
     public void testTrace_Sync() throws InterruptedException {
         RecordTraceHandle handle = new TestTraceHandle("testTrace_Sync");
         final AtomicReference<String> traceDuringProcessing = new AtomicReference<>();
@@ -468,7 +468,7 @@ public class ProcessingContextImplTest {
     }
 
     @Test
-    @Timeout(5000)
+    @Timeout(5)
     public void testTrace_Async() throws InterruptedException {
         CountDownLatch latch = new CountDownLatch(1);
         ExecutorService executor = Executors.newSingleThreadExecutor();

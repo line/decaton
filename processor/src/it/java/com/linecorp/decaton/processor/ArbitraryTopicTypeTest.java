@@ -110,7 +110,7 @@ public class ArbitraryTopicTypeTest {
     }
 
     @Test
-    @Timeout(30000)
+    @Timeout(30)
     public void testBytesKeyValue() throws Exception {
         testRetryWithKeyValue(
                 new ByteArraySerializer(),
@@ -122,7 +122,7 @@ public class ArbitraryTopicTypeTest {
     }
 
     @Test
-    @Timeout(30000)
+    @Timeout(30)
     public void testLongKeyValue() throws Exception {
         testRetryWithKeyValue(
                 new LongSerializer(),

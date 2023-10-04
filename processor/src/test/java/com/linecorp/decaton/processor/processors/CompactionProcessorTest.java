@@ -123,7 +123,7 @@ public class CompactionProcessorTest {
     }
 
     @Test
-    @Timeout(5000)
+    @Timeout(5)
     public void testCompactedOutput() throws InterruptedException {
         CountDownLatch waitFlush = new CountDownLatch(1);
         CountDownLatch completeFlush = new CountDownLatch(3);
@@ -166,7 +166,7 @@ public class CompactionProcessorTest {
     }
 
     @Test
-    @Timeout(5000)
+    @Timeout(5)
     public void testOutputDelayed() throws InterruptedException {
         CountDownLatch completeFlush = new CountDownLatch(2);
 
@@ -215,7 +215,7 @@ public class CompactionProcessorTest {
     }
 
     @Test
-    @Timeout(5000)
+    @Timeout(5)
     public void testCompletionHandling() throws InterruptedException {
         // In this test downstream processor defers task's completion and never completes it.
         doAnswer(invocation -> {
@@ -261,7 +261,7 @@ public class CompactionProcessorTest {
     }
 
     @Test
-    @Timeout(5000)
+    @Timeout(5)
     public void testRaceConditionOnFlush() throws InterruptedException {
         CountDownLatch schedulePassed = new CountDownLatch(1);
         CountDownLatch firstFlushComplete = new CountDownLatch(1);

@@ -73,7 +73,7 @@ public class BatchingProcessorTest {
     }
 
     @Test
-    @Timeout(5000)
+    @Timeout(5)
     public void testLingerLimit() throws InterruptedException {
         long lingerMs = 1000;
         CountDownLatch processLatch = new CountDownLatch(1);

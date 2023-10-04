@@ -239,7 +239,7 @@ public class ProcessPipelineTest {
     }
 
     @Test
-    @Timeout(5000)
+    @Timeout(5)
     public void testScheduleThenProcess_Terminate() throws InterruptedException {
         DecatonTask<HelloTask> task = new DecatonTask<>(TaskMetadata.fromProto(REQUEST.getMetadata()), TASK, TASK.toByteArray());
         when(extractorMock.extract(any())).thenReturn(task);

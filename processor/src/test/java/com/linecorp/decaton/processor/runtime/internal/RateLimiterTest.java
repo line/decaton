@@ -47,7 +47,7 @@ public class RateLimiterTest {
     private LongSupplier timeSupplier;
 
     @Test
-    @Timeout(2000)
+    @Timeout(2)
     public void testBasic() throws InterruptedException {
         RateLimiter limiter = RateLimiter.create(1L);
         long mustBeZero = limiter.acquire();
@@ -58,7 +58,7 @@ public class RateLimiterTest {
     }
 
     @Test
-    @Timeout(2000)
+    @Timeout(2)
     public void testTooLargeRateMeansUnlimited() throws InterruptedException {
         TimeUnit currentResolution = TimeUnit.MICROSECONDS;
         long maxRatePerSecond = currentResolution.convert(1L, SECONDS);
@@ -68,7 +68,7 @@ public class RateLimiterTest {
     }
 
     @Test
-    @Timeout(2000)
+    @Timeout(2)
     public void testMinusRateMeansUnlimited() throws InterruptedException {
         new Random().longs(10L, Long.MIN_VALUE, 0L)
                     .forEach(rate -> {
@@ -83,7 +83,7 @@ public class RateLimiterTest {
     }
 
     @Test
-    @Timeout(1000)
+    @Timeout(1)
     public void testUnlimited() throws InterruptedException {
         RateLimiter limiter = RateLimiter.create(-1L);
         for (int i = 0; i < 50; ++i) {
@@ -93,7 +93,7 @@ public class RateLimiterTest {
     }
 
     @Test
-    @Timeout(2000)
+    @Timeout(2)
     public void testAveragingThrottling() throws InterruptedException {
         final long rate = 10L;
         final long permitIntervalNanos = SECONDS.toNanos(1L) / rate;
@@ -130,7 +130,7 @@ public class RateLimiterTest {
     }
 
     @Test
-    @Timeout(2000)
+    @Timeout(2)
     public void testInfinitelyBlockedUntilClosed() throws Exception {
         RateLimiter limiter = RateLimiter.create(0L);
 
@@ -160,7 +160,7 @@ public class RateLimiterTest {
     }
 
     @Test
-    @Timeout(2000)
+    @Timeout(2)
     public void testThrottlingIncludingBlocking() throws InterruptedException {
         RateLimiter limiter = spy(new AveragingRateLimiter(10L, 1.0d, timeSupplier));
 
@@ -181,7 +181,7 @@ public class RateLimiterTest {
     }
 
     @Test
-    @Timeout(3000)
+    @Timeout(3)
     public void testTooSlowTask() throws Exception {
         final double maxBurstSeconds = 0.0d;
 
@@ -198,7 +198,7 @@ public class RateLimiterTest {
     }
 
     @Test
-    @Timeout(3000)
+    @Timeout(3)
     public void testTooSlowTaskWithBursty() throws Exception {
         final double maxBurstSeconds = 1.0d;
 

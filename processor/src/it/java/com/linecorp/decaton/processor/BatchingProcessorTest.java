@@ -39,7 +39,7 @@ public class BatchingProcessorTest {
     public RandomExtension randomExtension = new RandomExtension();
 
     @Test
-    @Timeout(30000)
+    @Timeout(30)
     public void testBatchingProcessor() throws Exception {
         Random rand = randomExtension.random();
         ProcessorTestSuite

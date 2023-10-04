@@ -182,7 +182,7 @@ public class ProcessorSubscriptionTest {
     }
 
     @Test
-    @Timeout(5000)
+    @Timeout(5)
     public void testOffsetRegression() throws Exception {
         TopicPartition tp = new TopicPartition("topic", 0);
         AtomicReference<ConsumerRebalanceListener> listener = new AtomicReference<>();
@@ -308,7 +308,7 @@ public class ProcessorSubscriptionTest {
     }
 
     @Test
-    @Timeout(5000)
+    @Timeout(5)
     public void closeWithoutStart() throws Exception {
         TopicPartition tp = new TopicPartition("topic", 0);
         ProcessorSubscription subscription = subscription(consumer, null, tp, (context, task) -> {

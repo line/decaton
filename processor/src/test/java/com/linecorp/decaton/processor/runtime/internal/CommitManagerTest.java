@@ -68,7 +68,7 @@ public class CommitManagerTest {
         commitManager = spy(new CommitManager(consumer, commitIntervalMillis, store, clock));
     }
     @Test
-    @Timeout(5000)
+    @Timeout(5)
     public void testCommitCompletedOffsetsSync() {
         // When committed ended up successfully update committed offsets
         Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(
@@ -81,7 +81,7 @@ public class CommitManagerTest {
     }
 
     @Test
-    @Timeout(5000)
+    @Timeout(5)
     public void testCommitCompletedOffsetsSync_NO_COMMIT() {
         // When target offsets is empty do not attempt any commit
         doReturn(emptyMap()).when(store).commitReadyOffsets();
@@ -92,7 +92,7 @@ public class CommitManagerTest {
     }
 
     @Test
-    @Timeout(5000)
+    @Timeout(5)
     public void testCommitCompletedOffsetsSync_FAIL() {
         // When commit raised an exception do not update committed offsets
         Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(
@@ -108,7 +108,7 @@ public class CommitManagerTest {
     }
 
     @Test
-    @Timeout(5000)
+    @Timeout(5)
     public void testCommitCompletedOffsetsAsync() {
         Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(
                 new TopicPartition("topic", 0), new OffsetAndMetadata(1234, null));
@@ -137,7 +137,7 @@ public class CommitManagerTest {
     }
 
     @Test
-    @Timeout(5000)
+    @Timeout(5)
     public void testCommitCompletedOffsetsAsync_FAIL() {
         Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(
                 new TopicPartition("topic", 0), new OffsetAndMetadata(1234, null));
@@ -156,7 +156,7 @@ public class CommitManagerTest {
     }
 
     @Test
-    @Timeout(5000)
+    @Timeout(5)
     public void testCommitCompletedOffsetsAsync_SUBSEQUENT_SYNC() {
         Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(
                 new TopicPartition("topic", 0), new OffsetAndMetadata(1234, null));

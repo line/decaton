@@ -63,7 +63,7 @@ public class OffsetStateReaperTest {
     }
 
     @Test
-    @Timeout(5000)
+    @Timeout(5)
     public void maybeReapOffset() throws InterruptedException {
         OffsetState state = spy(new OffsetState(100));
         AtomicInteger cbCount = new AtomicInteger();

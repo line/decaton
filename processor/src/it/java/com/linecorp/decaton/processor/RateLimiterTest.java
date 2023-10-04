@@ -58,7 +58,7 @@ public class RateLimiterTest {
     }
 
     @Test
-    @Timeout(30000)
+    @Timeout(30)
     public void testPropertyDynamicSwitch() throws Exception {
         Set<String> keys = new HashSet<>();
 

@@ -77,7 +77,7 @@ public class ExecutionSchedulerTest {
     }
 
     @Test
-    @Timeout(5000)
+    @Timeout(5)
     public void testScheduledProcess_IMMEDIATE() throws InterruptedException {
         doReturn(1L).when(currentTimeMillis).get();
         scheduler.waitOnScheduledTime(TaskMetadata.builder().scheduledTimeMillis(0).build());
@@ -88,7 +88,7 @@ public class ExecutionSchedulerTest {
     }
 
     @Test
-    @Timeout(5000)
+    @Timeout(5)
     public void testScheduledProcess_DELAY_BY_METADATA() throws InterruptedException {
         doReturn(1L).when(currentTimeMillis).get();
         long t0 = System.nanoTime();
@@ -100,7 +100,7 @@ public class ExecutionSchedulerTest {
     }
 
     @Test
-    @Timeout(5000)
+    @Timeout(5)
     public void testScheduledProcess_TERMINATE_AT_METADATA() throws Exception {
         CountDownLatch atSleepLatch = new CountDownLatch(1);
         doAnswer(invocation -> {
@@ -126,7 +126,7 @@ public class ExecutionSchedulerTest {
     }
 
     @Test
-    @Timeout(5000)
+    @Timeout(5)
     public void testScheduledProcess_TERMINATE_AT_LIMITER() throws Exception {
         CountDownLatch atAcquire = new CountDownLatch(1);
         doAnswer(invocation -> {
@@ -152,7 +152,7 @@ public class ExecutionSchedulerTest {
     }
 
     @Test
-    @Timeout(5000)
+    @Timeout(5)
     public void testScheduledProcess_TERMINATE_AT_ENTER() throws Exception {
         scheduler.close();
         rateLimiter.close();

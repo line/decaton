@@ -154,7 +154,7 @@ public class OutOfOrderCommitControlTest {
     }
 
     @Test
-    @Timeout(5000)
+    @Timeout(5)
     public void testTimeoutOffsetReaping() {
         Clock clock = mock(Clock.class);
         doReturn(10L).when(clock).millis();

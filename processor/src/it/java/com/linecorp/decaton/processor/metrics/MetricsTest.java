@@ -75,7 +75,7 @@ public class MetricsTest {
     }
 
     @Test
-    @Timeout(30000)
+    @Timeout(30)
     public void testMetricsCleanup() throws Exception {
         // Any neighbor integration tests that ran in the same JVM could leak subscription unclosed
         // (e.g, test timeout) and that causes this test to fail unless we clear the registry here.
@@ -98,7 +98,7 @@ public class MetricsTest {
     }
 
     @Test
-    @Timeout(30000)
+    @Timeout(30)
     public void testDetectStuckPartitions() throws Exception {
         // Micrometer doesn't track values without at least one register implementation added
         Metrics.register(new PrometheusMeterRegistry(PrometheusConfig.DEFAULT));
@@ -148,7 +148,7 @@ public class MetricsTest {
     }
 
     @Test
-    @Timeout(30000)
+    @Timeout(30)
     public void testTasksMetrics() throws Exception {
         Metrics.register(new PrometheusMeterRegistry(PrometheusConfig.DEFAULT));
         CountDownLatch processLatch = new CountDownLatch(4);
@@ -204,7 +204,7 @@ public class MetricsTest {
     }
 
     @Test
-    @Timeout(30000)
+    @Timeout(30)
     public void testDeferredCompletionLeak() throws Exception {
         Metrics.register(new PrometheusMeterRegistry(PrometheusConfig.DEFAULT));
 

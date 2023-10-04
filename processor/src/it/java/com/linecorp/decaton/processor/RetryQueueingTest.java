@@ -117,7 +117,7 @@ public class RetryQueueingTest {
     }
 
     @Test
-    @Timeout(30000)
+    @Timeout(30)
     public void testRetryQueuing() throws Exception {
         // scenario:
         //   * all arrived tasks are retried once
@@ -144,7 +144,7 @@ public class RetryQueueingTest {
     }
 
     @Test
-    @Timeout(30000)
+    @Timeout(30)
     public void testRetryQueuingOnAsyncProcessor() throws Exception {
         ExecutorService executorService = Executors.newFixedThreadPool(16);
         ProcessorTestSuite
@@ -187,7 +187,7 @@ public class RetryQueueingTest {
      *       message delivery loss due to decaton#101.
      */
     @Test
-    @Timeout(60000)
+    @Timeout(60)
     public void testRetryQueuingExtractingWithDefaultMeta() throws Exception {
         // LogManager waits to start clean-up process until InitialTaskDelayMs (30sec) elapses.
         // https://github.com/apache/kafka/blob/2.4.0/core/src/main/scala/kafka/log/LogManager.scala#L70
@@ -225,7 +225,7 @@ public class RetryQueueingTest {
     }
 
     @Test
-    @Timeout(60000)
+    @Timeout(60)
     public void testRetryQueueingFromCompletionTimeoutCallback() throws Exception {
         ProcessorTestSuite
                 .builder(rule)

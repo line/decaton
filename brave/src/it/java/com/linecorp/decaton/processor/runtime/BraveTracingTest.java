@@ -89,7 +89,7 @@ public class BraveTracingTest {
     }
 
     @Test
-    @Timeout(30000)
+    @Timeout(30)
     public void testTracePropagation() throws Exception {
         // scenario:
         //   * half of arrived tasks are retried once

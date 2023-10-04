@@ -40,7 +40,7 @@ public class SubscriptionStateTest {
     public static KafkaClusterExtension rule = new KafkaClusterExtension();
 
     @Test
-    @Timeout(30000)
+    @Timeout(30)
     public void testStateTransition() throws Exception {
         Map<Integer, List<State>> subscriptionStates = new HashMap<>();
         ProcessorTestSuite

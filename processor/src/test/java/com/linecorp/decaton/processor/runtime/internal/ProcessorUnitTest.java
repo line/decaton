@@ -79,7 +79,7 @@ public class ProcessorUnitTest {
     }
 
     @Test
-    @Timeout(1000)
+    @Timeout(1)
     public void testProcessNormally() throws Exception {
         CountDownLatch latch = new CountDownLatch(1);
         doAnswer(invocation -> {
@@ -95,7 +95,7 @@ public class ProcessorUnitTest {
     }
 
     @Test
-    @Timeout(1000)
+    @Timeout(1)
     public void testProcess_PIPELINE_THREW() throws Exception {
         CountDownLatch processLatch = new CountDownLatch(2);
         doAnswer(invocation -> {
