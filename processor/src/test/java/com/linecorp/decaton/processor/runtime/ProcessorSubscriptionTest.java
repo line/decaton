@@ -154,7 +154,7 @@ public class ProcessorSubscriptionTest {
     }
 
     @Test
-    @Timeout(10000L)
+    @Timeout(10)
     public void testStateTransition() throws Exception {
         TopicPartition tp = new TopicPartition("topic", 0);
         DecatonMockConsumer consumer = new DecatonMockConsumer();
@@ -241,7 +241,7 @@ public class ProcessorSubscriptionTest {
     }
 
     @Test
-    @Timeout(10000L)
+    @Timeout(10)
     public void testTerminateAsync() throws Exception {
         TopicPartition tp = new TopicPartition("topic", 0);
         DecatonMockConsumer consumer = new DecatonMockConsumer() {
@@ -319,7 +319,7 @@ public class ProcessorSubscriptionTest {
     }
 
     @Test
-    @Timeout(10000L)
+    @Timeout(10)
     public void testCommitFailureOnPartitionRevocation() throws Exception {
         TopicPartition tp = new TopicPartition("topic", 0);
 

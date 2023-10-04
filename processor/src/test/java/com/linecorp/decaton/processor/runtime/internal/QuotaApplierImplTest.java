@@ -90,7 +90,7 @@ public class QuotaApplierImplTest {
     }
 
     @Test
-    @Timeout(10000L)
+    @Timeout(10)
     public void testViolateQuota() throws Exception {
         CountDownLatch produceLatch = new CountDownLatch(1);
         Metrics metrics = Metrics.builder().rate(1000).build();
@@ -131,7 +131,7 @@ public class QuotaApplierImplTest {
     }
 
     @Test
-    @Timeout(10000L)
+    @Timeout(10)
     public void testIgnoreQueuedTasksAfterClose() throws Exception {
         CountDownLatch firstTaskLatch = new CountDownLatch(1);
         CountDownLatch producerCloseLatch = new CountDownLatch(1);
