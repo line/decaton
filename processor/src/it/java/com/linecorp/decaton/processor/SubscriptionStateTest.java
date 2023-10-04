@@ -16,8 +16,8 @@
 
 package com.linecorp.decaton.processor;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -27,18 +27,20 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.junit.ClassRule;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.extension.RegisterExtension;
 
 import com.linecorp.decaton.processor.runtime.SubscriptionStateListener.State;
-import com.linecorp.decaton.testing.KafkaClusterRule;
+import com.linecorp.decaton.testing.KafkaClusterExtension;
 import com.linecorp.decaton.testing.processor.ProcessorTestSuite;
 
 public class SubscriptionStateTest {
-    @ClassRule
-    public static KafkaClusterRule rule = new KafkaClusterRule();
+    @RegisterExtension
+    public static KafkaClusterExtension rule = new KafkaClusterExtension();
 
-    @Test(timeout = 30000)
+    @Test
+    @Timeout(30)
     public void testStateTransition() throws Exception {
         Map<Integer, List<State>> subscriptionStates = new HashMap<>();
         ProcessorTestSuite

@@ -16,7 +16,7 @@
 
 package com.linecorp.decaton.processor.processors;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.verify;
 import static org.mockito.internal.verification.VerificationModeFactory.times;
@@ -28,21 +28,19 @@ import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.stream.Collectors;
 
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnit;
-import org.mockito.junit.MockitoRule;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.linecorp.decaton.processor.Completion;
 import com.linecorp.decaton.processor.ProcessingContext;
 import com.linecorp.decaton.protocol.Sample.HelloTask;
 
+@ExtendWith(MockitoExtension.class)
 public class BatchingProcessorTest {
-    @Rule
-    public MockitoRule rule = MockitoJUnit.rule();
-
     @Mock
     private ProcessingContext<HelloTask> context;
 
@@ -51,7 +49,7 @@ public class BatchingProcessorTest {
 
     private final List<HelloTask> processedTasks = Collections.synchronizedList(new ArrayList<>());
 
-    @Before
+    @BeforeEach
     public void before() {
         doReturn(completion).when(context).deferCompletion();
         processedTasks.clear();
@@ -74,7 +72,8 @@ public class BatchingProcessorTest {
         };
     }
 
-    @Test(timeout = 5000)
+    @Test
+    @Timeout(5)
     public void testLingerLimit() throws InterruptedException {
         long lingerMs = 1000;
         CountDownLatch processLatch = new CountDownLatch(1);

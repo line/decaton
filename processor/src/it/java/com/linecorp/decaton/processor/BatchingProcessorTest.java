@@ -19,28 +19,29 @@ package com.linecorp.decaton.processor;
 import java.util.List;
 import java.util.Random;
 
-import org.junit.ClassRule;
-import org.junit.Rule;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.extension.RegisterExtension;
 
 import com.linecorp.decaton.processor.processors.BatchingProcessor;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.Property;
 import com.linecorp.decaton.processor.runtime.StaticPropertySupplier;
-import com.linecorp.decaton.testing.KafkaClusterRule;
-import com.linecorp.decaton.testing.RandomRule;
+import com.linecorp.decaton.testing.KafkaClusterExtension;
+import com.linecorp.decaton.testing.RandomExtension;
 import com.linecorp.decaton.testing.processor.ProcessorTestSuite;
 import com.linecorp.decaton.testing.processor.TestTask;
 
 public class BatchingProcessorTest {
-    @ClassRule
-    public static KafkaClusterRule rule = new KafkaClusterRule();
-    @Rule
-    public RandomRule randomRule = new RandomRule();
+    @RegisterExtension
+    public static KafkaClusterExtension rule = new KafkaClusterExtension();
+    @RegisterExtension
+    public RandomExtension randomExtension = new RandomExtension();
 
-    @Test(timeout = 30000)
+    @Test
+    @Timeout(30)
     public void testBatchingProcessor() throws Exception {
-        Random rand = randomRule.random();
+        Random rand = randomExtension.random();
         ProcessorTestSuite
             .builder(rule)
             .configureProcessorsBuilder(builder -> builder.thenProcess(

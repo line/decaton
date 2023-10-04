@@ -16,10 +16,10 @@
 
 package com.linecorp.decaton.client.internal;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.times;
@@ -31,27 +31,27 @@ import java.util.function.Supplier;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnit;
-import org.mockito.junit.MockitoRule;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import com.linecorp.decaton.client.DecatonClient.TaskMetadata;
 import com.linecorp.decaton.protobuf.ProtocolBuffersSerializer;
 import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
 import com.linecorp.decaton.protocol.Sample.HelloTask;
 
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 public class DecatonClientImplTest {
     private static final String TOPIC = "topic";
     private static final String APPLICATION_ID = "unittest";
     private static final String INSTANCE_ID = "instance";
-
-    @Rule
-    public MockitoRule rule = MockitoJUnit.rule();
 
     @Mock
     private Producer<byte[], DecatonTaskRequest> producer;
@@ -64,7 +64,7 @@ public class DecatonClientImplTest {
     @Captor
     private ArgumentCaptor<ProducerRecord<byte[], DecatonTaskRequest>> captor;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         client = new DecatonClientImpl<>(TOPIC, new ProtocolBuffersSerializer<>(),
                                          APPLICATION_ID, INSTANCE_ID, new Properties(),

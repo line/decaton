@@ -16,10 +16,10 @@
 
 package com.linecorp.decaton.testing.processor;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -29,8 +29,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
-import com.linecorp.decaton.processor.internal.HashableByteArray;
 import com.linecorp.decaton.processor.TaskMetadata;
+import com.linecorp.decaton.processor.internal.HashableByteArray;
 
 public class ProcessOrdering implements ProcessingGuarantee {
     private final Map<TestTask, Long> taskToOffset = new HashMap<>();

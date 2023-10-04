@@ -16,34 +16,31 @@
 
 package com.linecorp.decaton.spring;
 
-import static org.junit.Assert.assertNotSame;
-import static org.junit.Assert.assertSame;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import org.apache.kafka.common.TopicPartition;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.Spy;
-import org.mockito.junit.MockitoJUnit;
-import org.mockito.junit.MockitoRule;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.ObjectFactory;
 
+@ExtendWith(MockitoExtension.class)
 public class SubpartitionScopeTest {
-    @Rule
-    public MockitoRule rule = MockitoJUnit.rule();
-
     @Mock
     private ObjectFactory<?> objectFactory;
 
     @Spy
     private final SubpartitionScope scope = new SubpartitionScope();
 
-    @Before
+    @BeforeEach
     public void setUp() {
         doReturn("subscription").when(scope).processingSubscription();
         doAnswer(invocation -> new Object()).when(objectFactory).getObject();

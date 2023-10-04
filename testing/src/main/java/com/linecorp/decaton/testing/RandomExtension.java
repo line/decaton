@@ -18,9 +18,9 @@ package com.linecorp.decaton.testing;
 
 import java.util.Random;
 
-import org.junit.rules.TestRule;
-import org.junit.runner.Description;
-import org.junit.runners.model.Statement;
+import org.junit.jupiter.api.extension.BeforeEachCallback;
+import org.junit.jupiter.api.extension.ExtensionContext;
+import org.junit.jupiter.api.extension.TestWatcher;
 
 import lombok.Getter;
 import lombok.experimental.Accessors;
@@ -29,27 +29,22 @@ import lombok.experimental.Accessors;
  * Test rule to provide {@link Random} instance with including
  * random seed info in error message for reproducibility
  */
-public class RandomRule implements TestRule {
+public class RandomExtension implements BeforeEachCallback, TestWatcher {
+    private long seed;
     @Getter
     @Accessors(fluent = true)
     private Random random;
 
     @Override
-    public Statement apply(Statement base, Description description) {
-        return new Statement() {
-            @Override
-            public void evaluate() throws Throwable {
-                long seed = System.currentTimeMillis();
-                random = new Random(seed);
+    public void testFailed(ExtensionContext context, Throwable cause) {
+        throw new RuntimeException(String.format("%s failed. [randomSeed=%d]",
+                                                 context.getDisplayName(),
+                                                 seed), cause);
+    }
 
-                try {
-                    base.evaluate();
-                } catch (Throwable t) {
-                    throw new Exception(String.format("%s failed. [randomSeed=%d]",
-                                                      description.getDisplayName(),
-                                                      seed), t);
-                }
-            }
-        };
+    @Override
+    public void beforeEach(ExtensionContext extensionContext) throws Exception {
+        seed = System.currentTimeMillis();
+        random = new Random(seed);
     }
 }

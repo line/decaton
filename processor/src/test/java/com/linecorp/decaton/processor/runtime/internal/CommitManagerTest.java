@@ -36,21 +36,19 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.common.TopicPartition;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnit;
-import org.mockito.junit.MockitoRule;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.linecorp.decaton.processor.runtime.DynamicProperty;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.internal.CommitManager.OffsetsStore;
 
+@ExtendWith(MockitoExtension.class)
 public class CommitManagerTest {
-    @Rule
-    public MockitoRule rule = MockitoJUnit.rule();
-
     @Mock
     private Consumer<byte[], byte[]> consumer;
 
@@ -65,11 +63,12 @@ public class CommitManagerTest {
 
     private CommitManager commitManager;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         commitManager = spy(new CommitManager(consumer, commitIntervalMillis, store, clock));
     }
-    @Test(timeout = 5000)
+    @Test
+    @Timeout(5)
     public void testCommitCompletedOffsetsSync() {
         // When committed ended up successfully update committed offsets
         Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(
@@ -81,7 +80,8 @@ public class CommitManagerTest {
         verify(store, times(1)).storeCommittedOffsets(offsets);
     }
 
-    @Test(timeout = 5000)
+    @Test
+    @Timeout(5)
     public void testCommitCompletedOffsetsSync_NO_COMMIT() {
         // When target offsets is empty do not attempt any commit
         doReturn(emptyMap()).when(store).commitReadyOffsets();
@@ -91,7 +91,8 @@ public class CommitManagerTest {
         verify(consumer, never()).commitAsync(anyMap(), any());
     }
 
-    @Test(timeout = 5000)
+    @Test
+    @Timeout(5)
     public void testCommitCompletedOffsetsSync_FAIL() {
         // When commit raised an exception do not update committed offsets
         Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(
@@ -106,7 +107,8 @@ public class CommitManagerTest {
         verify(store, never()).storeCommittedOffsets(any());
     }
 
-    @Test(timeout = 5000)
+    @Test
+    @Timeout(5)
     public void testCommitCompletedOffsetsAsync() {
         Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(
                 new TopicPartition("topic", 0), new OffsetAndMetadata(1234, null));
@@ -134,7 +136,8 @@ public class CommitManagerTest {
         verify(store, times(1)).storeCommittedOffsets(offsets);
     }
 
-    @Test(timeout = 5000)
+    @Test
+    @Timeout(5)
     public void testCommitCompletedOffsetsAsync_FAIL() {
         Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(
                 new TopicPartition("topic", 0), new OffsetAndMetadata(1234, null));
@@ -152,7 +155,8 @@ public class CommitManagerTest {
         verify(store, never()).storeCommittedOffsets(any());
     }
 
-    @Test(timeout = 5000)
+    @Test
+    @Timeout(5)
     public void testCommitCompletedOffsetsAsync_SUBSEQUENT_SYNC() {
         Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(
                 new TopicPartition("topic", 0), new OffsetAndMetadata(1234, null));

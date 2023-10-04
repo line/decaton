@@ -16,13 +16,14 @@
 
 package com.linecorp.decaton.processor.runtime.internal;
 
-import static org.hamcrest.CoreMatchers.hasItem;
-import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static org.hamcrest.Matchers.hasItem;
+import static org.hamcrest.Matchers.not;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
@@ -44,18 +45,18 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 
 import org.apache.kafka.common.TopicPartition;
-import org.junit.Rule;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnit;
-import org.mockito.junit.MockitoRule;
+import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.linecorp.decaton.processor.Completion;
+import com.linecorp.decaton.processor.Completion.TimeoutChoice;
 import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.DeferredCompletion;
 import com.linecorp.decaton.processor.ProcessingContext;
 import com.linecorp.decaton.processor.TaskMetadata;
-import com.linecorp.decaton.processor.Completion;
-import com.linecorp.decaton.processor.Completion.TimeoutChoice;
 import com.linecorp.decaton.processor.runtime.DecatonTask;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.tracing.TestTraceHandle;
@@ -66,6 +67,7 @@ import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
 import com.linecorp.decaton.protocol.Decaton.TaskMetadataProto;
 import com.linecorp.decaton.protocol.Sample.HelloTask;
 
+@ExtendWith(MockitoExtension.class)
 public class ProcessingContextImplTest {
     private static class NamedProcessor implements DecatonProcessor<HelloTask> {
         private final String name;
@@ -95,9 +97,6 @@ public class ProcessingContextImplTest {
                               .setMetadata(TaskMetadataProto.getDefaultInstance())
                               .setSerializedTask(TASK.toByteString())
                               .build();
-
-    @Rule
-    public MockitoRule rule = MockitoJUnit.rule();
 
     @Mock
     private NamedProcessor processorMock;
@@ -143,7 +142,8 @@ public class ProcessingContextImplTest {
         return latches;
     }
 
-    @Test(timeout = 5000)
+    @Test
+    @Timeout(5)
     public void testPush_Level1_Sync() throws InterruptedException {
         ProcessingContextImpl<HelloTask> context = context(NoopTrace.INSTANCE, (ctx, task) -> { /* noop */ });
 
@@ -151,7 +151,8 @@ public class ProcessingContextImplTest {
         assertTrue(comp.isComplete());
     }
 
-    @Test(timeout = 5000)
+    @Test
+    @Timeout(5)
     public void testPush_Level1_Async() throws InterruptedException {
         CountDownLatch latch = new CountDownLatch(1);
         ExecutorService executor = Executors.newSingleThreadExecutor();
@@ -185,7 +186,8 @@ public class ProcessingContextImplTest {
      * {@link ProcessingContextImpl} but still we want to keep it to make sure that the our processing model
      * works consistently to what we expect.
      */
-    @Test(timeout = 5000)
+    @Test
+    @Timeout(5)
     public void testPush_Level1_MultiPush_BothSync() throws InterruptedException {
         ProcessingContextImpl<HelloTask> context = context(NoopTrace.INSTANCE, (ctx, task) -> { /* noop */ });
 
@@ -204,7 +206,8 @@ public class ProcessingContextImplTest {
      * {@link ProcessingContextImpl} but still we want to keep it to make sure that the our processing model
      * works consistently to what we expect.
      */
-    @Test(timeout = 5000)
+    @Test
+    @Timeout(5)
     public void testPush_Level1_MultiPush_BothAsync() throws InterruptedException {
         CountDownLatch[] latches = latches(2);
         ExecutorService[] executors = executors(2);
@@ -235,7 +238,8 @@ public class ProcessingContextImplTest {
         assertTrue(fAll.isDone());
     }
 
-    @Test(timeout = 5000)
+    @Test
+    @Timeout(5)
     public void testPush_Level2_Sync() throws InterruptedException {
         ProcessingContextImpl<HelloTask> context = context(NoopTrace.INSTANCE, ProcessingContext::push,
                                                            processorMock);
@@ -245,7 +249,8 @@ public class ProcessingContextImplTest {
         verify(processorMock, times(1)).process(any(), eq(TASK));
     }
 
-    @Test(timeout = 5000)
+    @Test
+    @Timeout(5)
     public void testPush_Level2_Sync_ThenAsync() throws InterruptedException {
         CountDownLatch latch = new CountDownLatch(1);
         ExecutorService executor = Executors.newSingleThreadExecutor();
@@ -267,7 +272,8 @@ public class ProcessingContextImplTest {
         verify(processorMock, times(1)).process(any(), eq(TASK));
     }
 
-    @Test(timeout = 5000)
+    @Test
+    @Timeout(5)
     public void testPush_Level2_Async_ThenAsync() throws InterruptedException {
         CountDownLatch latch = new CountDownLatch(1);
         ExecutorService executor = Executors.newSingleThreadExecutor();
@@ -300,7 +306,8 @@ public class ProcessingContextImplTest {
      * {@link ProcessingContextImpl} but still we want to keep it to make sure that the our processing model
      * works consistently to what we expect.
      */
-    @Test(timeout = 5000)
+    @Test
+    @Timeout(5)
     public void testPush_Level2_MultiPush_SyncAndAsync() throws InterruptedException {
         CountDownLatch latch = new CountDownLatch(1);
         ExecutorService executor = Executors.newSingleThreadExecutor();
@@ -343,7 +350,8 @@ public class ProcessingContextImplTest {
         assertTrue(fAll.isDone());
     }
 
-    @Test(timeout = 5000)
+    @Test
+    @Timeout(5)
     public void testRetry() throws InterruptedException {
         CountDownLatch retryLatch = new CountDownLatch(1);
         DecatonProcessor<byte[]> retryProcessor = spy(
@@ -382,12 +390,13 @@ public class ProcessingContextImplTest {
         assertTrue(retryComp.isComplete());
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void testRetry_NOT_CONFIGURED() throws InterruptedException {
-        context(NoopTrace.INSTANCE).retry();
+        assertThrows(IllegalStateException.class, () -> context(NoopTrace.INSTANCE).retry());
     }
 
-    @Test(timeout = 5000)
+    @Test
+    @Timeout(5)
     public void testRetryAtCompletionTimeout() throws InterruptedException {
         CountDownLatch retryLatch = new CountDownLatch(1);
         DecatonProcessor<byte[]> retryProcessor = spy(
@@ -436,7 +445,8 @@ public class ProcessingContextImplTest {
         assertTrue(comp.isComplete());
     }
 
-    @Test(timeout = 5000)
+    @Test
+    @Timeout(5)
     public void testTrace_Sync() throws InterruptedException {
         RecordTraceHandle handle = new TestTraceHandle("testTrace_Sync");
         final AtomicReference<String> traceDuringProcessing = new AtomicReference<>();
@@ -457,7 +467,8 @@ public class ProcessingContextImplTest {
         TestTracingProvider.assertAllTracesWereClosed();
     }
 
-    @Test(timeout = 5000)
+    @Test
+    @Timeout(5)
     public void testTrace_Async() throws InterruptedException {
         CountDownLatch latch = new CountDownLatch(1);
         ExecutorService executor = Executors.newSingleThreadExecutor();

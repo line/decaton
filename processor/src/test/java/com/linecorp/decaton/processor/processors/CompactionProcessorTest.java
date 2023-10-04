@@ -16,9 +16,9 @@
 
 package com.linecorp.decaton.processor.processors;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
@@ -38,12 +38,12 @@ import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 
 import org.apache.kafka.common.TopicPartition;
-import org.junit.Rule;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.Spy;
-import org.mockito.junit.MockitoJUnit;
-import org.mockito.junit.MockitoRule;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.linecorp.decaton.processor.Completion;
 import com.linecorp.decaton.processor.DecatonProcessor;
@@ -58,10 +58,8 @@ import com.linecorp.decaton.processor.runtime.internal.TaskRequest;
 import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider.NoopTrace;
 import com.linecorp.decaton.protocol.Sample.HelloTask;
 
+@ExtendWith(MockitoExtension.class)
 public class CompactionProcessorTest {
-    @Rule
-    public MockitoRule rule = MockitoJUnit.rule();
-
     private static final long LINGER_MS = 1000;
 
     private static class TaskInput {
@@ -124,7 +122,8 @@ public class CompactionProcessorTest {
         return put(name, age, null);
     }
 
-    @Test(timeout = 5000)
+    @Test
+    @Timeout(5)
     public void testCompactedOutput() throws InterruptedException {
         CountDownLatch waitFlush = new CountDownLatch(1);
         CountDownLatch completeFlush = new CountDownLatch(3);
@@ -166,7 +165,8 @@ public class CompactionProcessorTest {
         verify(downstream).process(any(), eq(babyYuto.task));
     }
 
-    @Test(timeout = 5000)
+    @Test
+    @Timeout(5)
     public void testOutputDelayed() throws InterruptedException {
         CountDownLatch completeFlush = new CountDownLatch(2);
 
@@ -214,7 +214,8 @@ public class CompactionProcessorTest {
         assertTrue(wonpillFlushedTime.get() >= secondPutTime + TimeUnit.MILLISECONDS.toNanos(LINGER_MS));
     }
 
-    @Test(timeout = 5000)
+    @Test
+    @Timeout(5)
     public void testCompletionHandling() throws InterruptedException {
         // In this test downstream processor defers task's completion and never completes it.
         doAnswer(invocation -> {
@@ -259,7 +260,8 @@ public class CompactionProcessorTest {
         verify(dyingYuto.context, times(1)).push(dyingYuto.task);
     }
 
-    @Test(timeout = 5000)
+    @Test
+    @Timeout(5)
     public void testRaceConditionOnFlush() throws InterruptedException {
         CountDownLatch schedulePassed = new CountDownLatch(1);
         CountDownLatch firstFlushComplete = new CountDownLatch(1);

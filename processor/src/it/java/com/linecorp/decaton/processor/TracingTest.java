@@ -16,9 +16,9 @@
 
 package com.linecorp.decaton.processor;
 
-import static org.hamcrest.CoreMatchers.startsWith;
-import static org.junit.Assert.assertEquals;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.startsWith;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -26,15 +26,16 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 
-import org.junit.After;
-import org.junit.Before;
-import org.junit.ClassRule;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.extension.RegisterExtension;
 
 import com.linecorp.decaton.client.DecatonClientBuilder.DefaultKafkaProducerSupplier;
 import com.linecorp.decaton.processor.runtime.RetryConfig;
 import com.linecorp.decaton.processor.tracing.TestTracingProvider;
-import com.linecorp.decaton.testing.KafkaClusterRule;
+import com.linecorp.decaton.testing.KafkaClusterExtension;
 import com.linecorp.decaton.testing.TestUtils;
 import com.linecorp.decaton.testing.processor.ProcessedRecord;
 import com.linecorp.decaton.testing.processor.ProcessingGuarantee;
@@ -70,22 +71,23 @@ public class TracingTest {
             TestTracingProvider.assertAllTracesWereClosed();
         }
     }
-    @ClassRule
-    public static KafkaClusterRule rule = new KafkaClusterRule();
+    @RegisterExtension
+    public static KafkaClusterExtension rule = new KafkaClusterExtension();
 
     private String retryTopic;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         retryTopic = rule.admin().createRandomTopic(3, 3);
     }
 
-    @After
+    @AfterEach
     public void tearDown() {
         rule.admin().deleteTopics(true, retryTopic);
     }
 
-    @Test(timeout = 30000)
+    @Test
+    @Timeout(30)
     public void testTracePropagation() throws Exception {
         // scenario:
         //   * half of arrived tasks are retried once

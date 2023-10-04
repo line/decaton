@@ -19,7 +19,7 @@ package com.linecorp.decaton.processor.runtime.internal;
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptySet;
 import static java.util.Collections.singletonList;
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.never;
@@ -31,22 +31,19 @@ import java.util.List;
 import java.util.Map;
 
 import org.apache.kafka.common.TopicPartition;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnit;
-import org.mockito.junit.MockitoRule;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.linecorp.decaton.processor.runtime.internal.AssignmentManager.AssignmentConfig;
 import com.linecorp.decaton.processor.runtime.internal.AssignmentManager.AssignmentStore;
 
+@ExtendWith(MockitoExtension.class)
 public class AssignmentManagerTest {
-    @Rule
-    public MockitoRule rule = MockitoJUnit.rule();
-
     @Captor
     private ArgumentCaptor<Map<TopicPartition, AssignmentConfig>> captor;
 
@@ -55,7 +52,7 @@ public class AssignmentManagerTest {
 
     private AssignmentManager assignManager;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         assignManager = new AssignmentManager(store);
     }

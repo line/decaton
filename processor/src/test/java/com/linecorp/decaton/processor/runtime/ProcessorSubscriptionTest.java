@@ -18,8 +18,8 @@ package com.linecorp.decaton.processor.runtime;
 
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonMap;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyMap;
@@ -39,6 +39,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -56,11 +57,13 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
-import org.junit.Rule;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnit;
-import org.mockito.junit.MockitoRule;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import org.mockito.stubbing.Answer;
 
 import com.linecorp.decaton.processor.DecatonProcessor;
@@ -73,11 +76,10 @@ import com.linecorp.decaton.processor.runtime.internal.NoopQuotaApplier;
 import com.linecorp.decaton.processor.runtime.internal.SubscriptionScope;
 import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider;
 
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 public class ProcessorSubscriptionTest {
     public static final byte[] NO_DATA = {};
-
-    @Rule
-    public MockitoRule rule = MockitoJUnit.rule();
 
     @Mock
     Consumer<byte[], byte[]> consumer;
@@ -151,7 +153,8 @@ public class ProcessorSubscriptionTest {
                 listener);
     }
 
-    @Test(timeout = 10000L)
+    @Test
+    @Timeout(10)
     public void testStateTransition() throws Exception {
         TopicPartition tp = new TopicPartition("topic", 0);
         DecatonMockConsumer consumer = new DecatonMockConsumer();
@@ -178,7 +181,8 @@ public class ProcessorSubscriptionTest {
                                    State.TERMINATED), states);
     }
 
-    @Test(timeout = 5000)
+    @Test
+    @Timeout(5)
     public void testOffsetRegression() throws Exception {
         TopicPartition tp = new TopicPartition("topic", 0);
         AtomicReference<ConsumerRebalanceListener> listener = new AtomicReference<>();
@@ -236,7 +240,8 @@ public class ProcessorSubscriptionTest {
         assertEquals(102L, offset.offset());
     }
 
-    @Test(timeout = 10000L)
+    @Test
+    @Timeout(10)
     public void testTerminateAsync() throws Exception {
         TopicPartition tp = new TopicPartition("topic", 0);
         DecatonMockConsumer consumer = new DecatonMockConsumer() {
@@ -296,13 +301,14 @@ public class ProcessorSubscriptionTest {
         assertEquals(3, subscription.contexts.totalPendingTasks());
         letTasksComplete.countDown();
         letTaskFinishBlocking.release(2);
-        subscription.awaitShutdown();
+        subscription.awaitShutdown();;
         assertEquals(13, consumer.committed(singleton(tp)).get(tp).offset());
         executor.shutdown();
         executor.awaitTermination(Long.MAX_VALUE, TimeUnit.SECONDS);
     }
 
-    @Test(timeout = 5000)
+    @Test
+    @Timeout(5)
     public void closeWithoutStart() throws Exception {
         TopicPartition tp = new TopicPartition("topic", 0);
         ProcessorSubscription subscription = subscription(consumer, null, tp, (context, task) -> {
@@ -312,7 +318,8 @@ public class ProcessorSubscriptionTest {
         verify(consumer).close();
     }
 
-    @Test(timeout = 10000L)
+    @Test
+    @Timeout(10)
     public void testCommitFailureOnPartitionRevocation() throws Exception {
         TopicPartition tp = new TopicPartition("topic", 0);
 

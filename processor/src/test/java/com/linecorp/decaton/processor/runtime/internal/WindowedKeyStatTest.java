@@ -16,15 +16,16 @@
 
 package com.linecorp.decaton.processor.runtime.internal;
 
-import static org.junit.Assert.assertEquals;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Random;
 
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import com.linecorp.decaton.processor.internal.HashableByteArray;
 import com.linecorp.decaton.processor.runtime.internal.WindowedKeyStat.Stat;
@@ -64,7 +65,7 @@ public class WindowedKeyStatTest {
 
     private WindowedKeyStat windowedKeyStat;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         long windowMs = 100L;
         windowedKeyStat = new WindowedKeyStat(Duration.ofMillis(windowMs), MockKeyCounter::new);

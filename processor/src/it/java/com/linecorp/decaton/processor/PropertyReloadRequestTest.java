@@ -16,7 +16,7 @@
 
 package com.linecorp.decaton.processor;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.util.Collections;
 import java.util.HashSet;
@@ -24,10 +24,11 @@ import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
-import org.junit.After;
-import org.junit.Before;
-import org.junit.ClassRule;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.extension.RegisterExtension;
 
 import com.linecorp.decaton.client.DecatonClient;
 import com.linecorp.decaton.processor.internal.HashableByteArray;
@@ -38,27 +39,27 @@ import com.linecorp.decaton.processor.runtime.ProcessorsBuilder;
 import com.linecorp.decaton.processor.runtime.StaticPropertySupplier;
 import com.linecorp.decaton.protobuf.ProtocolBuffersDeserializer;
 import com.linecorp.decaton.protocol.Sample.HelloTask;
-import com.linecorp.decaton.testing.KafkaClusterRule;
+import com.linecorp.decaton.testing.KafkaClusterExtension;
 import com.linecorp.decaton.testing.TestUtils;
 
 public class PropertyReloadRequestTest {
-
-    @ClassRule
-    public static KafkaClusterRule rule = new KafkaClusterRule();
+    @RegisterExtension
+    public static KafkaClusterExtension rule = new KafkaClusterExtension();
 
     private String topicName;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         topicName = rule.admin().createRandomTopic(3, 3);
     }
 
-    @After
+    @AfterEach
     public void tearDown() {
         rule.admin().deleteTopics(true, topicName);
     }
 
-    @Test(timeout = 30000)
+    @Test
+    @Timeout(30)
     public void testPropertyDynamicSwitch() throws Exception {
         Set<String> keys = new HashSet<>();
 

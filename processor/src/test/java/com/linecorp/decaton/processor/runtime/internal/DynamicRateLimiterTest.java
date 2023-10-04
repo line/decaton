@@ -16,8 +16,8 @@
 
 package com.linecorp.decaton.processor.runtime.internal;
 
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 
@@ -28,19 +28,17 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnit;
-import org.mockito.junit.MockitoRule;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.linecorp.decaton.processor.runtime.Property;
 
+@ExtendWith(MockitoExtension.class)
 public class DynamicRateLimiterTest {
-    @Rule
-    public MockitoRule rule = MockitoJUnit.rule();
-
     BiConsumer<Long, Long> listener;
 
     @Mock
@@ -48,7 +46,7 @@ public class DynamicRateLimiterTest {
 
     DynamicRateLimiter limiter;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         doAnswer(invocation -> {
             listener = invocation.getArgument(0);
@@ -57,7 +55,8 @@ public class DynamicRateLimiterTest {
         limiter = new DynamicRateLimiter(prop);
     }
 
-    @Test(timeout = 10000)
+    @Test
+    @Timeout(10)
     public void testAcquireOnSwitch() throws InterruptedException {
         // First setup limiter to pause all execution
         listener.accept(null, RateLimiter.PAUSED);
@@ -100,6 +99,6 @@ public class DynamicRateLimiterTest {
         // so in total at least N / L seconds will be needed to complete executing all threads.
         long expectedTime = THREADS / LIMIT;
         long sumSeconds = TimeUnit.NANOSECONDS.toSeconds(sum);
-        assertTrue(String.format("%d >= %d", sumSeconds, expectedTime), sumSeconds >= expectedTime);
+        assertTrue(sumSeconds >= expectedTime, String.format("%d >= %d", sumSeconds, expectedTime));
     }
 }

@@ -20,10 +20,10 @@ import static com.linecorp.decaton.processor.runtime.ProcessorProperties.CONFIG_
 import static com.linecorp.decaton.processor.runtime.ProcessorProperties.CONFIG_PARTITION_CONCURRENCY;
 import static com.linecorp.decaton.processor.runtime.ProcessorProperties.CONFIG_PROCESSING_RATE;
 import static java.util.Arrays.asList;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.clearInvocations;
@@ -47,22 +47,22 @@ import java.util.stream.Collectors;
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnit;
-import org.mockito.junit.MockitoRule;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import com.linecorp.decaton.processor.runtime.DefaultSubPartitioner;
 import com.linecorp.decaton.processor.runtime.DynamicProperty;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider;
 
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 public class PartitionContextsTest {
-    @Rule
-    public MockitoRule rule = MockitoJUnit.rule();
-
     private final DynamicProperty<Integer> partitionConcurrencyProperty =
             new DynamicProperty<>(CONFIG_PARTITION_CONCURRENCY);
 
@@ -106,7 +106,7 @@ public class PartitionContextsTest {
         return new TopicPartition("topic", partition);
     }
 
-    @Before
+    @BeforeEach
     public void setup() {
         partitionConcurrencyProperty.set(1);
         maxPendingRecordsProperty.set(10);
@@ -376,13 +376,13 @@ public class PartitionContextsTest {
         Map<TopicPartition, OffsetAndMetadata> readyOffsets = contexts.commitReadyOffsets();
 
         assertEquals(1, readyOffsets.size());
-        assertEquals(2, readyOffsets.get(tp(1)).offset());
+        assertEquals(2L, readyOffsets.get(tp(1)).offset());
 
         // unmark revoking
         doReturn(false).when(cts.get(0)).revoking();
         doReturn(OptionalLong.empty()).when(cts.get(1)).offsetWaitingCommit();
         readyOffsets = contexts.commitReadyOffsets();
         assertEquals(1, readyOffsets.size());
-        assertEquals(1, readyOffsets.get(tp(0)).offset());
+        assertEquals(1L, readyOffsets.get(tp(0)).offset());
     }
 }

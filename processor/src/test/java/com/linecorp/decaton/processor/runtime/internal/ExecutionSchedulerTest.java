@@ -16,8 +16,8 @@
 
 package com.linecorp.decaton.processor.runtime.internal;
 
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
@@ -34,19 +34,23 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 import org.apache.kafka.common.TopicPartition;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.Spy;
-import org.mockito.junit.MockitoJUnit;
-import org.mockito.junit.MockitoRule;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
+import com.linecorp.decaton.processor.TaskMetadata;
 import com.linecorp.decaton.processor.runtime.DefaultSubPartitioner;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
-import com.linecorp.decaton.processor.TaskMetadata;
 import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider;
 
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 public class ExecutionSchedulerTest {
     private static final ThreadScope scope = new ThreadScope(
             new PartitionScope(
@@ -58,9 +62,6 @@ public class ExecutionSchedulerTest {
                     new TopicPartition("topic", 0)),
             0);
 
-    @Rule
-    public MockitoRule rule = MockitoJUnit.rule();
-
     @Mock
     private Supplier<Long> currentTimeMillis;
 
@@ -69,13 +70,14 @@ public class ExecutionSchedulerTest {
 
     private ExecutionScheduler scheduler;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         doAnswer(invocation -> System.currentTimeMillis()).when(currentTimeMillis).get();
         scheduler = spy(new ExecutionScheduler(scope, rateLimiter, currentTimeMillis));
     }
 
-    @Test(timeout = 5000)
+    @Test
+    @Timeout(5)
     public void testScheduledProcess_IMMEDIATE() throws InterruptedException {
         doReturn(1L).when(currentTimeMillis).get();
         scheduler.waitOnScheduledTime(TaskMetadata.builder().scheduledTimeMillis(0).build());
@@ -85,7 +87,8 @@ public class ExecutionSchedulerTest {
         verify(scheduler, never()).sleep(anyLong());
     }
 
-    @Test(timeout = 5000)
+    @Test
+    @Timeout(5)
     public void testScheduledProcess_DELAY_BY_METADATA() throws InterruptedException {
         doReturn(1L).when(currentTimeMillis).get();
         long t0 = System.nanoTime();
@@ -96,7 +99,8 @@ public class ExecutionSchedulerTest {
         assertTrue(TimeUnit.NANOSECONDS.toMillis(elapsed) >= 499);
     }
 
-    @Test(timeout = 5000)
+    @Test
+    @Timeout(5)
     public void testScheduledProcess_TERMINATE_AT_METADATA() throws Exception {
         CountDownLatch atSleepLatch = new CountDownLatch(1);
         doAnswer(invocation -> {
@@ -121,7 +125,8 @@ public class ExecutionSchedulerTest {
         verify(rateLimiter, never()).acquire();
     }
 
-    @Test(timeout = 5000)
+    @Test
+    @Timeout(5)
     public void testScheduledProcess_TERMINATE_AT_LIMITER() throws Exception {
         CountDownLatch atAcquire = new CountDownLatch(1);
         doAnswer(invocation -> {
@@ -146,7 +151,8 @@ public class ExecutionSchedulerTest {
         executor.awaitTermination(Long.MAX_VALUE, TimeUnit.SECONDS);
     }
 
-    @Test(timeout = 5000)
+    @Test
+    @Timeout(5)
     public void testScheduledProcess_TERMINATE_AT_ENTER() throws Exception {
         scheduler.close();
         rateLimiter.close();
