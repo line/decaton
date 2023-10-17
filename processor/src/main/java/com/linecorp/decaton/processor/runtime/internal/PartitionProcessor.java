@@ -17,15 +17,14 @@
 package com.linecorp.decaton.processor.runtime.internal;
 
 import static com.linecorp.decaton.processor.runtime.ProcessorProperties.CONFIG_PROCESSOR_THREADS_TERMINATION_TIMEOUT_MS;
-import static java.util.stream.Collectors.toList;
 
-import java.time.Duration;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionStage;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeoutException;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
 
 import org.apache.kafka.common.TopicPartition;
@@ -33,13 +32,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.linecorp.decaton.processor.DecatonProcessor;
-import com.linecorp.decaton.processor.runtime.AsyncShutdownable;
+import com.linecorp.decaton.processor.metrics.Metrics;
+import com.linecorp.decaton.processor.metrics.Metrics.PerPartitionMetrics;
+import com.linecorp.decaton.processor.runtime.AsyncClosable;
 import com.linecorp.decaton.processor.runtime.PerKeyQuotaConfig;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
-import com.linecorp.decaton.processor.metrics.Metrics;
 import com.linecorp.decaton.processor.runtime.Property;
 import com.linecorp.decaton.processor.runtime.SubPartitioner;
-import com.linecorp.decaton.processor.runtime.internal.Utils.Task;
 
 /**
  * This class is responsible for following portions:
@@ -49,13 +48,13 @@ import com.linecorp.decaton.processor.runtime.internal.Utils.Task;
  *   process locally and ordering.
  * - Manage lifecycle of {@link DecatonProcessor}s for each {@link ProcessorUnit}s.
  */
-public class PartitionProcessor implements AsyncShutdownable {
+public class PartitionProcessor implements AsyncClosable {
     private static final Logger logger = LoggerFactory.getLogger(PartitionProcessor.class);
 
     private final PartitionScope scope;
     private final Processors<?> processors;
 
-    private final List<ProcessorUnit> units;
+    private final Map<Integer, ProcessorUnit> units;
 
     private final SubPartitioner subPartitioner;
 
@@ -63,35 +62,9 @@ public class PartitionProcessor implements AsyncShutdownable {
     // can make processing unfair but it likely gives better overall throughput
     private final RateLimiter rateLimiter;
 
-    private final CompletionStage<Void> shutdownFuture;
+    private final PerPartitionMetrics metrics;
 
     private final Property<Long> processorThreadTerminationTimeoutMillis;
-
-    private Task destroyThreadProcessorTask(int i) {
-        return () -> processors.destroyThreadScope(scope.subscriptionId(), scope.topicPartition(), i);
-    }
-
-    // Shutdown sequence:
-    // 1. ProcessorUnit#initiateShutdown => termination flag turns on, new tasks inflow stops.
-    // 2. ProcessorPipeline#close => termination flag turns on, it becomes ready to return immediately for
-    // all following tasks that hasn't yet started processing user-supplied logic.
-    // 3. ExecutionScheduler#close => terminates all pending schedule waits which are based on metadata.
-    // 4. RateLimiter#close => terminates all pending waits for rate limiting, then returns immediately by
-    // termination flag at ExecutionScheduler, ProcessorPipeline
-    // ===========
-    // 5. ProcessorUnit#awaitShutdown => synchronize on executor termination, ensure there's no remaining
-    // running tasks.
-    // 6. Destroy all thread-scoped processors.
-    private CompletableFuture<Void> buildShutdownFuture() {
-        return CompletableFuture.allOf(
-                units.stream().map(ProcessorUnit::shutdownFuture)
-                     .map(CompletionStage::toCompletableFuture)
-                     .toArray(CompletableFuture[]::new)).thenCompose(
-                v -> Utils.runInParallel("DestroyThreadScopedProcessors",
-                                         IntStream.range(0, units.size())
-                                                  .mapToObj(this::destroyThreadProcessorTask)
-                                                  .collect(toList())));
-    }
 
     public PartitionProcessor(PartitionScope scope, Processors<?> processors) {
         this.scope = scope;
@@ -108,44 +81,22 @@ public class PartitionProcessor implements AsyncShutdownable {
         //   3. change concurrency from 5 to 3 during reloading => request reloading again, so partitions will be kept paused
         //   4. at next subscription loop, all processors are reloaded with 3 again, then start processing
         int concurrency = scope.props().get(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY).value();
-        units = new ArrayList<>(concurrency);
+        units = new HashMap<>(concurrency);
         subPartitioner = scope.subPartitionerSupplier().get(concurrency);
         rateLimiter = new DynamicRateLimiter(rateProperty(scope));
+        metrics = Metrics.withTags(
+                "subscription", scope.subscriptionId(),
+                "topic", scope.topic(),
+                "partition", String.valueOf(scope.topicPartition().partition()))
+                .new PerPartitionMetrics();
         processorThreadTerminationTimeoutMillis = scope.props()
                                                        .get(CONFIG_PROCESSOR_THREADS_TERMINATION_TIMEOUT_MS);
-
-        try {
-            for (int i = 0; i < concurrency; i++) {
-                units.add(createUnit(i));
-            }
-        } catch (RuntimeException e) {
-            // If exception occurred in the middle of instantiating processor units, we have to make sure
-            // all the previously created units are destroyed before bubbling up the exception.
-            initiateShutdown();
-            try {
-                buildShutdownFuture().get();
-            } catch (Exception e1) {
-                logger.warn("failed to cleanup intermediate states", e1);
-            }
-            throw e;
-        }
-
-        shutdownFuture = buildShutdownFuture();
     }
 
     // visible for testing
     ProcessorUnit createUnit(int threadId) {
         ThreadScope threadScope = new ThreadScope(scope, threadId);
-
         ExecutionScheduler scheduler = new ExecutionScheduler(threadScope, rateLimiter);
-
-        TopicPartition tp = scope.topicPartition();
-        Metrics metrics = Metrics.withTags(
-                "subscription", scope.subscriptionId(),
-                "topic", tp.topic(),
-                "partition", String.valueOf(tp.partition()),
-                "subpartition", String.valueOf(threadId));
-
         ProcessPipeline<?> pipeline = processors.newPipeline(threadScope, scheduler, metrics);
         return new ProcessorUnit(threadScope, pipeline);
     }
@@ -162,37 +113,48 @@ public class PartitionProcessor implements AsyncShutdownable {
 
     public void addTask(TaskRequest request) {
         int subPartition = subPartitioner.subPartitionFor(request.key());
-        units.get(subPartition).putTask(request);
+        units.computeIfAbsent(subPartition, key -> createUnit(subPartition)).putTask(request);
+    }
+
+    public void cleanup() {
+        for (Entry<Integer, ProcessorUnit> entry : new HashSet<>(units.entrySet())) {
+            Integer key = entry.getKey();
+            ProcessorUnit unit = entry.getValue();
+            if (!unit.hasPendingTasks()) {
+                try {
+                    units.remove(key).close();
+                } catch (Exception e) {
+                    logger.warn("Failed to close processor unit of {}", key, e);
+                }
+            }
+        }
+    }
+
+    private void destroyThreadProcessor(int i) {
+        processors.destroyThreadScope(scope.subscriptionId(), scope.topicPartition(), i);
     }
 
     @Override
-    public void initiateShutdown() {
-        for (ProcessorUnit unit : units) {
-            try {
-                unit.initiateShutdown();
-            } catch (RuntimeException e) {
-                logger.error("Processor unit threw exception on shutdown", e);
-            }
-        }
+    public CompletableFuture<Void> asyncClose() {
+        CompletableFuture<Void> shutdownComplete = CompletableFuture.allOf(
+                units.keySet().stream().map(i -> {
+                    try {
+                        return units.get(i).asyncClose()
+                                    .completeOnTimeout(null, // TODO: we may wanna log if it has timed out
+                                                       processorThreadTerminationTimeoutMillis.value(),
+                                                       TimeUnit.MILLISECONDS)
+                                    .whenComplete((ignored, e) -> destroyThreadProcessor(i));
+                    } catch (RuntimeException e) {
+                        logger.error("Processor unit threw exception on shutdown", e);
+                        return null;
+                    }
+                }).filter(Objects::nonNull).toArray(CompletableFuture[]::new));
         try {
             rateLimiter.close();
         } catch (Exception e) {
             logger.error("Error thrown while closing rate limiter", e);
         }
-    }
 
-    @Override
-    public CompletionStage<Void> shutdownFuture() {
-        return shutdownFuture;
-    }
-
-    @Override
-    public void awaitShutdown() throws InterruptedException, ExecutionException {
-        try {
-            awaitShutdown(Duration.ofMillis(processorThreadTerminationTimeoutMillis.value()));
-        } catch (TimeoutException e) {
-            logger.warn("awaitShutdown failed due to timeout in {} ms",
-                        processorThreadTerminationTimeoutMillis.value(), e);
-        }
+        return shutdownComplete.whenComplete((ignored, ignored2) -> metrics.close());
     }
 }

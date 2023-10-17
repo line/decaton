@@ -68,37 +68,6 @@ public class PartitionProcessorTest {
     private Processors<?> processors;
 
     @Test
-    public void testCleanupPartiallyInitializedUnits() throws Exception {
-        AtomicInteger count = new AtomicInteger();
-        doAnswer(invocation -> {
-            if (count.incrementAndGet() == 3) {
-                throw new RuntimeException("exception");
-            }
-            return mock(ProcessPipeline.class);
-        }).when(processors).newPipeline(any(), any(), any());
-
-        List<ProcessorUnit> units = new ArrayList<>();
-        try {
-            new PartitionProcessor(scope("topic", Optional.empty(), prop -> {}), processors) {
-                @Override
-                ProcessorUnit createUnit(int threadId) {
-                    ProcessorUnit unit = spy(super.createUnit(threadId));
-                    units.add(unit);
-                    return unit;
-                }
-            };
-            fail("Successful call w/o exception");
-        } catch (RuntimeException ignored) {
-        }
-
-        assertEquals(2, units.size());
-        verify(units.get(0), times(1)).initiateShutdown();
-        verify(units.get(1), times(1)).initiateShutdown();
-        verify(units.get(0), times(1)).shutdownFuture();
-        verify(units.get(1), times(1)).shutdownFuture();
-    }
-
-    @Test
     public void testRateProperty() {
         assertEquals("decaton.processing.rate.per.partition",
                      PartitionProcessor.rateProperty(scope("topic", Optional.of(PerKeyQuotaConfig.shape()), prop -> {}))

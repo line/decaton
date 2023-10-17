@@ -123,6 +123,8 @@ public class ConsumeManager implements AutoCloseable {
         consumer.subscribe(subscribeTopics, new ConsumerRebalanceListener() {
             @Override
             public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+                log.debug("REVOKE {} / {}", Thread.currentThread().getId(), System.nanoTime());
+
                 // KafkaConsumer#close has been changed to invoke onPartitionRevoked since Kafka 2.4.0.
                 // Since we're doing cleanup procedure on shutdown manually
                 // so just immediately return if consumer is already closing
@@ -136,6 +138,7 @@ public class ConsumeManager implements AutoCloseable {
 
             @Override
             public void onPartitionsAssigned(Collection<TopicPartition> ignored) {
+                log.debug("ASSIGN {} / {}", Thread.currentThread().getId(), System.nanoTime());
                 handler.updateAssignment(consumer.assignment());
 
                 // Consumer rebalance resets all pause states of assigned partitions even though they

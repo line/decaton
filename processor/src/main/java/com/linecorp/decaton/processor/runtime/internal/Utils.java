@@ -141,6 +141,10 @@ public final class Utils {
         };
     }
 
+    public static ThreadFactory namedVirtualThreadFactory(String name) {
+        return Thread.ofVirtual().name(name).factory();
+    }
+
     /**
      * A slightly different version of {@link #namedThreadFactory(String)} which gives a {@link Function} that
      * takes monotonically increasing unique integer to name a {@link Thread}.

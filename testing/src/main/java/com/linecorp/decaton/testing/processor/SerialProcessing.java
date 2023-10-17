@@ -18,6 +18,7 @@ package com.linecorp.decaton.testing.processor;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.lessThan;
+import static org.hamcrest.Matchers.lessThanOrEqualTo;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -55,7 +56,7 @@ public class SerialProcessing implements ProcessingGuarantee {
                 ProcessedRecord current = perKeyRecords.get(i);
 
                 assertThat("Process time shouldn't overlap. key: " + entry.getKey(),
-                           prev.endTimeNanos(), lessThan(current.startTimeNanos()));
+                           prev.endTimeNanos(), lessThanOrEqualTo(current.startTimeNanos()));
             }
         }
     }

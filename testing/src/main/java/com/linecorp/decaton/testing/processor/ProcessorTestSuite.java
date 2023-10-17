@@ -52,6 +52,7 @@ import org.apache.kafka.common.serialization.ByteArraySerializer;
 import com.google.protobuf.ByteString;
 
 import com.linecorp.decaton.client.DecatonClientBuilder.DefaultKafkaProducerSupplier;
+import com.linecorp.decaton.processor.Completion;
 import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.runtime.PerKeyQuotaConfig;
 import com.linecorp.decaton.processor.runtime.PerKeyQuotaConfig.PerKeyQuotaConfigBuilder;
@@ -263,17 +264,19 @@ public class ProcessorTestSuite {
                 guarantee.doAssert();
             }
         } finally {
-            for (int i = 0; i < subscriptions.length; i++) {
-                log.info("Closing subscription-{} (threadId: {})", i, subscriptions[i].getId());
-                subscriptions[i].initiateShutdown();
-            }
-            for (ProcessorSubscription subscription : subscriptions) {
+            Arrays.stream(subscriptions).map(subsc -> {
+                log.info("Closing subscription (threadId: {})", subsc.getId());
+                return subsc.asyncClose();
+            }).forEach(fut -> {
                 try {
-                    subscription.awaitShutdown(DEFINITELY_TOO_SLOW);
+                    fut.get(DEFINITELY_TOO_SLOW.toMillis(), TimeUnit.MILLISECONDS);
                 } catch (TimeoutException | ExecutionException e) {
                     log.warn("Failed to close the resource within {}", DEFINITELY_TOO_SLOW, e);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new RuntimeException(e);
                 }
-            }
+            });
             rule.admin().deleteTopics(true, topic);
         }
     }
@@ -285,12 +288,17 @@ public class ProcessorTestSuite {
             ConcurrentMap<TopicPartition, Long> queuedTaskOffsets) throws InterruptedException, TimeoutException {
         DecatonProcessor<TestTask> preprocessor = (context, task) -> {
             long startTime = System.nanoTime();
+            Completion downComp;
             try {
-                context.deferCompletion().completeWith(context.push(task));
+                downComp = context.push(task);
             } finally {
-                ProcessedRecord record = new ProcessedRecord(context.key(), task, startTime, System.nanoTime());
+                ProcessedRecord record = new ProcessedRecord(context.subscriptionId() + '/' + Thread.currentThread().getId(),
+                                                             context.key(), task, startTime, System.nanoTime());
                 semantics.forEach(g -> g.onProcess(context.metadata(), record));
                 processLatch.ifPresent(CountDownLatch::countDown);
+            }
+            if (downComp != null) {
+                context.deferCompletion().completeWith(downComp); // TODO: otherwise, a completion happens even before g.onProcess is called => terminates ProcessorUnit => causes ordering broken??
             }
         };
 
@@ -364,8 +372,7 @@ public class ProcessorTestSuite {
             throws ExecutionException, InterruptedException, TimeoutException {
         for (int i = 0; i < subscriptions.length; i++) {
             log.info("Start restarting subscription-{} (threadId: {})", i, subscriptions[i].getId());
-            subscriptions[i].initiateShutdown();
-            subscriptions[i].awaitShutdown(DEFINITELY_TOO_SLOW);
+            subscriptions[i].asyncClose().get(DEFINITELY_TOO_SLOW.toMillis(), TimeUnit.MILLISECONDS);
             subscriptions[i] = subscriptionConstructor.apply(i);
             log.info("Finished restarting subscription-{} (threadId: {})", i, subscriptions[i].getId());
         }

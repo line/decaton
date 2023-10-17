@@ -179,6 +179,10 @@ public class PartitionContext implements AutoCloseable {
         return commitControl.reportFetchedOffset(offset);
     }
 
+    public void cleanup() {
+        partitionProcessor.cleanup();
+    }
+
     public boolean paused() {
         return pausedTimeNanos >= 0;
     }

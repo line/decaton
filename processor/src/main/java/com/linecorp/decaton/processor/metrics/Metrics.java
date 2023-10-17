@@ -81,7 +81,7 @@ public class Metrics {
 
         @Override
         public void close() {
-            synchronized (meterRefCounts) {
+            synchronized (meterRefCounts) { // TODO: no longer use synchronized
                 // traverse from the end to avoid arrayCopy
                 for (ListIterator<Meter> iterator = meters.listIterator(meters.size()); iterator.hasPrevious(); ) {
                     Meter meter = iterator.previous();
@@ -144,24 +144,7 @@ public class Metrics {
         }
     }
 
-    public class TaskMetrics extends AbstractMetrics {
-        public final Timer tasksDeliveryLatency =
-                meter(() -> Timer.builder("tasks.delivery.latency")
-                                 .description("The latency between the time the task is produced and the time the task is processed. "
-                                              + "This metric depends on the task's `timestampMillis` field, and it might not represent "
-                                              + "the actual end-to-end latency depending on how `timestampMillis` is constructed for the task.")
-                                 .tags(availableTags.partitionScope())
-                                 .distributionStatisticExpiry(Duration.ofSeconds(60))
-                                 .publishPercentiles(0.5, 0.9, 0.99, 0.999)
-                                 .register(registry));
-        public final Timer tasksScheduledDelay =
-                meter(() -> Timer.builder("tasks.scheduled.process.delay")
-                                 .description("The delay between the scheduled time and the time the task is processed")
-                                 .tags(availableTags.partitionScope())
-                                 .distributionStatisticExpiry(Duration.ofSeconds(60))
-                                 .publishPercentiles(0.5, 0.9, 0.99, 0.999)
-                                 .register(registry));
-
+    public class PerPartitionMetrics extends AbstractMetrics {
         public final Counter tasksProcessed =
                 meter(() -> Counter.builder("tasks.processed")
                                    .description("The number of tasks processed")
@@ -179,9 +162,7 @@ public class Metrics {
                                    .description("The number of tasks thrown exception by process")
                                    .tags(availableTags.partitionScope())
                                    .register(registry));
-    }
 
-    public class ProcessMetrics extends AbstractMetrics {
         public final Timer tasksCompleteDuration =
                 meter(() -> Timer.builder("tasks.complete.duration")
                                  .description("Time of a task taken to be completed")
@@ -193,6 +174,23 @@ public class Metrics {
         public final Timer tasksProcessDuration =
                 meter(() -> Timer.builder("tasks.process.duration")
                                  .description("The time a task taken to be processed")
+                                 .tags(availableTags.partitionScope())
+                                 .distributionStatisticExpiry(Duration.ofSeconds(60))
+                                 .publishPercentiles(0.5, 0.9, 0.99, 0.999)
+                                 .register(registry));
+
+        public final Timer tasksDeliveryLatency =
+                meter(() -> Timer.builder("tasks.delivery.latency")
+                                 .description("The latency between the time the task is produced and the time the task is processed. "
+                                              + "This metric depends on the task's `timestampMillis` field, and it might not represent "
+                                              + "the actual end-to-end latency depending on how `timestampMillis` is constructed for the task.")
+                                 .tags(availableTags.partitionScope())
+                                 .distributionStatisticExpiry(Duration.ofSeconds(60))
+                                 .publishPercentiles(0.5, 0.9, 0.99, 0.999)
+                                 .register(registry));
+        public final Timer tasksScheduledDelay =
+                meter(() -> Timer.builder("tasks.scheduled.process.delay")
+                                 .description("The delay between the scheduled time and the time the task is processed")
                                  .tags(availableTags.partitionScope())
                                  .distributionStatisticExpiry(Duration.ofSeconds(60))
                                  .publishPercentiles(0.5, 0.9, 0.99, 0.999)

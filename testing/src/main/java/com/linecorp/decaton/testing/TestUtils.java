@@ -230,6 +230,7 @@ public class TestUtils {
             if (elapsedMillis >= timeoutMillis) {
                 throw new AssertionError(message);
             }
+            // TODO: should check if this thread is not interrupted.
             LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(100));
         }
     }

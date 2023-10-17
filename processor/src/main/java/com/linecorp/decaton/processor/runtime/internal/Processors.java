@@ -25,6 +25,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.linecorp.decaton.processor.DecatonProcessor;
+import com.linecorp.decaton.processor.metrics.Metrics.PerPartitionMetrics;
 import com.linecorp.decaton.processor.runtime.TaskExtractor;
 import com.linecorp.decaton.processor.metrics.Metrics;
 import com.linecorp.decaton.processor.runtime.DecatonProcessorSupplier;
@@ -66,7 +67,7 @@ public class Processors<T> {
 
     public ProcessPipeline<T> newPipeline(ThreadScope scope,
                                           ExecutionScheduler scheduler,
-                                          Metrics metrics) {
+                                          PerPartitionMetrics metrics) {
         DecatonProcessor<byte[]> retryProcessor = retryProcessor(scope);
 
         TaskExtractor<T> taskExtractor = extractorFromTopic(scope);

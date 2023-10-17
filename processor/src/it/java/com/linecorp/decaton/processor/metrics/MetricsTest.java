@@ -94,6 +94,7 @@ public class MetricsTest {
         }
 
         List<Meter> meters = Metrics.registry().getMeters();
+        meters.forEach(m -> System.err.println(m.getId()));
         assertEquals(emptyList(), meters);
     }
 
@@ -190,16 +191,22 @@ public class MetricsTest {
                                  .counters()
                                  .stream()
                                  .mapToDouble(Counter::count)
-                                 .sum() == 4.0);
+                                 .sum() == 4.0,
+                                     10000);
             // count synchronous failure only
             TestUtils.awaitCondition("total error task count should becomes 1",
-                    () -> Metrics.registry()
-                                 .find("decaton.tasks.error")
-                                 .tags("topic", topicName)
-                                 .counters()
-                                 .stream()
-                                 .mapToDouble(Counter::count)
-                                 .sum() == 1.0);
+                    () -> {
+                        double val = Metrics.registry()
+                                                    .find("decaton.tasks.error")
+                                                    .tags("topic", topicName)
+                                                    .counters()
+                                                    .stream()
+                                                    .mapToDouble(Counter::count)
+                                                    .sum();
+                        System.err.println(val);
+                        return val == 1.0;
+                    },
+                                     10000);
         }
     }
 

@@ -112,7 +112,7 @@ public class SubscriptionBuilder {
      * A {@link SubPartitionerSupplier} for partitioning tasks into subpartitions
      */
     @Setter
-    private SubPartitionerSupplier subPartitionerSupplier = DefaultSubPartitioner::new;
+    private SubPartitionerSupplier subPartitionerSupplier = ignored -> new UnboundedSubPartitioner();
 
     public SubscriptionBuilder(String subscriptionId) {
         this.subscriptionId = Objects.requireNonNull(subscriptionId, "subscriptionId");
