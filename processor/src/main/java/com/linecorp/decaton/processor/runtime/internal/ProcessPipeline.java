@@ -131,6 +131,12 @@ public class ProcessPipeline<T> implements AutoCloseable {
                     TimeUnit.MILLISECONDS
             );
         }
+        if (task.metadata().scheduledTimeMillis() > 0) {
+            taskMetrics.tasksScheduledDelay.record(
+                    System.currentTimeMillis() - task.metadata().scheduledTimeMillis(),
+                    TimeUnit.MILLISECONDS
+            );
+        }
 
         Timer timer = Utils.timer();
         Completion processResult;

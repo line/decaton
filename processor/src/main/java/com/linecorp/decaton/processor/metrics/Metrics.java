@@ -147,7 +147,13 @@ public class Metrics {
     public class TaskMetrics extends AbstractMetrics {
         public final Timer tasksDeliveryLatency =
                 meter(() -> Timer.builder("tasks.delivery.latency")
-                                 .description("The latency between the Decaton client producing a task and its processor starting consumption")
+                                 .description("The latency between the time the task is produced and the time the task is consumed")
+                                 .tags(availableTags.partitionScope())
+                                 .register(registry));
+
+        public final Timer tasksScheduledDelay =
+                meter(() -> Timer.builder("tasks.scheduled.delay")
+                                 .description("The delay between the scheduled time and the time the task is consumed")
                                  .tags(availableTags.partitionScope())
                                  .register(registry));
 
