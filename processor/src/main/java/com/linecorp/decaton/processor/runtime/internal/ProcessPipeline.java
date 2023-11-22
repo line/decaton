@@ -20,6 +20,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.Completion;
@@ -123,6 +124,13 @@ public class ProcessPipeline<T> implements AutoCloseable {
         ProcessingContext<T> context =
                 new ProcessingContextImpl<>(scope.subscriptionId(), request, task, processors, retryProcessor,
                                             scope.props());
+
+        if (task.metadata().timestampMillis() > 0) {
+            taskMetrics.tasksDeliveryLatency.record(
+                    System.currentTimeMillis() - task.metadata().timestampMillis(),
+                    TimeUnit.MILLISECONDS
+            );
+        }
 
         Timer timer = Utils.timer();
         Completion processResult;

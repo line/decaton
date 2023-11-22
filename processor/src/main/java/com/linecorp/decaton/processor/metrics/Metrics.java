@@ -145,6 +145,12 @@ public class Metrics {
     }
 
     public class TaskMetrics extends AbstractMetrics {
+        public final Timer tasksDeliveryLatency =
+                meter(() -> Timer.builder("tasks.delivery.latency")
+                                 .description("The latency between the Decaton client producing a task and its processor starting consumption")
+                                 .tags(availableTags.partitionScope())
+                                 .register(registry));
+
         public final Counter tasksProcessed =
                 meter(() -> Counter.builder("tasks.processed")
                                    .description("The number of tasks processed")
