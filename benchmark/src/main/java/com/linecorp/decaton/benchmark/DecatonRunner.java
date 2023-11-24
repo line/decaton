@@ -16,6 +16,7 @@
 
 package com.linecorp.decaton.benchmark;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -26,6 +27,7 @@ import java.util.function.Function;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 
+import com.linecorp.decaton.processor.metrics.Metrics;
 import com.linecorp.decaton.processor.runtime.DecatonTask;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.ProcessorsBuilder;
@@ -38,6 +40,10 @@ import com.linecorp.decaton.processor.runtime.ProcessorScope;
 import com.linecorp.decaton.processor.runtime.ProcessorSubscription;
 import com.linecorp.decaton.processor.runtime.SubscriptionBuilder;
 
+import io.micrometer.core.instrument.Clock;
+import io.micrometer.core.instrument.logging.LoggingMeterRegistry;
+import io.micrometer.core.instrument.logging.LoggingRegistryConfig;
+
 public class DecatonRunner implements Runner {
     private static final Map<String, Function<String, Object>> propertyConstructors =
             new HashMap<String, Function<String, Object>>() {{
@@ -47,6 +53,7 @@ public class DecatonRunner implements Runner {
             }};
 
     private ProcessorSubscription subscription;
+    private LoggingMeterRegistry registry;
 
     @Override
     public void init(Config config, Recording recording, ResourceTracker resourceTracker)
@@ -72,6 +79,18 @@ public class DecatonRunner implements Runner {
             Property<?> prop = ProcessorProperties.propertyForName(name, value);
             properties.add(prop);
         }
+
+        registry = new LoggingMeterRegistry(new LoggingRegistryConfig() {
+            @Override
+            public Duration step() {
+                return Duration.ofSeconds(10);
+            }
+            @Override
+            public String get(String key) {
+                return null;
+            }
+        }, Clock.SYSTEM);
+        Metrics.register(registry);
 
         CountDownLatch startLatch = new CountDownLatch(1);
 
@@ -107,6 +126,9 @@ public class DecatonRunner implements Runner {
 
     @Override
     public void close() throws Exception {
+        if (registry != null) {
+            registry.close();
+        }
         if (subscription != null) {
             subscription.close();
         }
