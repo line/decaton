@@ -46,9 +46,10 @@ public class ProcessorUnit implements AsyncClosable {
         this.pipeline = pipeline;
 
 
+//        executor = Executors.newVirtualThreadPerTaskExecutor();
         executor = Executors.newSingleThreadExecutor(
                 Utils.namedVirtualThreadFactory("PartitionProcessorThread-" + scope));
-        executor.execute(() -> log.debug("Thread ID MAP {} => {}", Thread.currentThread().threadId(), id));
+//        executor.execute(() -> log.debug("Thread ID MAP {} => {}", Thread.currentThread().threadId(), id));
 //        executor = Executors.newSingleThreadExecutor(
 //                Utils.namedThreadFactory("PartitionProcessorThread-" + scope));
         pendingTask = new AtomicInteger();
