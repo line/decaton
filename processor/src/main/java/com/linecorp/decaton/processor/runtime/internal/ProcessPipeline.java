@@ -98,6 +98,22 @@ public class ProcessPipeline<T> implements AutoCloseable {
             return;
         }
 
+        final long now = System.currentTimeMillis();
+        if (extracted.metadata().timestampMillis() > 0
+                && now - extracted.metadata().timestampMillis() >= 0) {
+            taskMetrics.tasksDeliveryLatency.record(
+                    now - extracted.metadata().timestampMillis(),
+                    TimeUnit.MILLISECONDS
+            );
+        }
+        if (extracted.metadata().scheduledTimeMillis() > 0
+                && now - extracted.metadata().scheduledTimeMillis() >= 0) {
+            taskMetrics.tasksScheduledDelay.record(
+                    now - extracted.metadata().scheduledTimeMillis(),
+                    TimeUnit.MILLISECONDS
+            );
+        }
+
         Completion result = process(request, extracted);
         offsetState.completion().completeWith(result);
         long timeoutMs = scope.props().get(ProcessorProperties.CONFIG_DEFERRED_COMPLETE_TIMEOUT_MS).value();
@@ -124,20 +140,6 @@ public class ProcessPipeline<T> implements AutoCloseable {
         ProcessingContext<T> context =
                 new ProcessingContextImpl<>(scope.subscriptionId(), request, task, processors, retryProcessor,
                                             scope.props());
-
-        if (task.metadata().timestampMillis() > 0) {
-            taskMetrics.tasksDeliveryLatency.record(
-                    System.currentTimeMillis() - task.metadata().timestampMillis(),
-                    TimeUnit.MILLISECONDS
-            );
-        }
-        if (task.metadata().scheduledTimeMillis() > 0) {
-            taskMetrics.tasksScheduledDelay.record(
-                    System.currentTimeMillis() - task.metadata().scheduledTimeMillis(),
-                    TimeUnit.MILLISECONDS
-            );
-        }
-
         Timer timer = Utils.timer();
         Completion processResult;
         try (LoggingContext ignored = context.loggingContext()) {
