@@ -17,11 +17,10 @@
 package com.linecorp.decaton.benchmark;
 
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 import com.linecorp.decaton.benchmark.BenchmarkResult.Performance.Durations;
 
@@ -29,21 +28,22 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class Recording {
-    private static final ThreadLocal<ChildRecording> CHILD = new ThreadLocal<>();
-
-    static class ChildRecording {
-        private long maxDeliveryTime;
-        private long totalDeliveryTime;
-        private long processCount;
+    static class ExecutionRecord {
+        private final AtomicLong maxDeliveryTime = new AtomicLong();
+        private final AtomicLong totalDeliveryTime = new AtomicLong();
+        private final AtomicLong processCount = new AtomicLong();
 
         void process(Task task, boolean warmup) {
             if (!warmup) {
                 long deliveryLatency = System.currentTimeMillis() - task.getProducedTime();
-                if (deliveryLatency > maxDeliveryTime) {
-                    maxDeliveryTime = deliveryLatency;
+                while (true) {
+                    long currentMax = maxDeliveryTime.get();
+                    if (deliveryLatency <= currentMax || maxDeliveryTime.compareAndSet(currentMax, deliveryLatency)) {
+                        break;
+                    }
                 }
-                totalDeliveryTime += deliveryLatency;
-                processCount += 1;
+                totalDeliveryTime.addAndGet(deliveryLatency);
+                processCount.incrementAndGet();
             }
 
             // Simulate processing latency by sleeping a while
@@ -61,7 +61,7 @@ public class Recording {
 
     private final int tasks;
     private final int warmupTasks;
-    private final List<ChildRecording> children;
+    ExecutionRecord executionRecord;
     private final AtomicInteger processedCount;
     private final CountDownLatch warmupLatch;
     private final CountDownLatch completeLatch;
@@ -71,7 +71,7 @@ public class Recording {
     public Recording(int tasks, int warmupTasks) {
         this.tasks = tasks;
         this.warmupTasks = warmupTasks;
-        children = new ArrayList<>();
+        executionRecord = new ExecutionRecord();
         processedCount = new AtomicInteger();
         warmupLatch = new CountDownLatch(1);
         if (warmupTasks == 0) {
@@ -83,23 +83,11 @@ public class Recording {
     public void process(Task task) {
         int seq = processedCount.incrementAndGet();
         boolean warmup = seq <= warmupTasks;
-        ChildRecording child = CHILD.get();
-        if (child == null) {
-            if (!warmup) {
-                log.warn("Thread local recording initialization after warmup period."
-                         + " Warmup count might not be enough, thread:{}", Thread.currentThread().getName());
-            }
-            child = new ChildRecording();
-            CHILD.set(child);
-            synchronized (children) {
-                children.add(child);
-            }
-        }
         if (seq == warmupTasks + 1) {
             startTimeMs = System.currentTimeMillis();
             log.debug("Start recording time: {}", startTimeMs);
         }
-        child.process(task, warmup);
+        executionRecord.process(task, warmup);
         if (log.isTraceEnabled()) {
             log.trace("Task {} completed by thread: {}", seq, Thread.currentThread().getName());
         }
@@ -124,14 +112,10 @@ public class Recording {
     public BenchmarkResult.Performance computeResult() {
         Duration execTime = Duration.ofMillis(completeTimeMs - startTimeMs);
         double throughput = (double) tasks / execTime.toMillis() * 1000;
-        long maxDeliveryLatency = children.stream()
-                                          .mapToLong(x -> x.maxDeliveryTime)
-                                          .reduce(0, Math::max);
-        long avgDeliveryLatency = children.stream().mapToLong(x -> x.totalDeliveryTime).sum()
-                                  / children.stream().mapToLong(x -> x.processCount).sum();
+        long avgDeliveryLatency = executionRecord.totalDeliveryTime.get() / executionRecord.processCount.get();
 
         Durations deliveryLatencies = new Durations(Duration.ofMillis(avgDeliveryLatency),
-                                                    Duration.ofMillis(maxDeliveryLatency));
+                                                    Duration.ofMillis(executionRecord.maxDeliveryTime.get()));
         return new BenchmarkResult.Performance(tasks, execTime, throughput, deliveryLatencies);
     }
 }
