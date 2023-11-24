@@ -21,6 +21,7 @@ import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.ReentrantLock;
 
 import org.apache.kafka.common.TopicPartition;
 
@@ -36,6 +37,7 @@ public class ProcessorUnit implements AsyncClosable {
     private final long id;
     private final ProcessPipeline<?> pipeline;
     private final ExecutorService executor;
+    private final ReentrantLock serialExecutionLock;
     private final ResourceUtilizationMetrics metrics;
     private final AtomicInteger pendingTask;
 
@@ -46,9 +48,10 @@ public class ProcessorUnit implements AsyncClosable {
         this.pipeline = pipeline;
 
 
-//        executor = Executors.newVirtualThreadPerTaskExecutor();
-        executor = Executors.newSingleThreadExecutor(
-                Utils.namedVirtualThreadFactory("PartitionProcessorThread-" + scope));
+        executor = Executors.newVirtualThreadPerTaskExecutor();
+        serialExecutionLock = new ReentrantLock(true);
+//        executor = Executors.newSingleThreadExecutor(
+//                Utils.namedVirtualThreadFactory("PartitionProcessorThread-" + scope));
 //        executor.execute(() -> log.debug("Thread ID MAP {} => {}", Thread.currentThread().threadId(), id));
 //        executor = Executors.newSingleThreadExecutor(
 //                Utils.namedThreadFactory("PartitionProcessorThread-" + scope));
@@ -63,7 +66,14 @@ public class ProcessorUnit implements AsyncClosable {
 
     public void putTask(TaskRequest request) {
         metrics.tasksQueued.increment();
-        executor.execute(() -> processTask(request));
+        executor.execute(() -> {
+            serialExecutionLock.lock();
+            try {
+                processTask(request);
+            } finally {
+                serialExecutionLock.unlock();
+            }
+        });
         pendingTask.incrementAndGet();
     }
 
