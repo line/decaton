@@ -147,17 +147,11 @@ public class Metrics {
     public class TaskMetrics extends AbstractMetrics {
         public final Timer tasksDeliveryLatency =
                 meter(() -> Timer.builder("tasks.delivery.latency")
-                        .description("The latency between the time the task is produced and the time the task is consumed. "
-                                + "This metric depends on the task's `timestampMillis` field, and "
-                                + "it might not represent the actual end-to-end latency depending on how `timestampMillis` is constructed for the task.")
-                        .tags(availableTags.partitionScope())
-                        .register(registry));
-        public final Timer tasksDeliveryLatency =
-                meter(() -> Timer.builder("tasks.delivery.latency")
-                                 .description("The latency between the time the task is produced and the time the task is consumed")
+                                 .description("The latency between the time the task is produced and the time the task is consumed. "
+                                         + "This metric depends on the task's `timestampMillis` field, and it might not represent "
+                                         + "the actual end-to-end latency depending on how `timestampMillis` is constructed for the task.")
                                  .tags(availableTags.partitionScope())
                                  .register(registry));
-
         public final Timer tasksScheduledDelay =
                 meter(() -> Timer.builder("tasks.scheduled.delay")
                                  .description("The delay between the scheduled time and the time the task is consumed")

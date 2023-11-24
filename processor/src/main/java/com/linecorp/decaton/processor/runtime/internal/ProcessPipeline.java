@@ -140,6 +140,7 @@ public class ProcessPipeline<T> implements AutoCloseable {
         ProcessingContext<T> context =
                 new ProcessingContextImpl<>(scope.subscriptionId(), request, task, processors, retryProcessor,
                                             scope.props());
+
         Timer timer = Utils.timer();
         Completion processResult;
         try (LoggingContext ignored = context.loggingContext()) {
