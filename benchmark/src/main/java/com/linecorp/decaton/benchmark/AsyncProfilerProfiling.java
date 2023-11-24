@@ -55,7 +55,7 @@ public class AsyncProfilerProfiling implements Profiling {
     }
 
     private static String outputFileName() {
-        return "profile-" + JvmUtils.currentPid() + ".svg";
+        return "profile-" + JvmUtils.currentPid() + ".html";
     }
 
     private void exec(String subCommand) {
