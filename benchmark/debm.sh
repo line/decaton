@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-ASYNC_PROFILER_VERSION=1.7
+ASYNC_PROFILER_VERSION=2.9
 ASYNC_PROFILER_URL_BASE="https://github.com/jvm-profiling-tools/async-profiler/releases/download/v${ASYNC_PROFILER_VERSION}"
 JTASKSTATS_VERSION=0.2.0
 JTASKSTATS_URL_BASE="https://github.com/kawamuray/jtaskstats/releases/download/v${JTASKSTATS_VERSION}"
@@ -13,14 +13,20 @@ if [[ "$*" == *--profile* ]] && [[ "$*" != *--profiler-bin* ]] && ! which profil
     dir="/tmp/async-profiler-${ASYNC_PROFILER_VERSION}"
     if ! [ -e "$dir/profiler.sh" ]; then
         case "$(uname -s)" in
-            Linux*)     platform=linux;;
-            Darwin*)    platform=macos;;
+            Linux*)     platform=linux-x64.tar.gz;;
+            Darwin*)    platform=macos.zip;;
             *)          echo "Cannot determine platform to download async-profiler" >&2; exit 1;;
         esac
-        url="$ASYNC_PROFILER_URL_BASE/async-profiler-${ASYNC_PROFILER_VERSION}-${platform}-x64.tar.gz"
+        url="$ASYNC_PROFILER_URL_BASE/async-profiler-${ASYNC_PROFILER_VERSION}-${platform}"
         echo "Downloading async-profiler from $url into $dir" >&2
         mkdir -p $dir
-        curl -L "$url" | tar zx -C $dir
+        curl -L "$url" -o "$dir/async-profiler-${ASYNC_PROFILER_VERSION}-${platform}"
+        if [[ "$platform" == *".zip" ]]; then
+            unzip -d $dir "$dir/async-profiler-${ASYNC_PROFILER_VERSION}-${platform}"
+            mv $dir/*/* $dir/
+        else
+            tar zx -C $dir -f "$dir/async-profiler-${ASYNC_PROFILER_VERSION}-${platform}"
+        fi
     fi
     extra_opts="$extra_opts --profiler-bin=$dir/profiler.sh"
 fi
