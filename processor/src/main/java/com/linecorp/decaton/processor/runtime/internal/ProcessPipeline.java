@@ -20,6 +20,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.Completion;
@@ -95,6 +96,22 @@ public class ProcessPipeline<T> implements AutoCloseable {
         if (terminated) {
             log.debug("Returning after schedule due to termination");
             return;
+        }
+
+        final long now = System.currentTimeMillis();
+        if (extracted.metadata().timestampMillis() > 0
+                && now - extracted.metadata().timestampMillis() >= 0) {
+            taskMetrics.tasksDeliveryLatency.record(
+                    now - extracted.metadata().timestampMillis(),
+                    TimeUnit.MILLISECONDS
+            );
+        }
+        if (extracted.metadata().scheduledTimeMillis() > 0
+                && now - extracted.metadata().scheduledTimeMillis() >= 0) {
+            taskMetrics.tasksScheduledDelay.record(
+                    now - extracted.metadata().scheduledTimeMillis(),
+                    TimeUnit.MILLISECONDS
+            );
         }
 
         Completion result = process(request, extracted);
