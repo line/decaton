@@ -151,11 +151,15 @@ public class Metrics {
                                               + "This metric depends on the task's `timestampMillis` field, and it might not represent "
                                               + "the actual end-to-end latency depending on how `timestampMillis` is constructed for the task.")
                                  .tags(availableTags.partitionScope())
+                                 .distributionStatisticExpiry(Duration.ofSeconds(60))
+                                 .publishPercentiles(0.5, 0.9, 0.99, 0.999)
                                  .register(registry));
         public final Timer tasksScheduledDelay =
                 meter(() -> Timer.builder("tasks.scheduled.process.delay")
                                  .description("The delay between the scheduled time and the time the task is processed")
                                  .tags(availableTags.partitionScope())
+                                 .distributionStatisticExpiry(Duration.ofSeconds(60))
+                                 .publishPercentiles(0.5, 0.9, 0.99, 0.999)
                                  .register(registry));
 
         public final Counter tasksProcessed =
