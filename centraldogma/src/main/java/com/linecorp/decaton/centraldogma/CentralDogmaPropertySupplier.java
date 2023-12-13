@@ -18,6 +18,8 @@ package com.linecorp.decaton.centraldogma;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -43,6 +45,9 @@ import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.Property;
 import com.linecorp.decaton.processor.runtime.PropertyDefinition;
 import com.linecorp.decaton.processor.runtime.PropertySupplier;
+
+import lombok.AccessLevel;
+import lombok.Getter;
 
 /**
  * A {@link PropertySupplier} implementation with Central Dogma backend.
@@ -71,6 +76,9 @@ public class CentralDogmaPropertySupplier implements PropertySupplier, AutoClose
     private static final ObjectMapper objectMapper = new ObjectMapper();
 
     private final Watcher<JsonNode> rootWatcher;
+
+    @Getter(AccessLevel.PACKAGE)// visible for testing
+    private final ConcurrentMap<String, Optional<DynamicProperty<?>>> cachedProperties = new ConcurrentHashMap<>();
 
     /**
      * Creates a new {@link CentralDogmaPropertySupplier}.
@@ -118,32 +126,43 @@ public class CentralDogmaPropertySupplier implements PropertySupplier, AutoClose
             return Optional.empty();
         }
 
-        DynamicProperty<T> prop = new DynamicProperty<>(definition);
-        Watcher<JsonNode> child = rootWatcher.newChild(jsonNode -> jsonNode.path(definition.name()));
-        child.watch(node -> {
+        // note: cache DynamicProperties to avoid using too many child watchers if getProperty is called repeatedly.
+        // for most use cases though, this cache is only filled/read once.
+        return cachedProperties.computeIfAbsent(definition.name(), name -> {
+            DynamicProperty<T> prop = new DynamicProperty<>(definition);
+            Watcher<JsonNode> child = rootWatcher.newChild(jsonNode -> jsonNode.path(definition.name()));
+            child.watch(node -> {
+                try {
+                    setValue(prop, node);
+                } catch (Exception e) {
+                    // Catching Exception instead of RuntimeException, since
+                    // Kotlin-implemented DynamicProperty would throw checked exceptions
+                    logger.warn("Failed to set value updated from CentralDogma for {}", definition.name(), e);
+                }
+            });
             try {
+                JsonNode node = child.initialValueFuture().join().value(); //doesn't fail since it's a child watcher
                 setValue(prop, node);
             } catch (Exception e) {
                 // Catching Exception instead of RuntimeException, since
                 // Kotlin-implemented DynamicProperty would throw checked exceptions
-                logger.warn("Failed to set value updated from CentralDogma for {}", definition.name(), e);
+                logger.warn("Failed to set initial value from CentralDogma for {}", definition.name(), e);
             }
-        });
-        try {
-            JsonNode node = child.initialValueFuture().join().value(); //doesn't fail since it's a child watcher
-            setValue(prop, node);
-        } catch (Exception e) {
-            // Catching Exception instead of RuntimeException, since
-            // Kotlin-implemented DynamicProperty would throw checked exceptions
-            logger.warn("Failed to set initial value from CentralDogma for {}", definition.name(), e);
-        }
 
-        return Optional.of(prop);
+            return Optional.of(prop);
+        }).map(prop -> {
+            if (prop.definition().runtimeType() != definition.runtimeType()) {
+                throw new IllegalStateException("Several different properties have the same name: " + definition.name());
+            }
+            //noinspection unchecked
+            return (Property<T>) prop;
+        });
     }
 
     @Override
     public void close() {
         rootWatcher.close();
+        cachedProperties.clear();
     }
 
     /**

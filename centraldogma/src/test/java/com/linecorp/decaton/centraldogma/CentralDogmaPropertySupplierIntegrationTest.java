@@ -31,6 +31,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.IntStream;
 
 import org.junit.Rule;
 import org.junit.Test;
@@ -119,6 +120,11 @@ public class CentralDogmaPropertySupplierIntegrationTest {
 
         latch.await();
         assertEquals(20, prop.value().intValue());
+
+        IntStream.range(0, 10000)
+                 .mapToObj(i -> CONFIG_PARTITION_CONCURRENCY)
+                 .map(supplier::getProperty);
+        assertEquals(1, supplier.getCachedProperties().size());
     }
 
     @Test
