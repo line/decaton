@@ -78,7 +78,7 @@ public class CentralDogmaPropertySupplier implements PropertySupplier, AutoClose
     private final Watcher<JsonNode> rootWatcher;
 
     @Getter(AccessLevel.PACKAGE)// visible for testing
-    private final ConcurrentMap<String, Optional<DynamicProperty<?>>> cachedProperties = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, DynamicProperty<?>> cachedProperties = new ConcurrentHashMap<>();
 
     /**
      * Creates a new {@link CentralDogmaPropertySupplier}.
@@ -128,7 +128,7 @@ public class CentralDogmaPropertySupplier implements PropertySupplier, AutoClose
 
         // note: cache DynamicProperties to avoid using too many child watchers if getProperty is called repeatedly.
         // for most use cases though, this cache is only filled/read once.
-        return cachedProperties.computeIfAbsent(definition.name(), name -> {
+        final DynamicProperty<?> cachedProp = cachedProperties.computeIfAbsent(definition.name(), name -> {
             DynamicProperty<T> prop = new DynamicProperty<>(definition);
             Watcher<JsonNode> child = rootWatcher.newChild(jsonNode -> jsonNode.path(definition.name()));
             child.watch(node -> {
@@ -149,14 +149,14 @@ public class CentralDogmaPropertySupplier implements PropertySupplier, AutoClose
                 logger.warn("Failed to set initial value from CentralDogma for {}", definition.name(), e);
             }
 
-            return Optional.of(prop);
-        }).map(prop -> {
-            if (prop.definition().runtimeType() != definition.runtimeType()) {
-                throw new IllegalStateException("Several different properties have the same name: " + definition.name());
-            }
-            //noinspection unchecked
-            return (Property<T>) prop;
+            return prop;
         });
+
+        if (cachedProp.definition().runtimeType() != definition.runtimeType()) {
+            throw new IllegalStateException("Several different properties have the same name: " + definition.name());
+        }
+        //noinspection unchecked
+        return Optional.of((Property<T>) cachedProp);
     }
 
     @Override
