@@ -19,6 +19,7 @@ package com.linecorp.decaton.centraldogma;
 import static com.linecorp.decaton.processor.runtime.ProcessorProperties.CONFIG_PARTITION_CONCURRENCY;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -121,10 +122,14 @@ public class CentralDogmaPropertySupplierIntegrationTest {
         latch.await();
         assertEquals(20, prop.value().intValue());
 
-        IntStream.range(0, 10000)
-                 .mapToObj(i -> CONFIG_PARTITION_CONCURRENCY)
-                 .map(supplier::getProperty);
-        assertEquals(1, supplier.getCachedProperties().size());
+        assertEquals(20, IntStream
+                .range(0, 10000)
+                .mapToObj(i -> CONFIG_PARTITION_CONCURRENCY)
+                .map(supplier::getProperty)
+                .reduce((l, r) -> {
+                    assertSame(l.get(), r.get());
+                    return l;
+                }).get().get().value().intValue());
     }
 
     @Test

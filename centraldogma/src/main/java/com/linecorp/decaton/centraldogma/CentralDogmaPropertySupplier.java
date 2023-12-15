@@ -46,9 +46,6 @@ import com.linecorp.decaton.processor.runtime.Property;
 import com.linecorp.decaton.processor.runtime.PropertyDefinition;
 import com.linecorp.decaton.processor.runtime.PropertySupplier;
 
-import lombok.AccessLevel;
-import lombok.Getter;
-
 /**
  * A {@link PropertySupplier} implementation with Central Dogma backend.
  *
@@ -77,7 +74,6 @@ public class CentralDogmaPropertySupplier implements PropertySupplier, AutoClose
 
     private final Watcher<JsonNode> rootWatcher;
 
-    @Getter(AccessLevel.PACKAGE)// visible for testing
     private final ConcurrentMap<String, DynamicProperty<?>> cachedProperties = new ConcurrentHashMap<>();
 
     /**
