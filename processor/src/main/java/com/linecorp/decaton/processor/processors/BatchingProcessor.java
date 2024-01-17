@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.ReentrantLock;
 
 import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.DeferredCompletion;
@@ -43,6 +44,7 @@ public abstract class BatchingProcessor<T> implements DecatonProcessor<T> {
     private List<BatchingTask<T>> currentBatch = new ArrayList<>();
     private final long lingerMillis;
     private final int capacity;
+    private final ReentrantLock rollingLock;
 
     @Value
     @Accessors(fluent = true)
@@ -81,19 +83,23 @@ public abstract class BatchingProcessor<T> implements DecatonProcessor<T> {
         // we think taking A is much desirable behavior in most cases.
         scheduledExecutor.setExecuteExistingDelayedTasksAfterShutdownPolicy(false);
         executor = scheduledExecutor;
+        rollingLock = new ReentrantLock();
 
         scheduleFlush();
     }
 
     private void periodicallyFlushTask() {
         final List<BatchingTask<T>> batch;
-        synchronized (this) {
+        rollingLock.lock();
+        try {
             if (!currentBatch.isEmpty()) {
                 batch = currentBatch;
                 currentBatch = new ArrayList<>();
             } else {
                 batch = null;
             }
+        } finally {
+            rollingLock.unlock();
         }
         if (batch != null) {
             processBatchingTasks(batch);
@@ -107,7 +113,8 @@ public abstract class BatchingProcessor<T> implements DecatonProcessor<T> {
 
     @Override
     public void process(ProcessingContext<T> context, T task) throws InterruptedException {
-        synchronized (this) {
+        rollingLock.lock();
+        try {
             if (currentBatch.size() >= this.capacity) {
                 final List<BatchingTask<T>> batch = currentBatch;
                 executor.submit(() -> processBatchingTasks(batch));
@@ -115,6 +122,8 @@ public abstract class BatchingProcessor<T> implements DecatonProcessor<T> {
             }
             BatchingTask<T> newTask = new BatchingTask<>(context.deferCompletion(), context, task);
             currentBatch.add(newTask);
+        } finally {
+            rollingLock.unlock();
         }
     }
 

@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
 
 import org.apache.kafka.clients.consumer.Consumer;
@@ -67,21 +68,26 @@ public class Metrics {
      */
     abstract static class AbstractMetrics implements AutoCloseable {
         static final Map<Id, AtomicInteger> meterRefCounts = new HashMap<>();
+        static final ReentrantLock meterRefCountsLock = new ReentrantLock();
         private final List<Meter> meters = new ArrayList<>();
 
         <T extends Meter> T meter(Supplier<T> ctor) {
-            synchronized (meterRefCounts) {
+            meterRefCountsLock.lock();
+            try {
                 T meter = ctor.get();
                 meterRefCounts.computeIfAbsent(meter.getId(), key -> new AtomicInteger())
                               .incrementAndGet();
                 meters.add(meter);
                 return meter;
+            } finally {
+                meterRefCountsLock.unlock();
             }
         }
 
         @Override
         public void close() {
-            synchronized (meterRefCounts) { // TODO: no longer use synchronized
+            meterRefCountsLock.lock();
+            try {
                 // traverse from the end to avoid arrayCopy
                 for (ListIterator<Meter> iterator = meters.listIterator(meters.size()); iterator.hasPrevious(); ) {
                     Meter meter = iterator.previous();
@@ -98,6 +104,8 @@ public class Metrics {
                     // make close idempotent
                     iterator.remove();
                 }
+            } finally {
+                meterRefCountsLock.unlock();
             }
         }
     }

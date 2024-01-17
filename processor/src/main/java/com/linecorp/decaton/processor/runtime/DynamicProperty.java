@@ -16,6 +16,7 @@
 
 package com.linecorp.decaton.processor.runtime;
 
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BiConsumer;
 
 import org.slf4j.Logger;
@@ -30,9 +31,11 @@ import com.linecorp.decaton.processor.runtime.internal.AbstractProperty;
 public class DynamicProperty<T> extends AbstractProperty<T> {
     private static final Logger logger = LoggerFactory.getLogger(DynamicProperty.class);
     private volatile T value;
+    private final ReentrantLock setLock;
 
     public DynamicProperty(PropertyDefinition<T> definition) {
         super(definition);
+        setLock = new ReentrantLock();
         set(definition.defaultValue());
     }
 
@@ -65,21 +68,26 @@ public class DynamicProperty<T> extends AbstractProperty<T> {
      *
      * @throws IllegalArgumentException when invalid value passed.
      */
-    public synchronized T set(T value) {
-        T currentValue = this.value;
+    public T set(T value) {
+        setLock.lock();
+        try {
+            T currentValue = this.value;
 
-        if (currentValue == null && value == null || currentValue != null && currentValue.equals(value)) {
-            // No need to update.
-            return null;
+            if (currentValue == null && value == null || currentValue != null && currentValue.equals(value)) {
+                // No need to update.
+                return null;
+            }
+
+            validate(value);
+
+            this.value = value;
+            logger.debug("Property {} has been updated ({} => {})", name(), currentValue, value);
+
+            notifyListeners(currentValue, value);
+            return currentValue;
+        } finally {
+            setLock.unlock();
         }
-
-        validate(value);
-
-        this.value = value;
-        logger.debug("Property {} has been updated ({} => {})", name(), currentValue, value);
-
-        notifyListeners(currentValue, value);
-        return currentValue;
     }
 
     /**
