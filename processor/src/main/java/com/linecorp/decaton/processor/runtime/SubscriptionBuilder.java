@@ -49,6 +49,7 @@ import com.linecorp.decaton.processor.runtime.internal.SubscriptionScope;
 import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider;
 
 import lombok.AccessLevel;
+import lombok.NonNull;
 import lombok.Setter;
 import lombok.experimental.Accessors;
 
@@ -96,6 +97,12 @@ public class SubscriptionBuilder {
      */
     private SubscriptionStateListener stateListener;
 
+    /**
+     * Set sub partitions runtime to use for this subscription. See {@link SubPartitionRuntime}.
+     */
+    @NonNull
+    private SubPartitionRuntime subPartitionRuntime;
+
     @Setter(AccessLevel.NONE)
     private RetryConfig retryConfig;
 
@@ -112,11 +119,12 @@ public class SubscriptionBuilder {
      * A {@link SubPartitionerSupplier} for partitioning tasks into subpartitions
      */
     @Setter
-    private SubPartitionerSupplier subPartitionerSupplier = ignored -> new UnboundedSubPartitioner();
+    private SubPartitionerSupplier subPartitionerSupplier = DefaultSubPartitioner::new;
 
     public SubscriptionBuilder(String subscriptionId) {
         this.subscriptionId = Objects.requireNonNull(subscriptionId, "subscriptionId");
         propertiesBuilder = ProcessorProperties.builder();
+        subPartitionRuntime = SubPartitionRuntime.THREAD_POOL;
     }
 
     public static SubscriptionBuilder newBuilder(String subscriptionId) {
@@ -241,6 +249,7 @@ public class SubscriptionBuilder {
         String topic = processorsBuilder.topic();
         SubscriptionScope scope = new SubscriptionScope(Objects.requireNonNull(subscriptionId),
                                                         topic,
+                                                        subPartitionRuntime,
                                                         Optional.ofNullable(retryConfig),
                                                         Optional.ofNullable(perKeyQuotaConfig),
                                                         props,

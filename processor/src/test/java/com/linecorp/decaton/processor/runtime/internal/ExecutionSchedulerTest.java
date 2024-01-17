@@ -47,6 +47,7 @@ import org.mockito.quality.Strictness;
 import com.linecorp.decaton.processor.TaskMetadata;
 import com.linecorp.decaton.processor.runtime.DefaultSubPartitioner;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
+import com.linecorp.decaton.processor.runtime.SubPartitionRuntime;
 import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider;
 
 @ExtendWith(MockitoExtension.class)
@@ -55,6 +56,7 @@ public class ExecutionSchedulerTest {
     private static final ThreadScope scope = new ThreadScope(
             new PartitionScope(
                     new SubscriptionScope("subscription", "topic",
+                                          SubPartitionRuntime.THREAD_POOL,
                                           Optional.empty(), Optional.empty(), ProcessorProperties.builder().build(),
                                           NoopTracingProvider.INSTANCE,
                                           ConsumerSupplier.DEFAULT_MAX_POLL_RECORDS,

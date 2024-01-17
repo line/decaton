@@ -38,6 +38,7 @@ import com.linecorp.decaton.processor.runtime.DefaultSubPartitioner;
 import com.linecorp.decaton.processor.runtime.PerKeyQuotaConfig;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.Property;
+import com.linecorp.decaton.processor.runtime.SubPartitionRuntime;
 import com.linecorp.decaton.processor.runtime.internal.AbstractDecatonProperties.Builder;
 import com.linecorp.decaton.processor.runtime.internal.PerKeyQuotaManager.QuotaUsage;
 import com.linecorp.decaton.processor.runtime.internal.PerKeyQuotaManager.UsageType;
@@ -60,6 +61,7 @@ public class PerKeyQuotaManagerTest {
         builder.set(Property.ofStatic(ProcessorProperties.CONFIG_PER_KEY_QUOTA_PROCESSING_RATE, processingRateQuota));
         return new PartitionScope(
                 new SubscriptionScope("subscription", "topic",
+                                      SubPartitionRuntime.THREAD_POOL,
                                       Optional.empty(), Optional.of(PerKeyQuotaConfig.shape()),
                                       builder.build(),
                                       NoopTracingProvider.INSTANCE,

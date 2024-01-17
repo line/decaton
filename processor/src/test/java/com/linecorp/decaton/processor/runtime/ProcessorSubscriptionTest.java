@@ -123,6 +123,7 @@ public class ProcessorSubscriptionTest {
         return new SubscriptionScope(
                 "subscription",
                 topic,
+                SubPartitionRuntime.THREAD_POOL,
                 Optional.empty(),
                 Optional.empty(),
                 propertiesBuilder.build(),

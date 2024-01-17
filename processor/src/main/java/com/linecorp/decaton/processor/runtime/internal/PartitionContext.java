@@ -40,7 +40,7 @@ import lombok.experimental.Accessors;
 @Accessors(fluent = true)
 public class PartitionContext implements AutoCloseable {
     private final PartitionScope scope;
-    private final PartitionProcessor partitionProcessor;
+    private final SubPartitions subPartitions;
     private final OutOfOrderCommitControl commitControl;
     private final PerKeyQuotaManager perKeyQuotaManager;
     private final Processors<?> processors;
@@ -71,16 +71,27 @@ public class PartitionContext implements AutoCloseable {
     private volatile boolean reloadRequested;
 
     public PartitionContext(PartitionScope scope, Processors<?> processors) {
-        this(scope, processors, new PartitionProcessor(scope, processors));
+        this(scope, processors, createSubPartitions(scope, processors));
+    }
+
+    private static SubPartitions createSubPartitions(PartitionScope scope, Processors<?> processors) {
+        switch (scope.subPartitionRuntime()) {
+            case THREAD_POOL:
+                return new ThreadPoolSubPartitions(scope, processors);
+            case VIRTUAL_THREAD:
+                return new VirtualThreadSubPartitions(scope, processors);
+            default:
+                throw new IllegalArgumentException("unknown sub partition runtime: " + scope.subPartitionRuntime());
+        }
     }
 
     // visible for testing
     PartitionContext(PartitionScope scope,
                      Processors<?> processors,
-                     PartitionProcessor partitionProcessor) {
+                     SubPartitions subPartitions) {
         this.scope = scope;
         this.processors = processors;
-        this.partitionProcessor = partitionProcessor;
+        this.subPartitions = subPartitions;
         maxPendingRecords = scope.props().get(ProcessorProperties.CONFIG_MAX_PENDING_RECORDS).value();
 
         int capacity = maxPendingRecords + scope.maxPollRecords();
@@ -152,7 +163,7 @@ public class PartitionContext implements AutoCloseable {
     }
 
     public void destroyProcessors() throws Exception {
-        partitionProcessor.close();
+        subPartitions.close();
         processors.destroyPartitionScope(scope.subscriptionId(), scope.topicPartition());
         metrics.close();
     }
@@ -165,7 +176,7 @@ public class PartitionContext implements AutoCloseable {
             TaskRequest request = new TaskRequest(
                     scope.topicPartition(), record.offset(), offsetState, record.key(),
                     record.headers(), traceHandle, record.value(), maybeRecordQuotaUsage(record.key()));
-            partitionProcessor.addTask(request);
+            subPartitions.addTask(request);
         }
 
         if (lastQueueStarvedTime > 0) {
@@ -180,7 +191,7 @@ public class PartitionContext implements AutoCloseable {
     }
 
     public void cleanup() {
-        partitionProcessor.cleanup();
+        subPartitions.cleanup();
     }
 
     public boolean paused() {

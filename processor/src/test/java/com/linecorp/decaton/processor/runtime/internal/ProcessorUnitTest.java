@@ -25,6 +25,7 @@ import static org.mockito.Mockito.verify;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
 
 import org.apache.kafka.common.TopicPartition;
 import org.junit.jupiter.api.BeforeEach;
@@ -37,6 +38,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import com.linecorp.decaton.processor.DeferredCompletion;
 import com.linecorp.decaton.processor.runtime.DefaultSubPartitioner;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
+import com.linecorp.decaton.processor.runtime.SubPartitionRuntime;
 import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider;
 import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
 import com.linecorp.decaton.protocol.Decaton.TaskMetadataProto;
@@ -45,9 +47,6 @@ import com.linecorp.decaton.protocol.Sample.HelloTask;
 @ExtendWith(MockitoExtension.class)
 public class ProcessorUnitTest {
     private static final TopicPartition topicPartition = new TopicPartition("topic", 1);
-
-    @Mock
-    private DeferredCompletion completion;
 
     @Mock
     private ProcessPipeline<?> pipeline;
@@ -61,6 +60,7 @@ public class ProcessorUnitTest {
         ThreadScope scope = new ThreadScope(
                 new PartitionScope(
                         new SubscriptionScope("subscription", "topic",
+                                              SubPartitionRuntime.THREAD_POOL,
                                               Optional.empty(), Optional.empty(), ProcessorProperties.builder().build(),
                                               NoopTracingProvider.INSTANCE,
                                               ConsumerSupplier.DEFAULT_MAX_POLL_RECORDS,
@@ -68,7 +68,7 @@ public class ProcessorUnitTest {
                         new TopicPartition("topic", 0)),
                 0);
 
-        unit = spy(new ProcessorUnit(scope, pipeline));
+        unit = spy(new ProcessorUnit(scope, pipeline, Executors.newSingleThreadExecutor()));
         DecatonTaskRequest request =
                 DecatonTaskRequest.newBuilder()
                                   .setMetadata(TaskMetadataProto.getDefaultInstance())

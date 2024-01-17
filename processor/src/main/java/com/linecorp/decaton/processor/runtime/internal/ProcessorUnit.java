@@ -19,7 +19,6 @@ package com.linecorp.decaton.processor.runtime.internal;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.kafka.common.TopicPartition;
@@ -29,11 +28,15 @@ import com.linecorp.decaton.processor.metrics.Metrics.ResourceUtilizationMetrics
 import com.linecorp.decaton.processor.runtime.AsyncClosable;
 import com.linecorp.decaton.processor.runtime.internal.Utils.Timer;
 
+import lombok.Getter;
+import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
+@Accessors(fluent = true)
 public class ProcessorUnit implements AsyncClosable {
-    private final long id;
+    @Getter
+    private final int id;
     private final ProcessPipeline<?> pipeline;
     private final ExecutorService executor;
     private final ResourceUtilizationMetrics metrics;
@@ -41,17 +44,11 @@ public class ProcessorUnit implements AsyncClosable {
 
     private volatile boolean terminated;
 
-    public ProcessorUnit(ThreadScope scope, ProcessPipeline<?> pipeline) {
+    public ProcessorUnit(ThreadScope scope, ProcessPipeline<?> pipeline, ExecutorService executor) {
         this.id = scope.threadId();
         this.pipeline = pipeline;
+        this.executor = executor;
 
-
-//        executor = Executors.newVirtualThreadPerTaskExecutor();
-        executor = Executors.newSingleThreadExecutor(
-                Utils.namedVirtualThreadFactory("PartitionProcessorThread-" + scope));
-//        executor.execute(() -> log.debug("Thread ID MAP {} => {}", Thread.currentThread().threadId(), id));
-//        executor = Executors.newSingleThreadExecutor(
-//                Utils.namedThreadFactory("PartitionProcessorThread-" + scope));
         pendingTask = new AtomicInteger();
         TopicPartition tp = scope.topicPartition();
         metrics = Metrics.withTags("subscription", scope.subscriptionId(),

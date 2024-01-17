@@ -61,6 +61,7 @@ import com.linecorp.decaton.processor.runtime.DecatonTask;
 import com.linecorp.decaton.processor.runtime.DefaultSubPartitioner;
 import com.linecorp.decaton.processor.runtime.DynamicProperty;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
+import com.linecorp.decaton.processor.runtime.SubPartitionRuntime;
 import com.linecorp.decaton.processor.runtime.TaskExtractor;
 import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider;
 import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider.NoopTrace;
@@ -85,6 +86,7 @@ public class ProcessPipelineTest {
     private final ThreadScope scope = new ThreadScope(
             new PartitionScope(
                     new SubscriptionScope("subscription", "topic",
+                                          SubPartitionRuntime.THREAD_POOL,
                                           Optional.empty(), Optional.empty(),
                                           ProcessorProperties.builder().set(completionTimeoutMsProp).build(),
                                           NoopTracingProvider.INSTANCE,

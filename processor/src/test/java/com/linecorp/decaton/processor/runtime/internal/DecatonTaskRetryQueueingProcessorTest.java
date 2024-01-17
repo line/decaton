@@ -49,6 +49,7 @@ import com.linecorp.decaton.processor.TaskMetadata;
 import com.linecorp.decaton.processor.runtime.DefaultSubPartitioner;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.RetryConfig;
+import com.linecorp.decaton.processor.runtime.SubPartitionRuntime;
 import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider;
 import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
 import com.linecorp.decaton.protocol.Sample.HelloTask;
@@ -60,6 +61,7 @@ public class DecatonTaskRetryQueueingProcessorTest {
 
     private static final SubscriptionScope scope = new SubscriptionScope(
             "subscription", "topic",
+            SubPartitionRuntime.THREAD_POOL,
             Optional.of(RetryConfig.builder().backoff(RETRY_BACKOFF).build()), Optional.empty(),
             ProcessorProperties.builder().build(), NoopTracingProvider.INSTANCE,
             ConsumerSupplier.DEFAULT_MAX_POLL_RECORDS,

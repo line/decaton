@@ -49,6 +49,7 @@ import com.linecorp.decaton.processor.runtime.DefaultSubPartitioner;
 import com.linecorp.decaton.processor.runtime.PerKeyQuotaConfig.QuotaCallback;
 import com.linecorp.decaton.processor.runtime.PerKeyQuotaConfig.QuotaCallback.Metrics;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
+import com.linecorp.decaton.processor.runtime.SubPartitionRuntime;
 import com.linecorp.decaton.processor.runtime.internal.PerKeyQuotaManager.QuotaUsage;
 import com.linecorp.decaton.processor.runtime.internal.PerKeyQuotaManager.UsageType;
 import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider;
@@ -76,6 +77,7 @@ public class QuotaApplierImplTest {
                 callback,
                 new SubscriptionScope("subscription",
                                       "topic",
+                                      SubPartitionRuntime.THREAD_POOL,
                                       Optional.empty(),
                                       Optional.empty(),
                                       ProcessorProperties.builder().build(),

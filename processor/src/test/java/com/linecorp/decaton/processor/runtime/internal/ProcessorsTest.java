@@ -37,6 +37,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import com.linecorp.decaton.processor.runtime.DecatonProcessorSupplier;
 import com.linecorp.decaton.processor.runtime.DefaultSubPartitioner;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
+import com.linecorp.decaton.processor.runtime.SubPartitionRuntime;
 import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider;
 import com.linecorp.decaton.protocol.Sample.HelloTask;
 
@@ -49,6 +50,7 @@ public class ProcessorsTest {
     private static final ThreadScope scope = new ThreadScope(
             new PartitionScope(
                     new SubscriptionScope(SUBSC_ID, topicPartition.topic(),
+                                          SubPartitionRuntime.THREAD_POOL,
                                           Optional.empty(), Optional.empty(), ProcessorProperties.builder().build(),
                                           NoopTracingProvider.INSTANCE,
                                           ConsumerSupplier.DEFAULT_MAX_POLL_RECORDS,
