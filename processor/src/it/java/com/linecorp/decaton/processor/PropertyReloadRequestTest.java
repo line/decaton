@@ -39,6 +39,7 @@ import com.linecorp.decaton.processor.runtime.ProcessorsBuilder;
 import com.linecorp.decaton.processor.runtime.StaticPropertySupplier;
 import com.linecorp.decaton.protobuf.ProtocolBuffersDeserializer;
 import com.linecorp.decaton.protocol.Sample.HelloTask;
+import com.linecorp.decaton.testing.ConcurrentHashSet;
 import com.linecorp.decaton.testing.KafkaClusterExtension;
 import com.linecorp.decaton.testing.TestUtils;
 
@@ -66,7 +67,7 @@ public class PropertyReloadRequestTest {
         for (int i = 0; i < 10000; i++) {
             keys.add("key" + i);
         }
-        Set<HashableByteArray> processedKeys = Collections.synchronizedSet(new HashSet<>());
+        Set<HashableByteArray> processedKeys = new ConcurrentHashSet<>();
         CountDownLatch processLatch = new CountDownLatch(keys.size());
 
         DecatonProcessor<HelloTask> processor = (context, task) -> {

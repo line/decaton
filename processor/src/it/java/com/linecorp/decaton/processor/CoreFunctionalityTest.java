@@ -19,11 +19,11 @@ package com.linecorp.decaton.processor;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -33,11 +33,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
+import com.linecorp.decaton.processor.internal.HashableByteArray;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.ProcessorScope;
 import com.linecorp.decaton.processor.runtime.Property;
 import com.linecorp.decaton.processor.runtime.StaticPropertySupplier;
-import com.linecorp.decaton.processor.internal.HashableByteArray;
 import com.linecorp.decaton.testing.KafkaClusterExtension;
 import com.linecorp.decaton.testing.RandomExtension;
 import com.linecorp.decaton.testing.processor.ProcessedRecord;
@@ -164,16 +164,16 @@ public class CoreFunctionalityTest {
         // Note that this processing semantics is not be considered as Decaton specification which users can rely on.
         // Rather, this is just a expected behavior based on current implementation when we set concurrency to 1.
         ProcessingGuarantee noDuplicates = new ProcessingGuarantee() {
-            private final Map<HashableByteArray, List<TestTask>> produced = new HashMap<>();
-            private final Map<HashableByteArray, List<TestTask>> processed = new HashMap<>();
+            private final ConcurrentMap<HashableByteArray, List<TestTask>> produced = new ConcurrentHashMap<>();
+            private final ConcurrentMap<HashableByteArray, List<TestTask>> processed = new ConcurrentHashMap<>();
 
             @Override
-            public synchronized void onProduce(ProducedRecord record) {
+            public void onProduce(ProducedRecord record) {
                 produced.computeIfAbsent(new HashableByteArray(record.key()), key -> new ArrayList<>()).add(record.task());
             }
 
             @Override
-            public synchronized void onProcess(TaskMetadata metadata, ProcessedRecord record) {
+            public void onProcess(TaskMetadata metadata, ProcessedRecord record) {
                 processed.computeIfAbsent(new HashableByteArray(record.key()), key -> new ArrayList<>()).add(record.task());
             }
 

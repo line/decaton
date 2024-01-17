@@ -17,21 +17,20 @@
 package com.linecorp.decaton.testing.processor;
 
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.lessThan;
 import static org.hamcrest.Matchers.lessThanOrEqualTo;
 
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Map.Entry;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
-import com.linecorp.decaton.processor.internal.HashableByteArray;
 import com.linecorp.decaton.processor.TaskMetadata;
+import com.linecorp.decaton.processor.internal.HashableByteArray;
 
 public class SerialProcessing implements ProcessingGuarantee {
-    private final Map<HashableByteArray, List<ProcessedRecord>> records = new HashMap<>();
+    private final ConcurrentMap<HashableByteArray, List<ProcessedRecord>> records = new ConcurrentHashMap<>();
 
     @Override
     public void onProduce(ProducedRecord record) {
@@ -39,7 +38,7 @@ public class SerialProcessing implements ProcessingGuarantee {
     }
 
     @Override
-    public synchronized void onProcess(TaskMetadata metadata, ProcessedRecord record) {
+    public void onProcess(TaskMetadata metadata, ProcessedRecord record) {
         records.computeIfAbsent(new HashableByteArray(record.key()),
                                 key -> new ArrayList<>()).add(record);
     }

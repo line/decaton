@@ -19,15 +19,14 @@ package com.linecorp.decaton.testing.processor;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.util.Collections;
-import java.util.HashSet;
 import java.util.Set;
 
 import com.linecorp.decaton.processor.TaskMetadata;
+import com.linecorp.decaton.testing.ConcurrentHashSet;
 
 public class AtLeastOnceDelivery implements ProcessingGuarantee {
-    private final Set<String> producedIds = Collections.synchronizedSet(new HashSet<>());
-    private final Set<String> processedIds = Collections.synchronizedSet(new HashSet<>());
+    private final Set<String> producedIds = new ConcurrentHashSet<>();
+    private final Set<String> processedIds = new ConcurrentHashSet<>();
 
     @Override
     public void onProduce(ProducedRecord record) {

@@ -41,6 +41,7 @@ import com.linecorp.decaton.processor.runtime.RetryConfig;
 import com.linecorp.decaton.processor.runtime.StaticPropertySupplier;
 import com.linecorp.decaton.processor.runtime.TaskExtractor;
 import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
+import com.linecorp.decaton.testing.ConcurrentHashSet;
 import com.linecorp.decaton.testing.KafkaClusterExtension;
 import com.linecorp.decaton.testing.TestUtils;
 import com.linecorp.decaton.testing.processor.ProcessedRecord;
@@ -79,8 +80,8 @@ public class RetryQueueingTest {
     }
 
     private static class ProcessRetriedTask implements ProcessingGuarantee {
-        private final Set<String> producedIds = Collections.synchronizedSet(new HashSet<>());
-        private final Set<String> processedIds = Collections.synchronizedSet(new HashSet<>());
+        private final Set<String> producedIds = new ConcurrentHashSet<>();
+        private final Set<String> processedIds = new ConcurrentHashSet<>();
 
         @Override
         public void onProduce(ProducedRecord record) {
