@@ -64,6 +64,7 @@ import com.linecorp.decaton.processor.runtime.PropertySupplier;
 import com.linecorp.decaton.processor.runtime.RetryConfig;
 import com.linecorp.decaton.processor.runtime.RetryConfig.RetryConfigBuilder;
 import com.linecorp.decaton.processor.runtime.StaticPropertySupplier;
+import com.linecorp.decaton.processor.runtime.SubPartitionRuntime;
 import com.linecorp.decaton.processor.runtime.SubscriptionStateListener;
 import com.linecorp.decaton.processor.runtime.TaskExtractor;
 import com.linecorp.decaton.processor.runtime.internal.RateLimiter;
@@ -100,6 +101,7 @@ public class ProcessorTestSuite {
     private final KafkaClusterExtension rule;
     private final int numTasks;
     private final Function<ProcessorsBuilder<TestTask>, ProcessorsBuilder<TestTask>> configureProcessorsBuilder;
+    private final SubPartitionRuntime subPartitionRuntime;
     private final RetryConfig retryConfig;
     private final PerKeyQuotaConfig perKeyQuotaConfig;
     private final Properties consumerConfig;
@@ -144,6 +146,10 @@ public class ProcessorTestSuite {
          * Configure test-specific processing logic
          */
         private Function<ProcessorsBuilder<TestTask>, ProcessorsBuilder<TestTask>> configureProcessorsBuilder;
+        /**
+         * Configure subpartition runtime.
+         */
+        private SubPartitionRuntime subPartitionRuntime = SubPartitionRuntime.THREAD_POOL;
         /**
          * Configure retry-queueing feature for the subscription
          */
@@ -216,6 +222,7 @@ public class ProcessorTestSuite {
             return new ProcessorTestSuite(rule,
                                           numTasks,
                                           configureProcessorsBuilder,
+                                          subPartitionRuntime,
                                           retryConfig,
                                           perKeyQuotaConfig,
                                           consumerConfig,
@@ -316,6 +323,7 @@ public class ProcessorTestSuite {
                 rule.bootstrapServers(),
                 builder -> {
                     builder.processorsBuilder(processorsBuilder);
+                    builder.subPartitionRuntime(subPartitionRuntime);
                     if (retryConfig != null) {
                         RetryConfigBuilder retryConfigBuilder = retryConfig.toBuilder();
                         retryConfigBuilder.producerSupplier(props -> {
