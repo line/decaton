@@ -1,7 +1,7 @@
 /*
- * Copyright 2024 LINE Corporation
+ * Copyright 2024 LY Corporation
  *
- * LINE Corporation licenses this file to you under the Apache License,
+ * LY Corporation licenses this file to you under the Apache License,
  * version 2.0 (the "License"); you may not use this file except in compliance
  * with the License. You may obtain a copy of the License at:
  *
@@ -16,12 +16,17 @@
 
 package com.linecorp.decaton.processor.runtime.internal;
 
-import java.util.List;
-
 import com.linecorp.decaton.processor.runtime.AsyncClosable;
 
 public interface SubPartitions extends AsyncClosable {
+    /**
+     * Add a given task to one of subpartitions.
+     * @param request a task request to add.
+     */
     void addTask(TaskRequest request);
 
+    /**
+     * Runs periodical cleanup work if any.
+     */
     void cleanup();
 }

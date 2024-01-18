@@ -28,7 +28,6 @@ import lombok.experimental.Accessors;
 @Value
 @Accessors(fluent = true)
 public class ProcessedRecord {
-    String subscriptionId;
     /**
      * Key of the task
      */

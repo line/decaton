@@ -60,8 +60,13 @@ public class ProcessorUnit implements AsyncClosable {
 
     public void putTask(TaskRequest request) {
         metrics.tasksQueued.increment();
-        executor.execute(() -> processTask(request));
         pendingTask.incrementAndGet();
+        try {
+            executor.execute(() -> processTask(request));
+        } catch (RuntimeException e) {
+            pendingTask.decrementAndGet();
+            throw e;
+        }
     }
 
     private void processTask(TaskRequest request) {

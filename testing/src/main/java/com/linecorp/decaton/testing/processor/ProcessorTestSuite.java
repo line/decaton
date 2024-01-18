@@ -299,13 +299,14 @@ public class ProcessorTestSuite {
             try {
                 downComp = context.push(task);
             } finally {
-                ProcessedRecord record = new ProcessedRecord(context.subscriptionId() + '/' + Thread.currentThread().getId(),
-                                                             context.key(), task, startTime, System.nanoTime());
+                ProcessedRecord record = new ProcessedRecord(context.key(), task, startTime, System.nanoTime());
                 semantics.forEach(g -> g.onProcess(context.metadata(), record));
                 processLatch.ifPresent(CountDownLatch::countDown);
             }
             if (downComp != null) {
-                context.deferCompletion().completeWith(downComp); // TODO: otherwise, a completion happens even before g.onProcess is called => terminates ProcessorUnit => causes ordering broken??
+                // Otherwise, a completion happens even before g.onProcess is called
+                // => terminates ProcessorUnit => causes ordering broken??
+                context.deferCompletion().completeWith(downComp);
             }
         };
 

@@ -30,6 +30,12 @@ import java.util.concurrent.ExecutorService;
  * will usually lead to a quicker overall shutdown process.
  */
 public interface AsyncClosable extends AutoCloseable {
+    /**
+     * Initiate closing process of this instance and return a {@link CompletableFuture} that completes when entire
+     * closing process ends.
+     *
+     * @return a {@link CompletableFuture} that completes when entire closing process ends.
+     */
     CompletableFuture<Void> asyncClose();
 
     /**

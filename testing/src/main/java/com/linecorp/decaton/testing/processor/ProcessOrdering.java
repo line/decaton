@@ -37,15 +37,8 @@ import lombok.Value;
 
 public class ProcessOrdering implements ProcessingGuarantee {
     private final ConcurrentMap<TestTask, Long> taskToOffset = new ConcurrentHashMap<>();
-
-    @Value
-    static class Key {
-        String subscriptionId;
-        HashableByteArray recordKey;
-    }
-
     private final ConcurrentMap<HashableByteArray, List<TestTask>> producedRecords = new ConcurrentHashMap<>();
-    private final ConcurrentMap<HashableByteArray, List<ProcessedRecord>> processedRecords = new ConcurrentHashMap<>();
+    private final ConcurrentMap<HashableByteArray, List<TestTask>> processedRecords = new ConcurrentHashMap<>();
 
     @Override
     public void onProduce(ProducedRecord record) {
@@ -57,15 +50,15 @@ public class ProcessOrdering implements ProcessingGuarantee {
     @Override
     public void onProcess(TaskMetadata metadata, ProcessedRecord record) {
         processedRecords.computeIfAbsent(new HashableByteArray(record.key()),
-                                         key -> new ArrayList<>()).add(record);
+                                         key -> new ArrayList<>()).add(record.task());
     }
 
     @Override
     public void doAssert() {
         for (Entry<HashableByteArray, List<TestTask>> entry : producedRecords.entrySet()) {
-            final HashableByteArray recordKey = entry.getKey();
+            final HashableByteArray key = entry.getKey();
             List<TestTask> produced = entry.getValue();
-            List<ProcessedRecord> processed = processedRecords.get(recordKey);
+            List<TestTask> processed = processedRecords.get(key);
 
             assertNotNull(processed);
             assertOrdering(taskToOffset, produced, processed);
@@ -74,18 +67,17 @@ public class ProcessOrdering implements ProcessingGuarantee {
 
     static void assertOrdering(Map<TestTask, Long> taskToOffset,
                                List<TestTask> produced,
-                               List<ProcessedRecord> processed) {
-        System.err.println("produced = " + produced.size() + ", processed = " + processed.size());
+                               List<TestTask> processed) {
         Deque<TestTask> excludeReprocess = new ArrayDeque<>();
 
-        ProcessedRecord headTask = processed.get(0);
-        excludeReprocess.addLast(headTask.task());
-        long currentOffset = taskToOffset.get(headTask.task());
+        TestTask headTask = processed.get(0);
+        excludeReprocess.addLast(headTask);
+        long currentOffset = taskToOffset.get(headTask);
 
         long committed = -1L;
         for (int i = 1; i < processed.size(); i++) {
-            ProcessedRecord task = processed.get(i);
-            long offset = taskToOffset.get(task.task());
+            TestTask task = processed.get(i);
+            long offset = taskToOffset.get(task);
 
             if (offset < committed) {
                 fail("offset cannot be regressed beyond committed offset");
@@ -93,7 +85,6 @@ public class ProcessOrdering implements ProcessingGuarantee {
             if (offset <= currentOffset) {
                 // offset regression implies reprocessing from committed offset happened
                 committed = offset;
-                System.err.println("Regress to " + committed);
 
                 // rewind records to committed offset
                 TestTask last;
@@ -104,17 +95,11 @@ public class ProcessOrdering implements ProcessingGuarantee {
                     excludeReprocess.removeLast();
                 }
             } else {
-                excludeReprocess.add(task.task());
+                excludeReprocess.add(task);
             }
             currentOffset = offset;
         }
 
-        if (produced.size() != excludeReprocess.size()) {
-            processed.forEach(t -> {
-                Long offset = taskToOffset.get(t.task());
-                System.err.printf("%d %s\n", offset, t.subscriptionId());
-            });
-        }
         assertEquals(produced.size(), excludeReprocess.size());
         //noinspection SimplifiableJUnitAssertion
         assertTrue(produced.equals(new ArrayList<>(excludeReprocess)));

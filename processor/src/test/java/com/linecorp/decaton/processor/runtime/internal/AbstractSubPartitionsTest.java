@@ -17,11 +17,6 @@
 package com.linecorp.decaton.processor.runtime.internal;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.fail;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.verify;
 
 import java.util.Optional;
 import java.util.function.Consumer;
@@ -29,7 +24,6 @@ import java.util.function.Consumer;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.linecorp.decaton.processor.runtime.DefaultSubPartitioner;
@@ -41,7 +35,7 @@ import com.linecorp.decaton.processor.runtime.internal.AbstractDecatonProperties
 import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider;
 
 @ExtendWith(MockitoExtension.class)
-public class PartitionProcessorTest {
+public class AbstractSubPartitionsTest {
     private static PartitionScope scope(
             String topic,
             Optional<PerKeyQuotaConfig> perKeyQuotaConfig,
@@ -60,9 +54,6 @@ public class PartitionProcessorTest {
                                       DefaultSubPartitioner::new),
                 new TopicPartition(topic, 0));
     }
-
-    @Mock
-    private Processors<?> processors;
 
     @Test
     public void testRateProperty() {

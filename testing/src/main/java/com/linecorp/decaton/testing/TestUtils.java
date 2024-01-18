@@ -211,7 +211,7 @@ public class TestUtils {
      * @param condition expected condition to be met
      */
     public static void awaitCondition(String message,
-                                      BooleanSupplier condition) {
+                                      BooleanSupplier condition) throws InterruptedException {
         awaitCondition(message, condition, Long.MAX_VALUE);
     }
 
@@ -223,14 +223,16 @@ public class TestUtils {
      */
     public static void awaitCondition(String message,
                                       BooleanSupplier condition,
-                                      long timeoutMillis) {
+                                      long timeoutMillis) throws InterruptedException {
         long start = System.nanoTime();
         while (!condition.getAsBoolean()) {
             long elapsedMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start);
             if (elapsedMillis >= timeoutMillis) {
                 throw new AssertionError(message);
             }
-            // TODO: should check if this thread is not interrupted.
+            if (Thread.currentThread().isInterrupted()) {
+                throw new InterruptedException();
+            }
             LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(100));
         }
     }

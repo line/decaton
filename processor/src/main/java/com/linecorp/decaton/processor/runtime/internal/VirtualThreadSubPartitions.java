@@ -1,7 +1,7 @@
 /*
- * Copyright 2020 LINE Corporation
+ * Copyright 2024 LY Corporation
  *
- * LINE Corporation licenses this file to you under the Apache License,
+ * LY Corporation licenses this file to you under the Apache License,
  * version 2.0 (the "License"); you may not use this file except in compliance
  * with the License. You may obtain a copy of the License at:
  *
@@ -59,7 +59,10 @@ public class VirtualThreadSubPartitions extends AbstractSubPartitions {
             ProcessorUnit unit = entry.getValue();
             if (!unit.hasPendingTasks()) {
                 try {
-                    units.remove(threadId).close(); // TODO: should we use async API instead?
+                    // Since this ProcessorUnit has no more tasks to work on, this synchronous
+                    // call of close is expected to return fast enough.
+                    // TODO: blah
+                    units.remove(threadId).close();
                     destroyThreadProcessor(unit.id());
                 } catch (Exception e) {
                     log.warn("Failed to close processor unit of {}", threadId, e);

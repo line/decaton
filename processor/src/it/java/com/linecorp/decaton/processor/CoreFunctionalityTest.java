@@ -42,7 +42,6 @@ import com.linecorp.decaton.testing.KafkaClusterExtension;
 import com.linecorp.decaton.testing.RandomExtension;
 import com.linecorp.decaton.testing.processor.ProcessedRecord;
 import com.linecorp.decaton.testing.processor.ProcessingGuarantee;
-import com.linecorp.decaton.testing.processor.ProcessingGuarantee.GuaranteeType;
 import com.linecorp.decaton.testing.processor.ProcessorTestSuite;
 import com.linecorp.decaton.testing.processor.ProducedRecord;
 import com.linecorp.decaton.testing.processor.TestTask;
@@ -235,7 +234,6 @@ public class CoreFunctionalityTest {
                 .propertySupplier(StaticPropertySupplier.of(
                         Property.ofStatic(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY, 16)
                 ))
-                .excludeSemantics(GuaranteeType.SERIAL_PROCESSING)
                 .build()
                 .run();
     }
