@@ -16,8 +16,10 @@
 
 package com.linecorp.decaton.processor.runtime.internal;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.CompletableFuture;
@@ -33,7 +35,7 @@ public class VirtualThreadSubPartitions extends AbstractSubPartitions {
     private final SubPartitioner subPartitioner;
     private final Map<Integer, ProcessorUnit> units;
 
-    public VirtualThreadSubPartitions(PartitionScope scope,  Processors<?> processors) {
+    public VirtualThreadSubPartitions(PartitionScope scope, Processors<?> processors) {
         super(scope, processors);
         subPartitioner = scope.subPartitionerSupplier().get(Integer.MAX_VALUE);
         units = new HashMap<>();
@@ -43,9 +45,6 @@ public class VirtualThreadSubPartitions extends AbstractSubPartitions {
     public void addTask(TaskRequest request) {
         int threadId = subPartitioner.subPartitionFor(request.key());
         units.computeIfAbsent(threadId, key -> {
-            // TODO: should we use PerTask + lock or single thread
-//        ExecutorService executor = Executors.newThreadPerTaskExecutor(
-//                Utils.namedVirtualThreadFactory("PartitionProcessorVThread-" + scope));
             ExecutorService executor = Executors.newSingleThreadExecutor(
                     Utils.namedVirtualThreadFactory("PartitionProcessorVThread-" + scope));
             return createUnit(threadId, executor);
@@ -54,21 +53,22 @@ public class VirtualThreadSubPartitions extends AbstractSubPartitions {
 
     @Override
     public void cleanup() {
+        List<CompletableFuture<Void>> futures = new ArrayList<>();
         for (Entry<Integer, ProcessorUnit> entry : new HashSet<>(units.entrySet())) {
             int threadId = entry.getKey();
             ProcessorUnit unit = entry.getValue();
             if (!unit.hasPendingTasks()) {
                 try {
-                    // Since this ProcessorUnit has no more tasks to work on, this synchronous
-                    // call of close is expected to return fast enough.
-                    // TODO: blah
-                    units.remove(threadId).close();
-                    destroyThreadProcessor(unit.id());
+                    CompletableFuture<Void> future =
+                            units.remove(threadId).asyncClose()
+                                 .whenComplete((ignored, e) -> destroyThreadProcessor(unit.id()));
+                    futures.add(future);
                 } catch (Exception e) {
                     log.warn("Failed to close processor unit of {}", threadId, e);
                 }
             }
         }
+        futures.forEach(CompletableFuture::join);
     }
 
     @Override
