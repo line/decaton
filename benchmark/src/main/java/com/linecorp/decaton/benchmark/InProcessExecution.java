@@ -53,13 +53,12 @@ public class InProcessExecution implements Execution {
         log.info("Loading runner {}", bmConfig.runner());
         Runner runner = Runner.fromClassName(bmConfig.runner());
         Recording recording = new Recording(bmConfig.tasks(), bmConfig.warmupTasks(),
-                                            bmConfig.latencyDividingFactor());
+                                            bmConfig.latencyCount());
         ResourceTracker resourceTracker = new ResourceTracker();
         log.info("Initializing runner {}", bmConfig.runner());
 
         Runner.Config runnerConfig = new Runner.Config(config.bootstrapServers(),
                                                        config.topic(),
-                                                       bmConfig.latencyDividingFactor(),
                                                        new KafkaDeserializer(),
                                                        bmConfig.params());
         Profiling profiling = profiling(bmConfig);

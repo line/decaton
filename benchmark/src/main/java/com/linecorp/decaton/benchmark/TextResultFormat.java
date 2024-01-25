@@ -38,6 +38,8 @@ public class TextResultFormat implements ResultFormat {
         pw.printf("# Runner: %s\n", config.runner());
         pw.printf("# Tasks: %d (warmup: %d)\n", config.tasks(), config.warmupTasks());
         pw.printf("# Simulated Latency(ms): %d\n", config.simulateLatencyMs());
+        pw.printf("# Latency Count: %d\n", config.latencyCount());
+        pw.printf("# Total Simulated Latency(ms): %d\n", config.simulateLatencyMs() * config.latencyCount());
         for (Entry<String, String> e : config.params().entrySet()) {
             pw.printf("# Param: %s=%s\n", e.getKey(), e.getValue());
         }

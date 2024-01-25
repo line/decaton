@@ -29,7 +29,6 @@ public interface Runner extends AutoCloseable {
     class Config {
         String bootstrapServers;
         String topic;
-        int latencyDividingFactor;
         Deserializer<Task> taskDeserializer;
         Map<String, String> parameters;
     }
