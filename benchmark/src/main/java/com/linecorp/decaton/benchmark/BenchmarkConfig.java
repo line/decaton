@@ -50,6 +50,10 @@ public class BenchmarkConfig {
      */
     int simulateLatencyMs;
     /**
+     * Latency dividing factor.
+     */
+    int latencyDividingFactor;
+    /**
      * Optional bootstrap.servers to specify the cluster to use for testing. Otherwise local embedded cluster is
      * used.
      */
