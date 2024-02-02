@@ -69,6 +69,8 @@ public class InProcessExecution implements Execution {
         final Optional<Path> profilerOutput;
         final Optional<Path> taskstatsOutput;
         try {
+            profiling.start();
+
             stageCallback.accept(Stage.READY_WARMUP);
             if (!recording.awaitWarmupComplete(3, TimeUnit.MINUTES)) {
                 throw new RuntimeException("timeout on awaiting benchmark to complete");
@@ -77,7 +79,6 @@ public class InProcessExecution implements Execution {
                 awaitJITGetsSettled();
             }
 
-            profiling.start();
             JvmTracker jvmTracker = JvmTracker.create();
             stageCallback.accept(Stage.READY);
             if (!recording.await(3, TimeUnit.MINUTES)) {
