@@ -34,7 +34,7 @@ public class ExecutionScheduler implements AutoCloseable {
     private final RateLimiter rateLimiter;
     private final Supplier<Long> currentTimeMillis;
     private final CountDownLatch terminateLatch;
-    private final SchedulerMetrics metrics;
+//    private final SchedulerMetrics metrics;
 
     ExecutionScheduler(ThreadScope scope, RateLimiter rateLimiter, Supplier<Long> currentTimeMillis) {
         this.scope = scope;
@@ -43,10 +43,10 @@ public class ExecutionScheduler implements AutoCloseable {
         terminateLatch = new CountDownLatch(1);
 
         TopicPartition tp = scope.topicPartition();
-        metrics = Metrics.withTags("subscription", scope.subscriptionId(),
-                                   "topic", tp.topic(),
-                                   "partition", String.valueOf(tp.partition()))
-                .new SchedulerMetrics();
+//        metrics = Metrics.withTags("subscription", scope.subscriptionId(),
+//                                   "topic", tp.topic(),
+//                                   "partition", String.valueOf(tp.partition()))
+//                .new SchedulerMetrics();
     }
 
     public ExecutionScheduler(ThreadScope scope, RateLimiter rateLimiter) {
@@ -87,13 +87,13 @@ public class ExecutionScheduler implements AutoCloseable {
         if (terminated()) {
             return;
         }
-        metrics.tasksSchedulingDelay.record(timeWaitedMs, TimeUnit.MILLISECONDS);
+//        metrics.tasksSchedulingDelay.record(timeWaitedMs, TimeUnit.MILLISECONDS);
 
         long throttledMicros = rateLimiter.acquire();
         if (terminated()) {
             return;
         }
-        metrics.partitionThrottledTime.record(throttledMicros, TimeUnit.MICROSECONDS);
+//        metrics.partitionThrottledTime.record(throttledMicros, TimeUnit.MICROSECONDS);
     }
 
     private boolean terminated() {
@@ -103,6 +103,6 @@ public class ExecutionScheduler implements AutoCloseable {
     @Override
     public void close() {
         terminateLatch.countDown();
-        metrics.close();
+//        metrics.close();
     }
 }

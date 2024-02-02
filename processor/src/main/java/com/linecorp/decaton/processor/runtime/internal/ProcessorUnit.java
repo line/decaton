@@ -39,7 +39,7 @@ public class ProcessorUnit implements AsyncClosable {
     private final int id;
     private final ProcessPipeline<?> pipeline;
     private final ExecutorService executor;
-    private final ResourceUtilizationMetrics metrics;
+//    private final ResourceUtilizationMetrics metrics;
     private final AtomicInteger pendingTask;
 
     private volatile boolean terminated;
@@ -51,15 +51,15 @@ public class ProcessorUnit implements AsyncClosable {
 
         pendingTask = new AtomicInteger();
         TopicPartition tp = scope.topicPartition();
-        metrics = Metrics.withTags("subscription", scope.subscriptionId(),
-                                   "topic", tp.topic(),
-                                   "partition", String.valueOf(tp.partition()),
-                                   "subpartition", String.valueOf(scope.threadId()))
-                .new ResourceUtilizationMetrics();
+//        metrics = Metrics.withTags("subscription", scope.subscriptionId(),
+//                                   "topic", tp.topic(),
+//                                   "partition", String.valueOf(tp.partition()),
+//                                   "subpartition", String.valueOf(scope.threadId()))
+//                .new ResourceUtilizationMetrics();
     }
 
     public void putTask(TaskRequest request) {
-        metrics.tasksQueued.increment();
+//        metrics.tasksQueued.increment();
         pendingTask.incrementAndGet();
         try {
             executor.execute(() -> processTask(request));
@@ -91,7 +91,7 @@ public class ProcessorUnit implements AsyncClosable {
             // This metric measures the total amount of time the processors were processing tasks including time
             // for scheduling those tasks and is used to refer processor threads utilization, so it needs to measure
             // entire time of schedule and process.
-            metrics.processorProcessedTime.record(timer.duration());
+//            metrics.processorProcessedTime.record(timer.duration());
         }
         processCompletion.whenComplete((ignored, ignoredE) -> pendingTask.decrementAndGet());
     }
@@ -110,6 +110,7 @@ public class ProcessorUnit implements AsyncClosable {
             log.debug("ProcessorUnit {} SHUTDOWN", id);
         });
         executor.shutdown();
-        return shutdownComplete.whenComplete((unused, unused2) -> metrics.close());
+        return shutdownComplete;
+//        return shutdownComplete.whenComplete((unused, unused2) -> metrics.close());
     }
 }
