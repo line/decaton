@@ -18,11 +18,10 @@ package com.linecorp.decaton.processor.runtime.internal;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -55,14 +54,16 @@ public class VirtualThreadSubPartitions extends AbstractSubPartitions {
     @Override
     public void cleanup() {
         List<CompletableFuture<Void>> futures = new ArrayList<>();
-        for (Entry<Integer, ProcessorUnit> entry : new HashSet<>(units.entrySet())) {
+        Iterator<Entry<Integer, ProcessorUnit>> iter = units.entrySet().iterator();
+        while (iter.hasNext()) {
+            Entry<Integer, ProcessorUnit> entry = iter.next();
             int threadId = entry.getKey();
             ProcessorUnit unit = entry.getValue();
             if (!unit.hasPendingTasks()) {
                 try {
+                    iter.remove();
                     CompletableFuture<Void> future =
-                            units.remove(threadId).asyncClose()
-                                 .whenComplete((ignored, e) -> destroyThreadProcessor(unit.id()));
+                            unit.asyncClose().whenComplete((ignored, e) -> destroyThreadProcessor(unit.id()));
                     futures.add(future);
                 } catch (Exception e) {
                     log.warn("Failed to close processor unit of {}", threadId, e);
