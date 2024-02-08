@@ -16,9 +16,9 @@
 
 package com.linecorp.decaton.processor.runtime.internal;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.stream.Collectors;
 
 import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
@@ -26,8 +26,8 @@ import org.slf4j.LoggerFactory;
 
 import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.metrics.Metrics.PerPartitionMetrics;
-import com.linecorp.decaton.processor.runtime.TaskExtractor;
 import com.linecorp.decaton.processor.runtime.DecatonProcessorSupplier;
+import com.linecorp.decaton.processor.runtime.TaskExtractor;
 
 public class Processors<T> {
     private static final Logger logger = LoggerFactory.getLogger(Processors.class);
@@ -71,12 +71,7 @@ public class Processors<T> {
 
         TaskExtractor<T> taskExtractor = extractorFromTopic(scope);
         try {
-            List<DecatonProcessor<T>> processors =
-                    suppliers.stream()
-                             .map(s -> s.getProcessor(scope.subscriptionId(),
-                                                      scope.topicPartition(),
-                                                      scope.threadId()))
-                             .collect(Collectors.toList());
+            List<DecatonProcessor<T>> processors = createProcessors(scope);
             logger.info("Creating partition processor core: {}", scope);
             return new ProcessPipeline<>(scope, processors, retryProcessor, taskExtractor, scheduler, metrics);
         } catch (Exception e) {
@@ -97,6 +92,17 @@ public class Processors<T> {
             }
             throw e;
         }
+    }
+
+    private List<DecatonProcessor<T>> createProcessors(ThreadScope scope) {
+        List<DecatonProcessor<T>> processors = new ArrayList<>(suppliers.size());
+        for (DecatonProcessorSupplier<T> supplier : suppliers) {
+            DecatonProcessor<T> processor = supplier.getProcessor(scope.subscriptionId(),
+                                                                  scope.topicPartition(),
+                                                                  scope.threadId());
+            processors.add(processor);
+        }
+        return processors;
     }
 
     public void destroySingletonScope(String subscriptionId) {
