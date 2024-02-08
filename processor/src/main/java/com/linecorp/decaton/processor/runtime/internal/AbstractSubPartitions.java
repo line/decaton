@@ -16,15 +16,14 @@
 
 package com.linecorp.decaton.processor.runtime.internal;
 
-import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Stream;
 
 import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.metrics.Metrics;
 import com.linecorp.decaton.processor.metrics.Metrics.PerPartitionMetrics;
+import com.linecorp.decaton.processor.metrics.Metrics.SchedulerMetrics;
 import com.linecorp.decaton.processor.runtime.PerKeyQuotaConfig;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.Property;
@@ -49,7 +48,8 @@ public abstract class AbstractSubPartitions implements SubPartitions {
     // Sharing this limiter object with all processor threads
     // can make processing unfair but it likely gives better overall throughput
     protected final RateLimiter rateLimiter;
-    protected final PerPartitionMetrics metrics;
+    protected final PerPartitionMetrics perPartitionMetrics;
+    protected final SchedulerMetrics schedulerMetrics;
 
     public AbstractSubPartitions(PartitionScope scope, Processors<?> processors) {
         this.scope = scope;
@@ -57,19 +57,19 @@ public abstract class AbstractSubPartitions implements SubPartitions {
         shutdownTimeoutMillis = scope.props().get(
                 ProcessorProperties.CONFIG_PROCESSOR_THREADS_TERMINATION_TIMEOUT_MS);
         rateLimiter = new DynamicRateLimiter(rateProperty(scope));
-        metrics = Metrics.withTags(
+        Metrics metrics = Metrics.withTags(
                 "subscription", scope.subscriptionId(),
                 "topic", scope.topic(),
-                "partition", String.valueOf(scope.topicPartition().partition()))
-                .new PerPartitionMetrics();
+                "partition", String.valueOf(scope.topicPartition().partition()));
+        perPartitionMetrics = metrics.new PerPartitionMetrics();
+        schedulerMetrics = metrics.new SchedulerMetrics();
     }
 
     // visible for testing
-    ProcessorUnit createUnit(int threadId, ExecutorService executor) {
-        ThreadScope threadScope = new ThreadScope(scope, threadId);
-        ExecutionScheduler scheduler = new ExecutionScheduler(threadScope, rateLimiter);
-        ProcessPipeline<?> pipeline = processors.newPipeline(threadScope, scheduler, metrics);
-        return new ProcessorUnit(threadScope, pipeline, executor);
+    ProcessorUnit createUnit(ThreadScope scope, ExecutorService executor) {
+        ExecutionScheduler scheduler = new ExecutionScheduler(scope, rateLimiter, schedulerMetrics);
+        ProcessPipeline<?> pipeline = processors.newPipeline(scope, scheduler, perPartitionMetrics);
+        return new ProcessorUnit(scope, pipeline, executor);
     }
 
     // visible for testing
@@ -86,26 +86,25 @@ public abstract class AbstractSubPartitions implements SubPartitions {
         processors.destroyThreadScope(scope.subscriptionId(), scope.topicPartition(), threadId);
     }
 
-    protected CompletableFuture<Void> closeProcessorUnitsAsync(Stream<ProcessorUnit> units) {
-        return CompletableFuture.allOf(
-                units.map(unit -> {
-                    try {
-                        return unit.asyncClose()
-                                              .thenApply(ignored -> null) // To migrate type from Void to Object
-                                              .completeOnTimeout(TIMEOUT_INDICATOR,
-                                                                 shutdownTimeoutMillis.value(),
-                                                                 TimeUnit.MILLISECONDS)
-                                              .whenComplete((indicator, e) -> {
-                                                  if (indicator == TIMEOUT_INDICATOR) {
-                                                      log.error("Processor unit termination timed out {}", unit.id());
-                                                  }
-                                                  destroyThreadProcessor(unit.id());
-                                              });
-                    } catch (RuntimeException e) {
-                        log.error("Processor unit threw exception on shutdown", e);
-                        return null;
-                    }
-                }).filter(Objects::nonNull).toArray(CompletableFuture[]::new));
+    protected CompletableFuture<Object> closeUnitAsync(ProcessorUnit unit) {
+        try {
+            return unit.asyncClose()
+                       .thenApply(ignored -> null) // To migrate type from Void to Object
+                       .completeOnTimeout(TIMEOUT_INDICATOR,
+                                          shutdownTimeoutMillis.value(),
+                                          TimeUnit.MILLISECONDS)
+                       .whenComplete((indicator, e) -> {
+                           if (indicator == TIMEOUT_INDICATOR) {
+                               log.error("Processor unit termination timed out {}", unit.id());
+                           }
+                           destroyThreadProcessor(unit.id());
+                       });
+        } catch (RuntimeException e) {
+            log.error("Processor unit threw exception on shutdown {}", unit.id(), e);
+            CompletableFuture<Object> fut = new CompletableFuture<>();
+            fut.completeExceptionally(e);
+            return fut;
+        }
     }
 
     public CompletableFuture<Void> asyncClose(CompletableFuture<Void> unitsShutdown) {
@@ -115,6 +114,9 @@ public abstract class AbstractSubPartitions implements SubPartitions {
             log.error("Error thrown while closing rate limiter", e);
         }
 
-        return unitsShutdown.whenComplete((ignored, ignored2) -> metrics.close());
+        return unitsShutdown.whenComplete((ignored, ignoredE) -> {
+            schedulerMetrics.close();
+            perPartitionMetrics.close();
+        });
     }
 }

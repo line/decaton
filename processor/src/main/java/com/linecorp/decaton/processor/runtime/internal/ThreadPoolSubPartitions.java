@@ -17,19 +17,32 @@
 package com.linecorp.decaton.processor.runtime.internal;
 
 import java.util.Arrays;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
+import com.linecorp.decaton.processor.metrics.Metrics;
+import com.linecorp.decaton.processor.metrics.Metrics.ThreadUtilizationMetrics;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.SubPartitioner;
+import com.linecorp.decaton.processor.runtime.internal.Utils.Timer;
 
+import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class ThreadPoolSubPartitions extends AbstractSubPartitions {
+    @AllArgsConstructor
+    private static class SubPartition {
+        ProcessorUnit unit;
+        ThreadUtilizationMetrics threadUtilMetrics;
+    }
+
     private final SubPartitioner subPartitioner;
-    private final ProcessorUnit[] units;
+    private final SubPartition[] subPartitions;
 
     public ThreadPoolSubPartitions(PartitionScope scope, Processors<?> processors) {
         super(scope, processors);
@@ -45,18 +58,43 @@ public class ThreadPoolSubPartitions extends AbstractSubPartitions {
         //   4. at next subscription loop, all processors are reloaded with 3 again, then start processing
         int concurrency = scope.props().get(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY).value();
         subPartitioner = scope.subPartitionerSupplier().get(concurrency);
-        units = new ProcessorUnit[concurrency];
+        subPartitions = new SubPartition[concurrency];
     }
 
     @Override
     public void addTask(TaskRequest request) {
         int threadId = subPartitioner.subPartitionFor(request.key());
-        if (units[threadId] == null) {
-            ExecutorService executor = Executors.newSingleThreadExecutor(
-                    Utils.namedThreadFactory("PartitionProcessorThread-" + scope));
-            units[threadId] = createUnit(threadId, executor);
+        SubPartition subPartition = subPartitions[threadId];
+        if (subPartition == null) {
+            ThreadScope threadScope = new ThreadScope(scope, threadId);
+            ThreadUtilizationMetrics metrics =
+                    Metrics.withTags("subscription", threadScope.subscriptionId(),
+                                     "topic", threadScope.topic(),
+                                     "partition", String.valueOf(threadScope.topicPartition().partition()),
+                                     "subpartition", String.valueOf(threadId))
+                            .new ThreadUtilizationMetrics();
+            ExecutorService executor = createExecutorService(threadScope, metrics);
+            ProcessorUnit unit = createUnit(threadScope, executor);
+            subPartition = subPartitions[threadId] = new SubPartition(unit, metrics);
         }
-        units[threadId].putTask(request);
+        subPartition.threadUtilMetrics.tasksQueued.increment();
+        subPartition.unit.putTask(request);
+    }
+
+    private static ExecutorService createExecutorService(ThreadScope scope, ThreadUtilizationMetrics metrics) {
+        return new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
+                                      new LinkedBlockingQueue<>(),
+                                      Utils.namedThreadFactory("PartitionProcessorThread-" + scope)) {
+            @Override
+            public void execute(Runnable command) {
+                Timer timer = Utils.timer();
+                try {
+                    super.execute(command);
+                } finally {
+                    metrics.processorProcessedTime.record(timer.duration());
+                }
+            }
+        };
     }
 
     @Override
@@ -66,6 +104,11 @@ public class ThreadPoolSubPartitions extends AbstractSubPartitions {
 
     @Override
     public CompletableFuture<Void> asyncClose() {
-        return asyncClose(closeProcessorUnitsAsync(Arrays.stream(units)));
+        return asyncClose(CompletableFuture.allOf(
+                Arrays.stream(subPartitions)
+                      .filter(Objects::nonNull)
+                      .map(subPartition -> closeUnitAsync(subPartition.unit).whenComplete(
+                              (ignored, ignoredE) -> subPartition.threadUtilMetrics.close()))
+                      .toArray(CompletableFuture[]::new)));
     }
 }

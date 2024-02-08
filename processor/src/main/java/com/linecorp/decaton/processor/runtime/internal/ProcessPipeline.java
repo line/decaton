@@ -18,21 +18,20 @@ package com.linecorp.decaton.processor.runtime.internal;
 
 import java.time.Clock;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.TimeUnit;
 
-import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.Completion;
+import com.linecorp.decaton.processor.DecatonProcessor;
+import com.linecorp.decaton.processor.LoggingContext;
+import com.linecorp.decaton.processor.ProcessingContext;
 import com.linecorp.decaton.processor.metrics.Metrics.PerPartitionMetrics;
 import com.linecorp.decaton.processor.runtime.DecatonTask;
-import com.linecorp.decaton.processor.ProcessingContext;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.TaskExtractor;
-import com.linecorp.decaton.processor.LoggingContext;
 import com.linecorp.decaton.processor.runtime.internal.Utils.Timer;
 
 import lombok.extern.slf4j.Slf4j;

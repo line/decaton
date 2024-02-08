@@ -22,6 +22,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -47,7 +48,7 @@ public class VirtualThreadSubPartitions extends AbstractSubPartitions {
         units.computeIfAbsent(threadId, key -> {
             ExecutorService executor = Executors.newSingleThreadExecutor(
                     Utils.namedVirtualThreadFactory("PartitionProcessorVThread-" + scope));
-            return createUnit(threadId, executor);
+            return createUnit(new ThreadScope(scope, threadId), executor);
         }).putTask(request);
     }
 
@@ -73,6 +74,8 @@ public class VirtualThreadSubPartitions extends AbstractSubPartitions {
 
     @Override
     public CompletableFuture<Void> asyncClose() {
-        return asyncClose(closeProcessorUnitsAsync(units.values().stream()));
+        return asyncClose(CompletableFuture.allOf(
+                units.values().stream().map(this::closeUnitAsync)
+                     .toArray(CompletableFuture[]::new)));
     }
 }

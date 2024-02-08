@@ -21,10 +21,6 @@ import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import org.apache.kafka.common.TopicPartition;
-
-import com.linecorp.decaton.processor.metrics.Metrics;
-import com.linecorp.decaton.processor.metrics.Metrics.ResourceUtilizationMetrics;
 import com.linecorp.decaton.processor.runtime.AsyncClosable;
 import com.linecorp.decaton.processor.runtime.internal.Utils.Timer;
 
@@ -39,7 +35,6 @@ public class ProcessorUnit implements AsyncClosable {
     private final int id;
     private final ProcessPipeline<?> pipeline;
     private final ExecutorService executor;
-//    private final ResourceUtilizationMetrics metrics;
     private final AtomicInteger pendingTask;
 
     private volatile boolean terminated;
@@ -50,16 +45,9 @@ public class ProcessorUnit implements AsyncClosable {
         this.executor = executor;
 
         pendingTask = new AtomicInteger();
-        TopicPartition tp = scope.topicPartition();
-//        metrics = Metrics.withTags("subscription", scope.subscriptionId(),
-//                                   "topic", tp.topic(),
-//                                   "partition", String.valueOf(tp.partition()),
-//                                   "subpartition", String.valueOf(scope.threadId()))
-//                .new ResourceUtilizationMetrics();
     }
 
     public void putTask(TaskRequest request) {
-//        metrics.tasksQueued.increment();
         pendingTask.incrementAndGet();
         try {
             executor.execute(() -> processTask(request));
@@ -77,7 +65,6 @@ public class ProcessorUnit implements AsyncClosable {
             return;
         }
 
-        Timer timer = Utils.timer();
         CompletionStage<Void> processCompletion = CompletableFuture.completedFuture(null);
         try {
             processCompletion = pipeline.scheduleThenProcess(request);
@@ -87,11 +74,6 @@ public class ProcessorUnit implements AsyncClosable {
             }
             log.error("Error while processing request {}. Corresponding offset will be left uncommitted.",
                       request, e);
-        } finally {
-            // This metric measures the total amount of time the processors were processing tasks including time
-            // for scheduling those tasks and is used to refer processor threads utilization, so it needs to measure
-            // entire time of schedule and process.
-//            metrics.processorProcessedTime.record(timer.duration());
         }
         processCompletion.whenComplete((ignored, ignoredE) -> pendingTask.decrementAndGet());
     }
@@ -111,6 +93,5 @@ public class ProcessorUnit implements AsyncClosable {
         });
         executor.shutdown();
         return shutdownComplete;
-//        return shutdownComplete.whenComplete((unused, unused2) -> metrics.close());
     }
 }

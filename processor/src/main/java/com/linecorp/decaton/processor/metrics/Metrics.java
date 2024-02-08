@@ -213,7 +213,8 @@ public class Metrics {
                                    .register(registry));
     }
 
-    public class ResourceUtilizationMetrics extends AbstractMetrics {
+
+    public class ThreadUtilizationMetrics extends AbstractMetrics {
         public final Timer processorProcessedTime =
                 meter(() -> Timer.builder("processor.processed.time")
                                  .description("The accumulated time the processor were processing tasks")

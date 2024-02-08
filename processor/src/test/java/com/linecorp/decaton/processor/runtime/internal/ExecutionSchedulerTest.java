@@ -45,6 +45,8 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import com.linecorp.decaton.processor.TaskMetadata;
+import com.linecorp.decaton.processor.metrics.Metrics;
+import com.linecorp.decaton.processor.metrics.Metrics.SchedulerMetrics;
 import com.linecorp.decaton.processor.runtime.DefaultSubPartitioner;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.SubPartitionRuntime;
@@ -75,7 +77,10 @@ public class ExecutionSchedulerTest {
     @BeforeEach
     public void setUp() {
         doAnswer(invocation -> System.currentTimeMillis()).when(currentTimeMillis).get();
-        scheduler = spy(new ExecutionScheduler(scope, rateLimiter, currentTimeMillis));
+        SchedulerMetrics metrics = Metrics.withTags("subscription", "sub",
+                                                    "topic", "topic",
+                                                    "partition", "0").new SchedulerMetrics();
+        scheduler = spy(new ExecutionScheduler(scope, rateLimiter, metrics, currentTimeMillis));
     }
 
     @Test
