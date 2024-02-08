@@ -27,19 +27,18 @@ import java.util.function.Function;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 
+import com.linecorp.decaton.processor.TaskMetadata;
 import com.linecorp.decaton.processor.metrics.Metrics;
 import com.linecorp.decaton.processor.runtime.DecatonTask;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
+import com.linecorp.decaton.processor.runtime.ProcessorSubscription;
 import com.linecorp.decaton.processor.runtime.ProcessorsBuilder;
 import com.linecorp.decaton.processor.runtime.Property;
 import com.linecorp.decaton.processor.runtime.StaticPropertySupplier;
 import com.linecorp.decaton.processor.runtime.SubPartitionRuntime;
+import com.linecorp.decaton.processor.runtime.SubscriptionBuilder;
 import com.linecorp.decaton.processor.runtime.SubscriptionStateListener;
 import com.linecorp.decaton.processor.runtime.TaskExtractor;
-import com.linecorp.decaton.processor.TaskMetadata;
-import com.linecorp.decaton.processor.runtime.ProcessorScope;
-import com.linecorp.decaton.processor.runtime.ProcessorSubscription;
-import com.linecorp.decaton.processor.runtime.SubscriptionBuilder;
 
 import io.micrometer.core.instrument.Clock;
 import io.micrometer.core.instrument.logging.LoggingMeterRegistry;
@@ -114,11 +113,10 @@ public class DecatonRunner implements Runner {
                                                                 TaskMetadata.builder().build(), task, bytes);
                                                     })
                                          .thenProcess(
-                                                 () -> (ctx, task) -> {
+                                                 (ctx, task) -> {
                                                      resourceTracker.track(Thread.currentThread().getId());
                                                      recording.process(task);
-                                                 },
-                                                 ProcessorScope.THREAD))
+                                                 }))
                 .stateListener(state -> {
                     if (state == SubscriptionStateListener.State.RUNNING) {
                         startLatch.countDown();
