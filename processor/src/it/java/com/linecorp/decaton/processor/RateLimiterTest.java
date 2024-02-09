@@ -18,9 +18,9 @@ package com.linecorp.decaton.processor;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 
 import org.junit.jupiter.api.AfterEach;
@@ -38,7 +38,6 @@ import com.linecorp.decaton.processor.runtime.StaticPropertySupplier;
 import com.linecorp.decaton.processor.internal.HashableByteArray;
 import com.linecorp.decaton.protobuf.ProtocolBuffersDeserializer;
 import com.linecorp.decaton.protocol.Sample.HelloTask;
-import com.linecorp.decaton.testing.ConcurrentHashSet;
 import com.linecorp.decaton.testing.KafkaClusterExtension;
 import com.linecorp.decaton.testing.TestUtils;
 
@@ -66,7 +65,7 @@ public class RateLimiterTest {
         for (int i = 0; i < 10000; i++) {
             keys.add("key" + i);
         }
-        Set<HashableByteArray> processedKeys = new ConcurrentHashSet<>();
+        Set<HashableByteArray> processedKeys = ConcurrentHashMap.newKeySet();
         CountDownLatch processLatch = new CountDownLatch(keys.size());
 
         DecatonProcessor<HelloTask> processor = (context, task) -> {

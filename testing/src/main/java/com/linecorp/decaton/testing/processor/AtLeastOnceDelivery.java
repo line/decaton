@@ -20,13 +20,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 import com.linecorp.decaton.processor.TaskMetadata;
-import com.linecorp.decaton.testing.ConcurrentHashSet;
 
 public class AtLeastOnceDelivery implements ProcessingGuarantee {
-    private final Set<String> producedIds = new ConcurrentHashSet<>();
-    private final Set<String> processedIds = new ConcurrentHashSet<>();
+    private final Set<String> producedIds = ConcurrentHashMap.newKeySet();
+    private final Set<String> processedIds = ConcurrentHashMap.newKeySet();
 
     @Override
     public void onProduce(ProducedRecord record) {

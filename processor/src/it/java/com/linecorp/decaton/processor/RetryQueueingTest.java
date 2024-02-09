@@ -21,6 +21,7 @@ import java.io.UncheckedIOException;
 import java.time.Duration;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -39,7 +40,6 @@ import com.linecorp.decaton.processor.runtime.RetryConfig;
 import com.linecorp.decaton.processor.runtime.StaticPropertySupplier;
 import com.linecorp.decaton.processor.runtime.TaskExtractor;
 import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
-import com.linecorp.decaton.testing.ConcurrentHashSet;
 import com.linecorp.decaton.testing.KafkaClusterExtension;
 import com.linecorp.decaton.testing.TestUtils;
 import com.linecorp.decaton.testing.processor.ProcessedRecord;
@@ -78,8 +78,8 @@ public class RetryQueueingTest {
     }
 
     private static class ProcessRetriedTask implements ProcessingGuarantee {
-        private final Set<String> producedIds = new ConcurrentHashSet<>();
-        private final Set<String> processedIds = new ConcurrentHashSet<>();
+        private final Set<String> producedIds = ConcurrentHashMap.newKeySet();
+        private final Set<String> processedIds = ConcurrentHashMap.newKeySet();
 
         @Override
         public void onProduce(ProducedRecord record) {
