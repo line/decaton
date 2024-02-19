@@ -40,7 +40,6 @@ class UtilsTest {
     @Timeout(5)
     void completeOnTimeoutTO() {
         CompletableFuture<Object> fut = new CompletableFuture<>();
-        Object success = new Object();
         Object timeout = new Object();
         Utils.completeOnTimeout(fut, timeout, 1000);
         assertSame(timeout, fut.join());
