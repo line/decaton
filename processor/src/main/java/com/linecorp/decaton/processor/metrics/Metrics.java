@@ -152,7 +152,7 @@ public class Metrics {
         }
     }
 
-    public class PerPartitionMetrics extends AbstractMetrics {
+    public class TaskMetrics extends AbstractMetrics {
         public final Counter tasksProcessed =
                 meter(() -> Counter.builder("tasks.processed")
                                    .description("The number of tasks processed")

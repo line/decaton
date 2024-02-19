@@ -22,7 +22,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.linecorp.decaton.processor.runtime.AsyncClosable;
-import com.linecorp.decaton.processor.runtime.internal.Utils.Timer;
 
 import lombok.Getter;
 import lombok.experimental.Accessors;
@@ -65,13 +64,14 @@ public class ProcessorUnit implements AsyncClosable {
             return;
         }
 
-        CompletionStage<Void> processCompletion = CompletableFuture.completedFuture(null);
+        CompletionStage<Void> processCompletion;
         try {
             processCompletion = pipeline.scheduleThenProcess(request);
         } catch (Exception e) {
             if (e instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
             }
+            processCompletion = CompletableFuture.completedFuture(null);
             log.error("Error while processing request {}. Corresponding offset will be left uncommitted.",
                       request, e);
         }

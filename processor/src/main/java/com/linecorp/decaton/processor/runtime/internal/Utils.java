@@ -23,6 +23,9 @@ import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -39,8 +42,6 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 public final class Utils {
-    private static final Logger logger = LoggerFactory.getLogger(Utils.class);
-
     // NumberFormat isn't thread-safe so we have to create and cache an instance for each thread.
     private static final ThreadLocal<NumberFormat> numberFormat =
             ThreadLocal.withInitial(() -> NumberFormat.getNumberInstance(Locale.US));
@@ -197,7 +198,7 @@ public final class Utils {
                          try {
                              t.run();
                          } catch (Exception e) {
-                             logger.error("{} - execution failed", subject, e);
+                             log.error("{} - execution failed", subject, e);
                              throw new RuntimeException(e);
                          }
                      }, executor))
@@ -205,5 +206,33 @@ public final class Utils {
 
         return CompletableFuture.allOf(results)
                                 .whenComplete((v, e) -> executor.shutdown());
+    }
+
+    private static final ScheduledExecutorService scheduledExecutor;
+    static {
+        ((ScheduledThreadPoolExecutor) (scheduledExecutor =
+                Executors.newScheduledThreadPool(1, r -> {
+                    Thread th = namedThreadFactory(
+                            "CompletableFutureCanceller").newThread(r);
+                    th.setDaemon(true);
+                    return th;
+                }))).setRemoveOnCancelPolicy(true);
+    }
+
+    public static <T> CompletableFuture<T> completeOnTimeout(CompletableFuture<T> cf, T value, long timeoutMs) {
+        if (cf.isDone()) {
+            return cf;
+        }
+        ScheduledFuture<?> cancelFut = scheduledExecutor.schedule(() -> {
+            if (!cf.isDone()) {
+                cf.complete(value);
+            }
+        }, timeoutMs, TimeUnit.MILLISECONDS);
+        cf.whenComplete((t, throwable) -> {
+            if (!cancelFut.isDone()) {
+                cancelFut.cancel(false);
+            }
+        });
+        return cf;
     }
 }

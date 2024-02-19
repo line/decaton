@@ -28,7 +28,7 @@ import com.linecorp.decaton.processor.Completion;
 import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.LoggingContext;
 import com.linecorp.decaton.processor.ProcessingContext;
-import com.linecorp.decaton.processor.metrics.Metrics.PerPartitionMetrics;
+import com.linecorp.decaton.processor.metrics.Metrics.TaskMetrics;
 import com.linecorp.decaton.processor.runtime.DecatonTask;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.TaskExtractor;
@@ -43,7 +43,7 @@ public class ProcessPipeline<T> implements AutoCloseable {
     private final DecatonProcessor<byte[]> retryProcessor;
     private final TaskExtractor<T> taskExtractor;
     private final ExecutionScheduler scheduler;
-    private final PerPartitionMetrics metrics;
+    private final TaskMetrics metrics;
     private final Clock clock;
     private volatile boolean terminated;
 
@@ -52,7 +52,7 @@ public class ProcessPipeline<T> implements AutoCloseable {
                     DecatonProcessor<byte[]> retryProcessor,
                     TaskExtractor<T> taskExtractor,
                     ExecutionScheduler scheduler,
-                    PerPartitionMetrics metrics,
+                    TaskMetrics metrics,
                     Clock clock) {
         this.scope = scope;
         this.processors = Collections.unmodifiableList(processors);
@@ -68,7 +68,7 @@ public class ProcessPipeline<T> implements AutoCloseable {
                            DecatonProcessor<byte[]> retryProcessor,
                            TaskExtractor<T> taskExtractor,
                            ExecutionScheduler scheduler,
-                           PerPartitionMetrics metrics) {
+                           TaskMetrics metrics) {
         this(scope, processors, retryProcessor, taskExtractor, scheduler, metrics, Clock.systemDefaultZone());
     }
 

@@ -50,9 +50,6 @@ public class VThreadCoreFunctionalityTest {
                     // adding some random delay to simulate realistic usage
                     Thread.sleep(rand.nextInt(10));
                 }))
-                .propertySupplier(StaticPropertySupplier.of(
-                        Property.ofStatic(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY, 16)
-                ))
                 .build()
                 .run();
     }
@@ -67,9 +64,6 @@ public class VThreadCoreFunctionalityTest {
                 .configureProcessorsBuilder(
                         builder -> builder.thenProcess(
                                 () -> (ctx, task) -> Thread.sleep(rand.nextInt(10)), ProcessorScope.PARTITION))
-                .propertySupplier(StaticPropertySupplier.of(
-                        Property.ofStatic(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY, 16)
-                ))
                 .build()
                 .run();
     }
@@ -84,9 +78,6 @@ public class VThreadCoreFunctionalityTest {
                 .configureProcessorsBuilder(
                         builder -> builder.thenProcess(
                                 () -> (ctx, task) -> Thread.sleep(rand.nextInt(10)), ProcessorScope.THREAD))
-                .propertySupplier(StaticPropertySupplier.of(
-                        Property.ofStatic(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY, 16)
-                ))
                 .build()
                 .run();
     }

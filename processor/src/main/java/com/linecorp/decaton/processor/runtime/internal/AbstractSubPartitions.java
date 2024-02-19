@@ -22,7 +22,7 @@ import java.util.concurrent.TimeUnit;
 
 import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.metrics.Metrics;
-import com.linecorp.decaton.processor.metrics.Metrics.PerPartitionMetrics;
+import com.linecorp.decaton.processor.metrics.Metrics.TaskMetrics;
 import com.linecorp.decaton.processor.metrics.Metrics.SchedulerMetrics;
 import com.linecorp.decaton.processor.runtime.PerKeyQuotaConfig;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
@@ -48,10 +48,10 @@ public abstract class AbstractSubPartitions implements SubPartitions {
     // Sharing this limiter object with all processor threads
     // can make processing unfair but it likely gives better overall throughput
     protected final RateLimiter rateLimiter;
-    protected final PerPartitionMetrics perPartitionMetrics;
+    protected final TaskMetrics taskMetrics;
     protected final SchedulerMetrics schedulerMetrics;
 
-    public AbstractSubPartitions(PartitionScope scope, Processors<?> processors) {
+    protected AbstractSubPartitions(PartitionScope scope, Processors<?> processors) {
         this.scope = scope;
         this.processors = processors;
         shutdownTimeoutMillis = scope.props().get(
@@ -61,14 +61,14 @@ public abstract class AbstractSubPartitions implements SubPartitions {
                 "subscription", scope.subscriptionId(),
                 "topic", scope.topic(),
                 "partition", String.valueOf(scope.topicPartition().partition()));
-        perPartitionMetrics = metrics.new PerPartitionMetrics();
+        taskMetrics = metrics.new TaskMetrics();
         schedulerMetrics = metrics.new SchedulerMetrics();
     }
 
     // visible for testing
     ProcessorUnit createUnit(ThreadScope scope, ExecutorService executor) {
         ExecutionScheduler scheduler = new ExecutionScheduler(scope, rateLimiter, schedulerMetrics);
-        ProcessPipeline<?> pipeline = processors.newPipeline(scope, scheduler, perPartitionMetrics);
+        ProcessPipeline<?> pipeline = processors.newPipeline(scope, scheduler, taskMetrics);
         return new ProcessorUnit(scope, pipeline, executor);
     }
 
@@ -88,17 +88,16 @@ public abstract class AbstractSubPartitions implements SubPartitions {
 
     protected CompletableFuture<Object> closeUnitAsync(ProcessorUnit unit) {
         try {
-            return unit.asyncClose()
-                       .thenApply(ignored -> null) // To migrate type from Void to Object
-                       .completeOnTimeout(TIMEOUT_INDICATOR,
-                                          shutdownTimeoutMillis.value(),
-                                          TimeUnit.MILLISECONDS)
-                       .whenComplete((indicator, e) -> {
-                           if (indicator == TIMEOUT_INDICATOR) {
-                               log.error("Processor unit termination timed out {}", unit.id());
-                           }
-                           destroyThreadProcessor(unit.id());
-                       });
+            return Utils.completeOnTimeout(unit.asyncClose()
+                                               .thenApply(ignored -> null), // To migrate type from Void to Object
+                                           TIMEOUT_INDICATOR,
+                                           shutdownTimeoutMillis.value())
+                        .whenComplete((indicator, e) -> {
+                            if (indicator == TIMEOUT_INDICATOR) {
+                                log.error("Processor unit termination timed out {}", unit.id());
+                            }
+                            destroyThreadProcessor(unit.id());
+                        });
         } catch (RuntimeException e) {
             log.error("Processor unit threw exception on shutdown {}", unit.id(), e);
             CompletableFuture<Object> fut = new CompletableFuture<>();
@@ -116,7 +115,7 @@ public abstract class AbstractSubPartitions implements SubPartitions {
 
         return unitsShutdown.whenComplete((ignored, ignoredE) -> {
             schedulerMetrics.close();
-            perPartitionMetrics.close();
+            taskMetrics.close();
         });
     }
 }
