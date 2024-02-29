@@ -32,9 +32,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -211,7 +208,7 @@ public final class Utils {
     private static final ScheduledExecutorService scheduledExecutor;
     static {
         ((ScheduledThreadPoolExecutor) (scheduledExecutor =
-                Executors.newScheduledThreadPool(1, r -> {
+                Executors.newScheduledThreadPool(Math.min(8, Runtime.getRuntime().availableProcessors()), r -> {
                     Thread th = namedThreadFactory(
                             "CompletableFutureCanceller").newThread(r);
                     th.setDaemon(true);
