@@ -41,6 +41,7 @@ import com.linecorp.decaton.processor.runtime.DefaultSubPartitioner;
 import com.linecorp.decaton.processor.runtime.PerKeyQuotaConfig;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.Property;
+import com.linecorp.decaton.processor.runtime.SubPartitionRuntime;
 import com.linecorp.decaton.processor.runtime.internal.PerKeyQuotaManager.UsageType;
 import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider;
 import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider.NoopTrace;
@@ -53,6 +54,7 @@ public class PartitionContextTest {
     private static PartitionScope scope(String topic, Optional<PerKeyQuotaConfig> perKeyQuotaConfig) {
         return new PartitionScope(
                 new SubscriptionScope("subscription", "topic",
+                                      SubPartitionRuntime.THREAD_POOL,
                                       Optional.empty(), perKeyQuotaConfig,
                                       ProcessorProperties.builder().set(MAX_PENDING_RECORDS).build(),
                                       NoopTracingProvider.INSTANCE,
@@ -64,7 +66,7 @@ public class PartitionContextTest {
     @Mock
     private Processors<?> processors;
     @Mock
-    private PartitionProcessor partitionProcessor;
+    private SubPartitions subPartitions;
     @Mock
     private ConsumerRecord<byte[], byte[]> record;
 
@@ -146,10 +148,10 @@ public class PartitionContextTest {
         PartitionContext context = new PartitionContext(
                 scope("topic-shaping", Optional.of(PerKeyQuotaConfig.shape())),
                 processors,
-                partitionProcessor);
+                subPartitions);
 
         context.addRecord(record, new OffsetState(42L), NoopTrace.INSTANCE, (r, o, q) -> true);
-        verify(partitionProcessor, never()).addTask(any());
+        verify(subPartitions, never()).addTask(any());
     }
 
     @Test
@@ -157,9 +159,9 @@ public class PartitionContextTest {
         PartitionContext context = new PartitionContext(
                 scope("topic-shaping", Optional.of(PerKeyQuotaConfig.shape())),
                 processors,
-                partitionProcessor);
+                subPartitions);
 
         context.addRecord(record, new OffsetState(42L), NoopTrace.INSTANCE, (r, o, q) -> false);
-        verify(partitionProcessor, times(1)).addTask(any());
+        verify(subPartitions, times(1)).addTask(any());
     }
 }

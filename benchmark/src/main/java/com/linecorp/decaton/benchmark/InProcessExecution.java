@@ -52,7 +52,8 @@ public class InProcessExecution implements Execution {
 
         log.info("Loading runner {}", bmConfig.runner());
         Runner runner = Runner.fromClassName(bmConfig.runner());
-        Recording recording = new Recording(bmConfig.tasks(), bmConfig.warmupTasks());
+        Recording recording = new Recording(bmConfig.tasks(), bmConfig.warmupTasks(),
+                                            bmConfig.latencyCount());
         ResourceTracker resourceTracker = new ResourceTracker();
         log.info("Initializing runner {}", bmConfig.runner());
 
@@ -68,6 +69,7 @@ public class InProcessExecution implements Execution {
         final Optional<Path> profilerOutput;
         final Optional<Path> taskstatsOutput;
         try {
+            profiling.start();
             stageCallback.accept(Stage.READY_WARMUP);
             if (!recording.awaitWarmupComplete(3, TimeUnit.MINUTES)) {
                 throw new RuntimeException("timeout on awaiting benchmark to complete");
@@ -75,6 +77,7 @@ public class InProcessExecution implements Execution {
             if (!bmConfig.skipWaitingJIT()) {
                 awaitJITGetsSettled();
             }
+            profiling.stop();
 
             profiling.start();
             JvmTracker jvmTracker = JvmTracker.create();

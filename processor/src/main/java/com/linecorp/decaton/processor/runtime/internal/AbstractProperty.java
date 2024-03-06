@@ -18,6 +18,7 @@ package com.linecorp.decaton.processor.runtime.internal;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BiConsumer;
 
 import org.slf4j.Logger;
@@ -31,10 +32,12 @@ public abstract class AbstractProperty<T> implements Property<T> {
 
     private final PropertyDefinition<T> definition;
     private final List<BiConsumer<T, T>> listeners;
+    private final ReentrantLock listenersLock;
 
     protected AbstractProperty(PropertyDefinition<T> definition) {
         this.definition = definition;
         listeners = new ArrayList<>();
+        listenersLock = new ReentrantLock();
     }
 
     @Override
@@ -44,8 +47,11 @@ public abstract class AbstractProperty<T> implements Property<T> {
 
     @Override
     public void listen(BiConsumer<T, T> listener) {
-        synchronized (listeners) {
+        listenersLock.lock();
+        try {
             listeners.add(listener);
+        } finally {
+            listenersLock.unlock();
         }
         // On registration, listener receives notification for initializing value reference.
         notifyListener(listener, null, value());
@@ -71,8 +77,11 @@ public abstract class AbstractProperty<T> implements Property<T> {
     }
 
     protected void notifyListeners(T oldValue, T newValue) {
-        synchronized (listeners) {
+        listenersLock.lock();
+        try {
             listeners.forEach(l -> notifyListener(l, oldValue, newValue));
+        } finally {
+            listenersLock.unlock();
         }
     }
 }

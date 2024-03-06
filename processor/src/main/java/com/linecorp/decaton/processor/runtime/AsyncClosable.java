@@ -16,12 +16,8 @@
 
 package com.linecorp.decaton.processor.runtime;
 
-import java.time.Duration;
-import java.util.concurrent.CompletionStage;
-import java.util.concurrent.ExecutionException;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 /**
  * Represents a service with a two-stage shutdown process, vaguely analogous to that of {@link ExecutorService}:
@@ -33,50 +29,20 @@ import java.util.concurrent.TimeoutException;
  * Although the worst-case time is the same as simply calling close on each instance in turn, in practice this
  * will usually lead to a quicker overall shutdown process.
  */
-public interface AsyncShutdownable extends AutoCloseable {
+public interface AsyncClosable extends AutoCloseable {
     /**
-     * Start the shutdown process but return without blocking.
-     * Actual shutdown may be ongoing asynchronously after this method returns.
-     * Use {@link #awaitShutdown()} to wait for shutdown to complete.
+     * Initiate closing process of this instance and return a {@link CompletableFuture} that completes when entire
+     * closing process ends.
+     *
+     * @return a {@link CompletableFuture} that completes when entire closing process ends.
      */
-    void initiateShutdown();
-
-    /**
-     * @return A {@link CompletionStage} that will be completed when this service shuts down
-     */
-    CompletionStage<Void> shutdownFuture();
-
-    /**
-     * Block until shutdown completes, the given duration limit has passed, or this thread is interrupted.
-     * @param limit maximum time to block for
-     * @throws InterruptedException if this thread is interrupted
-     * @throws TimeoutException if the time passes without shutdown completing
-     * @throws ExecutionException if the shutdown process errors
-     */
-    default void awaitShutdown(Duration limit) throws InterruptedException, TimeoutException,
-                                                      ExecutionException {
-        shutdownFuture().toCompletableFuture().get(limit.toMillis(), TimeUnit.MILLISECONDS);
-    }
-
-    /**
-     * Block until shutdown completes or this thread is interrupted
-     */
-    default void awaitShutdown() throws InterruptedException, ExecutionException {
-        try {
-            awaitShutdown(Duration.ofMillis(Long.MAX_VALUE));
-        } catch (TimeoutException e) {
-            // impossible
-        }
-    }
-
-
+    CompletableFuture<Void> asyncClose();
 
     /**
      * Shut down, blocking until shutdown is complete
      */
     @Override
     default void close() throws Exception {
-        initiateShutdown();
-        awaitShutdown();
+        asyncClose().get();
     }
 }

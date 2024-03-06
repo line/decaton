@@ -50,4 +50,4 @@ if [[ "$*" == *--taskstats* ]] && [[ "$*" != *--taskstats-bin* ]] && ! which jta
     extra_opts="$extra_opts --taskstats-bin=$file"
 fi
 
-exec java -XX:+UseG1GC -cp "$classpath" com.linecorp.decaton.benchmark.Main $extra_opts "$@"
+exec java -server -Xmx8g -Xcomp -XX:+UseG1GC -cp "$classpath" com.linecorp.decaton.benchmark.Main $extra_opts "$@"

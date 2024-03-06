@@ -22,6 +22,7 @@ import java.util.Set;
 
 import com.linecorp.decaton.processor.runtime.PerKeyQuotaConfig;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
+import com.linecorp.decaton.processor.runtime.SubPartitionRuntime;
 import com.linecorp.decaton.processor.runtime.SubPartitionerSupplier;
 import com.linecorp.decaton.processor.tracing.TracingProvider;
 import com.linecorp.decaton.processor.runtime.RetryConfig;
@@ -38,6 +39,7 @@ import lombok.experimental.Accessors;
 public class SubscriptionScope {
     private final String subscriptionId;
     private final String topic;
+    private final SubPartitionRuntime subPartitionRuntime;
     private final Optional<RetryConfig> retryConfig;
     private final Optional<PerKeyQuotaConfig> perKeyQuotaConfig;
     private final ProcessorProperties props;

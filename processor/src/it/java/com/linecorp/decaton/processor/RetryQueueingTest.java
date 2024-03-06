@@ -19,10 +19,9 @@ package com.linecorp.decaton.processor;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.time.Duration;
-import java.util.Collections;
-import java.util.HashSet;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -79,8 +78,8 @@ public class RetryQueueingTest {
     }
 
     private static class ProcessRetriedTask implements ProcessingGuarantee {
-        private final Set<String> producedIds = Collections.synchronizedSet(new HashSet<>());
-        private final Set<String> processedIds = Collections.synchronizedSet(new HashSet<>());
+        private final Set<String> producedIds = ConcurrentHashMap.newKeySet();
+        private final Set<String> processedIds = ConcurrentHashMap.newKeySet();
 
         @Override
         public void onProduce(ProducedRecord record) {
@@ -96,8 +95,13 @@ public class RetryQueueingTest {
 
         @Override
         public void doAssert() {
-            TestUtils.awaitCondition("all retried tasks must be processed",
-                                     () -> producedIds.size() == processedIds.size());
+            try {
+                TestUtils.awaitCondition("all retried tasks must be processed",
+                                         () -> producedIds.size() == processedIds.size());
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new RuntimeException(e);
+            }
         }
     }
 

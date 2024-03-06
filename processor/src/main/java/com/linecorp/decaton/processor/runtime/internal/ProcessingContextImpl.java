@@ -19,6 +19,7 @@ package com.linecorp.decaton.processor.runtime.internal;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Function;
 
 import org.apache.kafka.common.header.Headers;
@@ -46,6 +47,7 @@ public class ProcessingContextImpl<T> implements ProcessingContext<T> {
     private final DecatonProcessor<byte[]> retryQueueingProcessor;
     private final ProcessorProperties props;
     private final AtomicReference<CompletionImpl> deferredCompletion;
+    private final ReentrantLock pushLock;
 
     public ProcessingContextImpl(String subscriptionId,
                                  TaskRequest request,
@@ -60,6 +62,7 @@ public class ProcessingContextImpl<T> implements ProcessingContext<T> {
         this.retryQueueingProcessor = retryQueueingProcessor;
         this.props = props;
         deferredCompletion = new AtomicReference<>();
+        pushLock = new ReentrantLock();
     }
 
     @Override
@@ -151,14 +154,19 @@ public class ProcessingContextImpl<T> implements ProcessingContext<T> {
     /**
      * This method must be synchronized, as it can call downstream's
      * {@link DecatonProcessor#process} directly but upstream might call this method from a thread other than
-     * {@link PartitionProcessor}'s internal threads.
+     * {@link SubPartitions}'s internal threads.
      * In such case, since we don't know if the downstream processor is implemented taking account
      * thread-safety, we have to guarantee that the only one invocation of
      * {@link DecatonProcessor#process} occurs at the time from this context.
      */
     @Override
-    public synchronized Completion push(T task) throws InterruptedException {
-        return pushDownStream(downstreams, task);
+    public Completion push(T task) throws InterruptedException {
+        pushLock.lock();
+        try {
+            return pushDownStream(downstreams, task);
+        } finally {
+            pushLock.unlock();
+        }
     }
 
     @Override

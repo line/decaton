@@ -20,10 +20,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
-import org.apache.kafka.common.TopicPartition;
-
 import com.linecorp.decaton.processor.TaskMetadata;
-import com.linecorp.decaton.processor.metrics.Metrics;
 import com.linecorp.decaton.processor.metrics.Metrics.SchedulerMetrics;
 
 import lombok.extern.slf4j.Slf4j;
@@ -36,21 +33,17 @@ public class ExecutionScheduler implements AutoCloseable {
     private final CountDownLatch terminateLatch;
     private final SchedulerMetrics metrics;
 
-    ExecutionScheduler(ThreadScope scope, RateLimiter rateLimiter, Supplier<Long> currentTimeMillis) {
+    ExecutionScheduler(ThreadScope scope, RateLimiter rateLimiter, SchedulerMetrics metrics,
+                       Supplier<Long> currentTimeMillis) {
         this.scope = scope;
         this.rateLimiter = rateLimiter;
         this.currentTimeMillis = currentTimeMillis;
         terminateLatch = new CountDownLatch(1);
-
-        TopicPartition tp = scope.topicPartition();
-        metrics = Metrics.withTags("subscription", scope.subscriptionId(),
-                                   "topic", tp.topic(),
-                                   "partition", String.valueOf(tp.partition()))
-                .new SchedulerMetrics();
+        this.metrics = metrics;
     }
 
-    public ExecutionScheduler(ThreadScope scope, RateLimiter rateLimiter) {
-        this(scope, rateLimiter, System::currentTimeMillis);
+    public ExecutionScheduler(ThreadScope scope, RateLimiter rateLimiter, SchedulerMetrics metrics) {
+        this(scope, rateLimiter, metrics, System::currentTimeMillis);
     }
 
     // visible for testing

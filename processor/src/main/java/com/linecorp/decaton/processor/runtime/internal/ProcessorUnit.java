@@ -19,45 +19,41 @@ package com.linecorp.decaton.processor.runtime.internal;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 
-import org.apache.kafka.common.TopicPartition;
+import com.linecorp.decaton.processor.runtime.AsyncClosable;
 
-import com.linecorp.decaton.processor.metrics.Metrics;
-import com.linecorp.decaton.processor.metrics.Metrics.ResourceUtilizationMetrics;
-import com.linecorp.decaton.processor.runtime.AsyncShutdownable;
-import com.linecorp.decaton.processor.runtime.internal.Utils.Timer;
-
+import lombok.Getter;
+import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class ProcessorUnit implements AsyncShutdownable {
+@Accessors(fluent = true)
+public class ProcessorUnit implements AsyncClosable {
+    @Getter
+    private final int id;
     private final ProcessPipeline<?> pipeline;
     private final ExecutorService executor;
-    private final CompletableFuture<Void> executorShutdownFuture = new CompletableFuture<>();
-
-    private final ResourceUtilizationMetrics metrics;
+    private final AtomicInteger pendingTask;
 
     private volatile boolean terminated;
-    private final CompletionStage<Void> shutdownFuture;
 
-    public ProcessorUnit(ThreadScope scope, ProcessPipeline<?> pipeline) {
+    public ProcessorUnit(ThreadScope scope, ProcessPipeline<?> pipeline, ExecutorService executor) {
+        this.id = scope.threadId();
         this.pipeline = pipeline;
+        this.executor = executor;
 
-        executor = Executors.newSingleThreadExecutor(
-                Utils.namedThreadFactory("PartitionProcessorThread-" + scope));
-        TopicPartition tp = scope.topicPartition();
-        metrics = Metrics.withTags("subscription", scope.subscriptionId(),
-                                   "topic", tp.topic(),
-                                   "partition", String.valueOf(tp.partition()),
-                                   "subpartition", String.valueOf(scope.threadId()))
-                .new ResourceUtilizationMetrics();
-        shutdownFuture = executorShutdownFuture.thenAccept(v -> metrics.close());
+        pendingTask = new AtomicInteger();
     }
 
     public void putTask(TaskRequest request) {
-        metrics.tasksQueued.increment();
-        executor.execute(() -> processTask(request));
+        pendingTask.incrementAndGet();
+        try {
+            executor.execute(() -> processTask(request));
+        } catch (RuntimeException e) {
+            pendingTask.decrementAndGet();
+            throw e;
+        }
     }
 
     private void processTask(TaskRequest request) {
@@ -68,36 +64,34 @@ public class ProcessorUnit implements AsyncShutdownable {
             return;
         }
 
-        Timer timer = Utils.timer();
+        CompletionStage<Void> processCompletion;
         try {
-            pipeline.scheduleThenProcess(request);
+            processCompletion = pipeline.scheduleThenProcess(request);
         } catch (Exception e) {
             if (e instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
             }
+            processCompletion = CompletableFuture.completedFuture(null);
             log.error("Error while processing request {}. Corresponding offset will be left uncommitted.",
                       request, e);
-        } finally {
-            // This metric measures the total amount of time the processors were processing tasks including time
-            // for scheduling those tasks and is used to refer processor threads utilization, so it needs to measure
-            // entire time of schedule and process.
-            metrics.processorProcessedTime.record(timer.duration());
         }
+        processCompletion.whenComplete((ignored, ignoredE) -> pendingTask.decrementAndGet());
+    }
+
+    public boolean hasPendingTasks() {
+        return pendingTask.get() > 0;
     }
 
     @Override
-    public void initiateShutdown() {
+    public CompletableFuture<Void> asyncClose() {
         terminated = true;
-        // Submit close as a task to the single-threaded executor, so that it closes after any in-flight tasks
-        // finish
-        executor.submit(() -> executorShutdownFuture.complete(null));
-        executor.shutdown();
         pipeline.close();
+        CompletableFuture<Void> shutdownComplete = new CompletableFuture<>();
+        executor.submit(() -> {
+            shutdownComplete.complete(null);
+            log.debug("ProcessorUnit {} SHUTDOWN", id);
+        });
+        executor.shutdown();
+        return shutdownComplete;
     }
-
-    @Override
-    public CompletionStage<Void> shutdownFuture() {
-        return shutdownFuture;
-    }
-
 }

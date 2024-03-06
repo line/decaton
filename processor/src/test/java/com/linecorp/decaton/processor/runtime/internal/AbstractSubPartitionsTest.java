@@ -17,35 +17,25 @@
 package com.linecorp.decaton.processor.runtime.internal;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.fail;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 import org.apache.kafka.common.TopicPartition;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.linecorp.decaton.processor.runtime.DefaultSubPartitioner;
 import com.linecorp.decaton.processor.runtime.PerKeyQuotaConfig;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.Property;
+import com.linecorp.decaton.processor.runtime.SubPartitionRuntime;
 import com.linecorp.decaton.processor.runtime.internal.AbstractDecatonProperties.Builder;
 import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider;
 
 @ExtendWith(MockitoExtension.class)
-public class PartitionProcessorTest {
+public class AbstractSubPartitionsTest {
     private static PartitionScope scope(
             String topic,
             Optional<PerKeyQuotaConfig> perKeyQuotaConfig,
@@ -56,6 +46,7 @@ public class PartitionProcessorTest {
         propConfigurer.accept(builder);
         return new PartitionScope(
                 new SubscriptionScope("subscription", "topic",
+                                      SubPartitionRuntime.THREAD_POOL,
                                       Optional.empty(), perKeyQuotaConfig,
                                       builder.build(),
                                       NoopTracingProvider.INSTANCE,
@@ -64,61 +55,27 @@ public class PartitionProcessorTest {
                 new TopicPartition(topic, 0));
     }
 
-    @Mock
-    private Processors<?> processors;
-
-    @Test
-    public void testCleanupPartiallyInitializedUnits() throws Exception {
-        AtomicInteger count = new AtomicInteger();
-        doAnswer(invocation -> {
-            if (count.incrementAndGet() == 3) {
-                throw new RuntimeException("exception");
-            }
-            return mock(ProcessPipeline.class);
-        }).when(processors).newPipeline(any(), any(), any());
-
-        List<ProcessorUnit> units = new ArrayList<>();
-        try {
-            new PartitionProcessor(scope("topic", Optional.empty(), prop -> {}), processors) {
-                @Override
-                ProcessorUnit createUnit(int threadId) {
-                    ProcessorUnit unit = spy(super.createUnit(threadId));
-                    units.add(unit);
-                    return unit;
-                }
-            };
-            fail("Successful call w/o exception");
-        } catch (RuntimeException ignored) {
-        }
-
-        assertEquals(2, units.size());
-        verify(units.get(0), times(1)).initiateShutdown();
-        verify(units.get(1), times(1)).initiateShutdown();
-        verify(units.get(0), times(1)).shutdownFuture();
-        verify(units.get(1), times(1)).shutdownFuture();
-    }
-
     @Test
     public void testRateProperty() {
         assertEquals("decaton.processing.rate.per.partition",
-                     PartitionProcessor.rateProperty(scope("topic", Optional.of(PerKeyQuotaConfig.shape()), prop -> {}))
-                                       .definition().name());
+                     AbstractSubPartitions.rateProperty(scope("topic", Optional.of(PerKeyQuotaConfig.shape()), prop -> {}))
+                                          .definition().name());
     }
 
     @Test
     public void testRatePropertyForShapingTopic() {
         assertEquals("decaton.per.key.quota.processing.rate",
-                     PartitionProcessor.rateProperty(scope("topic-shaping", Optional.of(PerKeyQuotaConfig.shape()), prop -> {}))
-                                       .definition().name());
+                     AbstractSubPartitions.rateProperty(scope("topic-shaping", Optional.of(PerKeyQuotaConfig.shape()), prop -> {}))
+                                          .definition().name());
     }
 
     @Test
     public void testOverrideRatePropertyForShapingTopic() {
         assertEquals("decaton.shaping.topic.processing.rate.per.partition.topic-shaping",
-                     PartitionProcessor.rateProperty(scope("topic-shaping", Optional.of(PerKeyQuotaConfig.shape()), prop -> {
+                     AbstractSubPartitions.rateProperty(scope("topic-shaping", Optional.of(PerKeyQuotaConfig.shape()), prop -> {
                                            prop.set(Property.ofStatic(PerKeyQuotaConfig.shapingRateProperty("topic-shaping"),
                                                                       42L));
                                        }))
-                                       .definition().name());
+                                          .definition().name());
     }
 }

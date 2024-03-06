@@ -329,4 +329,8 @@ public class PartitionContexts implements OffsetsStore, AssignmentStore, Partiti
     public void close() {
         cleanupPartitions(new ArrayList<>(contexts.keySet()));
     }
+
+    public void cleanup() {
+        contexts.values().forEach(PartitionContext::cleanup);
+    }
 }

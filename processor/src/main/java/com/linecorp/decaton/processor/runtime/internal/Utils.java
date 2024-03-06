@@ -23,14 +23,14 @@ import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.function.Supplier;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -39,8 +39,6 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 public final class Utils {
-    private static final Logger logger = LoggerFactory.getLogger(Utils.class);
-
     // NumberFormat isn't thread-safe so we have to create and cache an instance for each thread.
     private static final ThreadLocal<NumberFormat> numberFormat =
             ThreadLocal.withInitial(() -> NumberFormat.getNumberInstance(Locale.US));
@@ -141,6 +139,10 @@ public final class Utils {
         };
     }
 
+    public static ThreadFactory namedVirtualThreadFactory(String name) {
+        return Thread.ofVirtual().name(name).factory();
+    }
+
     /**
      * A slightly different version of {@link #namedThreadFactory(String)} which gives a {@link Function} that
      * takes monotonically increasing unique integer to name a {@link Thread}.
@@ -193,7 +195,7 @@ public final class Utils {
                          try {
                              t.run();
                          } catch (Exception e) {
-                             logger.error("{} - execution failed", subject, e);
+                             log.error("{} - execution failed", subject, e);
                              throw new RuntimeException(e);
                          }
                      }, executor))
@@ -201,5 +203,33 @@ public final class Utils {
 
         return CompletableFuture.allOf(results)
                                 .whenComplete((v, e) -> executor.shutdown());
+    }
+
+    private static final ScheduledExecutorService scheduledExecutor;
+    static {
+        ((ScheduledThreadPoolExecutor) (scheduledExecutor =
+                Executors.newScheduledThreadPool(Math.min(8, Runtime.getRuntime().availableProcessors()), r -> {
+                    Thread th = namedThreadFactory(
+                            "CompletableFutureCanceller").newThread(r);
+                    th.setDaemon(true);
+                    return th;
+                }))).setRemoveOnCancelPolicy(true);
+    }
+
+    public static <T> CompletableFuture<T> completeOnTimeout(CompletableFuture<T> cf, T value, long timeoutMs) {
+        if (cf.isDone()) {
+            return cf;
+        }
+        ScheduledFuture<?> cancelFut = scheduledExecutor.schedule(() -> {
+            if (!cf.isDone()) {
+                cf.complete(value);
+            }
+        }, timeoutMs, TimeUnit.MILLISECONDS);
+        cf.whenComplete((t, throwable) -> {
+            if (!cancelFut.isDone()) {
+                cancelFut.cancel(false);
+            }
+        });
+        return cf;
     }
 }

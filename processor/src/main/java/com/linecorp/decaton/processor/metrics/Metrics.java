@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
 
 import org.apache.kafka.clients.consumer.Consumer;
@@ -67,21 +68,26 @@ public class Metrics {
      */
     abstract static class AbstractMetrics implements AutoCloseable {
         static final Map<Id, AtomicInteger> meterRefCounts = new HashMap<>();
+        static final ReentrantLock meterRefCountsLock = new ReentrantLock();
         private final List<Meter> meters = new ArrayList<>();
 
         <T extends Meter> T meter(Supplier<T> ctor) {
-            synchronized (meterRefCounts) {
+            meterRefCountsLock.lock();
+            try {
                 T meter = ctor.get();
                 meterRefCounts.computeIfAbsent(meter.getId(), key -> new AtomicInteger())
                               .incrementAndGet();
                 meters.add(meter);
                 return meter;
+            } finally {
+                meterRefCountsLock.unlock();
             }
         }
 
         @Override
         public void close() {
-            synchronized (meterRefCounts) {
+            meterRefCountsLock.lock();
+            try {
                 // traverse from the end to avoid arrayCopy
                 for (ListIterator<Meter> iterator = meters.listIterator(meters.size()); iterator.hasPrevious(); ) {
                     Meter meter = iterator.previous();
@@ -98,6 +104,8 @@ public class Metrics {
                     // make close idempotent
                     iterator.remove();
                 }
+            } finally {
+                meterRefCountsLock.unlock();
             }
         }
     }
@@ -145,23 +153,6 @@ public class Metrics {
     }
 
     public class TaskMetrics extends AbstractMetrics {
-        public final Timer tasksDeliveryLatency =
-                meter(() -> Timer.builder("tasks.delivery.latency")
-                                 .description("The latency between the time the task is produced and the time the task is processed. "
-                                              + "This metric depends on the task's `timestampMillis` field, and it might not represent "
-                                              + "the actual end-to-end latency depending on how `timestampMillis` is constructed for the task.")
-                                 .tags(availableTags.partitionScope())
-                                 .distributionStatisticExpiry(Duration.ofSeconds(60))
-                                 .publishPercentiles(0.5, 0.9, 0.99, 0.999)
-                                 .register(registry));
-        public final Timer tasksScheduledDelay =
-                meter(() -> Timer.builder("tasks.scheduled.process.delay")
-                                 .description("The delay between the scheduled time and the time the task is processed")
-                                 .tags(availableTags.partitionScope())
-                                 .distributionStatisticExpiry(Duration.ofSeconds(60))
-                                 .publishPercentiles(0.5, 0.9, 0.99, 0.999)
-                                 .register(registry));
-
         public final Counter tasksProcessed =
                 meter(() -> Counter.builder("tasks.processed")
                                    .description("The number of tasks processed")
@@ -179,9 +170,7 @@ public class Metrics {
                                    .description("The number of tasks thrown exception by process")
                                    .tags(availableTags.partitionScope())
                                    .register(registry));
-    }
 
-    public class ProcessMetrics extends AbstractMetrics {
         public final Timer tasksCompleteDuration =
                 meter(() -> Timer.builder("tasks.complete.duration")
                                  .description("Time of a task taken to be completed")
@@ -197,6 +186,23 @@ public class Metrics {
                                  .distributionStatisticExpiry(Duration.ofSeconds(60))
                                  .publishPercentiles(0.5, 0.9, 0.99, 0.999)
                                  .register(registry));
+
+        public final Timer tasksDeliveryLatency =
+                meter(() -> Timer.builder("tasks.delivery.latency")
+                                 .description("The latency between the time the task is produced and the time the task is processed. "
+                                              + "This metric depends on the task's `timestampMillis` field, and it might not represent "
+                                              + "the actual end-to-end latency depending on how `timestampMillis` is constructed for the task.")
+                                 .tags(availableTags.partitionScope())
+                                 .distributionStatisticExpiry(Duration.ofSeconds(60))
+                                 .publishPercentiles(0.5, 0.9, 0.99, 0.999)
+                                 .register(registry));
+        public final Timer tasksScheduledDelay =
+                meter(() -> Timer.builder("tasks.scheduled.process.delay")
+                                 .description("The delay between the scheduled time and the time the task is processed")
+                                 .tags(availableTags.partitionScope())
+                                 .distributionStatisticExpiry(Duration.ofSeconds(60))
+                                 .publishPercentiles(0.5, 0.9, 0.99, 0.999)
+                                 .register(registry));
     }
 
     public class CommitControlMetrics extends AbstractMetrics {
@@ -207,7 +213,8 @@ public class Metrics {
                                    .register(registry));
     }
 
-    public class ResourceUtilizationMetrics extends AbstractMetrics {
+
+    public class ThreadUtilizationMetrics extends AbstractMetrics {
         public final Timer processorProcessedTime =
                 meter(() -> Timer.builder("processor.processed.time")
                                  .description("The accumulated time the processor were processing tasks")

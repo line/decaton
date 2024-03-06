@@ -27,18 +27,18 @@ import java.util.function.Function;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 
+import com.linecorp.decaton.processor.TaskMetadata;
 import com.linecorp.decaton.processor.metrics.Metrics;
 import com.linecorp.decaton.processor.runtime.DecatonTask;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
+import com.linecorp.decaton.processor.runtime.ProcessorSubscription;
 import com.linecorp.decaton.processor.runtime.ProcessorsBuilder;
 import com.linecorp.decaton.processor.runtime.Property;
 import com.linecorp.decaton.processor.runtime.StaticPropertySupplier;
+import com.linecorp.decaton.processor.runtime.SubPartitionRuntime;
+import com.linecorp.decaton.processor.runtime.SubscriptionBuilder;
 import com.linecorp.decaton.processor.runtime.SubscriptionStateListener;
 import com.linecorp.decaton.processor.runtime.TaskExtractor;
-import com.linecorp.decaton.processor.TaskMetadata;
-import com.linecorp.decaton.processor.runtime.ProcessorScope;
-import com.linecorp.decaton.processor.runtime.ProcessorSubscription;
-import com.linecorp.decaton.processor.runtime.SubscriptionBuilder;
 
 import io.micrometer.core.instrument.Clock;
 import io.micrometer.core.instrument.logging.LoggingMeterRegistry;
@@ -71,13 +71,18 @@ public class DecatonRunner implements Runner {
         // value than zero with the default "latest" reset policy.
         props.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
+        SubPartitionRuntime subPartitionRuntime = SubPartitionRuntime.THREAD_POOL;
         List<Property<?>> properties = new ArrayList<>();
         for (Map.Entry<String, String> entry : config.parameters().entrySet()) {
             String name = entry.getKey();
-            Function<String, Object> ctor = propertyConstructors.get(name);
-            Object value = ctor.apply(entry.getValue());
-            Property<?> prop = ProcessorProperties.propertyForName(name, value);
-            properties.add(prop);
+            if ("decaton.subpartition.runtime".equals(name)) {
+                subPartitionRuntime = SubPartitionRuntime.valueOf(entry.getValue());
+            } else {
+                Function<String, Object> ctor = propertyConstructors.get(name);
+                Object value = ctor.apply(entry.getValue());
+                Property<?> prop = ProcessorProperties.propertyForName(name, value);
+                properties.add(prop);
+            }
         }
 
         registry = new LoggingMeterRegistry(new LoggingRegistryConfig() {
@@ -98,6 +103,7 @@ public class DecatonRunner implements Runner {
                 .newBuilder("decaton-benchmark")
                 .consumerConfig(props)
                 .addProperties(StaticPropertySupplier.of(properties))
+                .subPartitionRuntime(subPartitionRuntime)
                 .processorsBuilder(
                         ProcessorsBuilder.consuming(config.topic(),
                                                     (TaskExtractor<Task>) bytes -> {
@@ -107,11 +113,10 @@ public class DecatonRunner implements Runner {
                                                                 TaskMetadata.builder().build(), task, bytes);
                                                     })
                                          .thenProcess(
-                                                 () -> (ctx, task) -> {
+                                                 (ctx, task) -> {
                                                      resourceTracker.track(Thread.currentThread().getId());
                                                      recording.process(task);
-                                                 },
-                                                 ProcessorScope.THREAD))
+                                                 }))
                 .stateListener(state -> {
                     if (state == SubscriptionStateListener.State.RUNNING) {
                         startLatch.countDown();

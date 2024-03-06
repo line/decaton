@@ -123,6 +123,7 @@ public class ProcessorSubscriptionTest {
         return new SubscriptionScope(
                 "subscription",
                 topic,
+                SubPartitionRuntime.THREAD_POOL,
                 Optional.empty(),
                 Optional.empty(),
                 propertiesBuilder.build(),
@@ -296,12 +297,12 @@ public class ProcessorSubscriptionTest {
         consumer.addRecord(new ConsumerRecord<>(tp.topic(), tp.partition(), 11, new byte[0], NO_DATA));
         consumer.addRecord(new ConsumerRecord<>(tp.topic(), tp.partition(), 12, new byte[0], NO_DATA));
         asyncProcessingStarted.await();
-        subscription.initiateShutdown();
+        CompletableFuture<Void> shutdownFut = subscription.asyncClose();
         assertTrue(consumer.committed(singleton(tp)).isEmpty());
         assertEquals(3, subscription.contexts.totalPendingTasks());
         letTasksComplete.countDown();
         letTaskFinishBlocking.release(2);
-        subscription.awaitShutdown();;
+        shutdownFut.join();
         assertEquals(13, consumer.committed(singleton(tp)).get(tp).offset());
         executor.shutdown();
         executor.awaitTermination(Long.MAX_VALUE, TimeUnit.SECONDS);

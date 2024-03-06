@@ -20,31 +20,30 @@ import java.time.Clock;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.TimeUnit;
 
-import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.Completion;
-import com.linecorp.decaton.processor.runtime.DecatonTask;
+import com.linecorp.decaton.processor.DecatonProcessor;
+import com.linecorp.decaton.processor.LoggingContext;
 import com.linecorp.decaton.processor.ProcessingContext;
+import com.linecorp.decaton.processor.metrics.Metrics.TaskMetrics;
+import com.linecorp.decaton.processor.runtime.DecatonTask;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.TaskExtractor;
-import com.linecorp.decaton.processor.metrics.Metrics;
-import com.linecorp.decaton.processor.metrics.Metrics.ProcessMetrics;
-import com.linecorp.decaton.processor.metrics.Metrics.TaskMetrics;
-import com.linecorp.decaton.processor.LoggingContext;
 import com.linecorp.decaton.processor.runtime.internal.Utils.Timer;
 
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class ProcessPipeline<T> implements AutoCloseable {
-    private final ThreadScope scope;
+    private final PartitionScope scope;
     private final List<DecatonProcessor<T>> processors;
     private final DecatonProcessor<byte[]> retryProcessor;
     private final TaskExtractor<T> taskExtractor;
     private final ExecutionScheduler scheduler;
-    private final TaskMetrics taskMetrics;
-    private final ProcessMetrics processMetrics;
+    private final TaskMetrics metrics;
     private final Clock clock;
     private volatile boolean terminated;
 
@@ -53,17 +52,15 @@ public class ProcessPipeline<T> implements AutoCloseable {
                     DecatonProcessor<byte[]> retryProcessor,
                     TaskExtractor<T> taskExtractor,
                     ExecutionScheduler scheduler,
-                    Metrics metrics,
+                    TaskMetrics metrics,
                     Clock clock) {
         this.scope = scope;
         this.processors = Collections.unmodifiableList(processors);
         this.retryProcessor = retryProcessor;
         this.taskExtractor = taskExtractor;
         this.scheduler = scheduler;
+        this.metrics = metrics;
         this.clock = clock;
-
-        taskMetrics = metrics.new TaskMetrics();
-        processMetrics = metrics.new ProcessMetrics();
     }
 
     public ProcessPipeline(ThreadScope scope,
@@ -71,11 +68,11 @@ public class ProcessPipeline<T> implements AutoCloseable {
                            DecatonProcessor<byte[]> retryProcessor,
                            TaskExtractor<T> taskExtractor,
                            ExecutionScheduler scheduler,
-                           Metrics metrics) {
+                           TaskMetrics metrics) {
         this(scope, processors, retryProcessor, taskExtractor, scheduler, metrics, Clock.systemDefaultZone());
     }
 
-    public void scheduleThenProcess(TaskRequest request) throws InterruptedException {
+    public CompletionStage<Void> scheduleThenProcess(TaskRequest request) throws InterruptedException {
         OffsetState offsetState = request.offsetState();
         final DecatonTask<T> extracted;
         try {
@@ -88,27 +85,27 @@ public class ProcessPipeline<T> implements AutoCloseable {
             offsetState.completion().complete();
 
             log.error("Dropping not-deserializable task [{}]", request.id(), e);
-            taskMetrics.tasksDiscarded.increment();
-            return;
+            metrics.tasksDiscarded.increment();
+            return CompletableFuture.completedFuture(null);
         }
 
         scheduler.schedule(extracted.metadata());
         if (terminated) {
             log.debug("Returning after schedule due to termination");
-            return;
+            return CompletableFuture.completedFuture(null);
         }
 
         final long now = System.currentTimeMillis();
         if (extracted.metadata().timestampMillis() > 0
                 && now - extracted.metadata().timestampMillis() >= 0) {
-            taskMetrics.tasksDeliveryLatency.record(
+            metrics.tasksDeliveryLatency.record(
                     now - extracted.metadata().timestampMillis(),
                     TimeUnit.MILLISECONDS
             );
         }
         if (extracted.metadata().scheduledTimeMillis() > 0
                 && now - extracted.metadata().scheduledTimeMillis() >= 0) {
-            taskMetrics.tasksScheduledDelay.record(
+            metrics.tasksScheduledDelay.record(
                     now - extracted.metadata().scheduledTimeMillis(),
                     TimeUnit.MILLISECONDS
             );
@@ -121,6 +118,7 @@ public class ProcessPipeline<T> implements AutoCloseable {
             long expireAt = clock.millis() + timeoutMs;
             offsetState.setTimeout(expireAt);
         }
+        return result.asFuture();
     }
 
     // visible for testing
@@ -156,8 +154,8 @@ public class ProcessPipeline<T> implements AutoCloseable {
             if (log.isTraceEnabled()) {
                 log.trace("Processing task [{}] took {} ns", request.id(), Utils.formatNanos(elapsed));
             }
-            taskMetrics.tasksProcessed.increment();
-            processMetrics.tasksProcessDuration.record(elapsed);
+            metrics.tasksProcessed.increment();
+            metrics.tasksProcessDuration.record(elapsed);
         }
 
         processResult.asFuture().whenComplete((r, e) -> {
@@ -167,11 +165,11 @@ public class ProcessPipeline<T> implements AutoCloseable {
                 log.trace("Completing task [{}] took {} ns",
                           request.id(), Utils.formatNanos(completeDuration));
             }
-            processMetrics.tasksCompleteDuration.record(completeDuration);
+            metrics.tasksCompleteDuration.record(completeDuration);
 
             if (e != null) {
                 log.error("Uncaught exception thrown by processor {} for task {}", scope, request, e);
-                taskMetrics.tasksError.increment();
+                metrics.tasksError.increment();
             }
         });
         return processResult;
@@ -188,7 +186,5 @@ public class ProcessPipeline<T> implements AutoCloseable {
     public void close() {
         terminated = true;
         scheduler.close();
-        processMetrics.close();
-        taskMetrics.close();
     }
 }

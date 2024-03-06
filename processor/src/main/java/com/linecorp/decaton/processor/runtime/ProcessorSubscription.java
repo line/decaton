@@ -56,7 +56,7 @@ import com.linecorp.decaton.processor.tracing.TracingProvider.RecordTraceHandle;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class ProcessorSubscription extends Thread implements AsyncShutdownable {
+public class ProcessorSubscription extends Thread implements AsyncClosable {
     private final SubscriptionScope scope;
     private final BlacklistedKeysFilter blacklistedKeysFilter;
     final PartitionContexts contexts;
@@ -69,7 +69,6 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
     private final ConsumeManager consumeManager;
     private final QuotaApplier quotaApplier;
     private final CompletableFuture<Void> loopTerminateFuture;
-    private final CompletableFuture<Void> shutdownFuture;
     private volatile boolean started;
     private volatile boolean terminated;
 
@@ -160,7 +159,6 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
         rebalanceTimeoutMillis = props.get(ProcessorProperties.CONFIG_GROUP_REBALANCE_TIMEOUT_MS);
 
         loopTerminateFuture = new CompletableFuture<>();
-        shutdownFuture = loopTerminateFuture.whenComplete((unused, throwable) -> cleanUp());
 
         setName(String.format("DecatonSubscriptionThread-%s", scope));
     }
@@ -252,6 +250,8 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
                 timer = Utils.timer();
                 commitManager.maybeCommitAsync();
                 metrics.commitOffsetTime.record(timer.duration());
+
+                contexts.cleanup();
             }
             updateState(SubscriptionStateListener.State.SHUTTING_DOWN);
             final long timeoutMillis =
@@ -279,15 +279,6 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
         }
     }
 
-    @Override
-    public void initiateShutdown() {
-        log.info("Initiating shutdown of subscription thread: {}", getName());
-        terminated = true;
-        if (!started) {
-            loopTerminateFuture.complete(null);
-        }
-    }
-
     private void cleanUp() {
         contexts.close();
         consumeManager.close();
@@ -297,7 +288,12 @@ public class ProcessorSubscription extends Thread implements AsyncShutdownable {
     }
 
     @Override
-    public CompletionStage<Void> shutdownFuture() {
-        return shutdownFuture;
+    public CompletableFuture<Void> asyncClose() {
+        log.info("Initiating shutdown of subscription thread: {}", getName());
+        terminated = true;
+        if (!started) {
+            loopTerminateFuture.complete(null);
+        }
+        return loopTerminateFuture.whenComplete((unused, throwable) -> cleanUp());
     }
 }

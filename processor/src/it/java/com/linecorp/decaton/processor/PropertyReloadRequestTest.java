@@ -18,9 +18,9 @@ package com.linecorp.decaton.processor;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -66,7 +66,7 @@ public class PropertyReloadRequestTest {
         for (int i = 0; i < 10000; i++) {
             keys.add("key" + i);
         }
-        Set<HashableByteArray> processedKeys = Collections.synchronizedSet(new HashSet<>());
+        Set<HashableByteArray> processedKeys = ConcurrentHashMap.newKeySet();
         CountDownLatch processLatch = new CountDownLatch(keys.size());
 
         DecatonProcessor<HelloTask> processor = (context, task) -> {

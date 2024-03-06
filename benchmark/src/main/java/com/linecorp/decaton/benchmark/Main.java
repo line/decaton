@@ -56,6 +56,11 @@ public final class Main implements Callable<Integer> {
             defaultValue = "0")
     private int simulateLatencyMs;
 
+    @Option(names = "--latency-count",
+            description = "The number of times to sleep for the latency to simulating multiple I/O",
+            defaultValue = "1")
+    private int latencyCount;
+
     @Option(names = "--bootstrap-servers",
             description = "Optional bootstrap.servers property. if supplied, the specified kafka cluster is used for benchmarking instead of local embedded clusters")
     private String bootstrapServers;
@@ -144,6 +149,7 @@ public final class Main implements Callable<Integer> {
                                .tasks(tasks)
                                .warmupTasks(warmupTasks)
                                .simulateLatencyMs(simulateLatencyMs)
+                               .latencyCount(latencyCount)
                                .bootstrapServers(bootstrapServers)
                                .params(params)
                                .skipWaitingJIT(skipWaitingJIT)

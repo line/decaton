@@ -32,6 +32,11 @@ public class Recording {
         private final AtomicLong maxDeliveryTime = new AtomicLong();
         private final AtomicLong totalDeliveryTime = new AtomicLong();
         private final AtomicLong processCount = new AtomicLong();
+        private final int latencyCount;
+
+        public ExecutionRecord(int latencyCount) {
+            this.latencyCount = latencyCount;
+        }
 
         void process(Task task, boolean warmup) {
             if (!warmup) {
@@ -50,7 +55,9 @@ public class Recording {
             try {
                 int latency = task.getProcessLatency();
                 if (latency > 0) {
-                    Thread.sleep(latency);
+                    for (int i = 0; i < latencyCount; i++) {
+                        Thread.sleep(latency);
+                    }
                 }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
@@ -68,10 +75,10 @@ public class Recording {
     private volatile long startTimeMs;
     private volatile long completeTimeMs;
 
-    public Recording(int tasks, int warmupTasks) {
+    public Recording(int tasks, int warmupTasks, int latencyCount) {
         this.tasks = tasks;
         this.warmupTasks = warmupTasks;
-        executionRecord = new ExecutionRecord();
+        executionRecord = new ExecutionRecord(latencyCount);
         processedCount = new AtomicInteger();
         warmupLatch = new CountDownLatch(1);
         if (warmupTasks == 0) {

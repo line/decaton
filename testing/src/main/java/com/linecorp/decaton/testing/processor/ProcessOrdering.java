@@ -24,28 +24,31 @@ import static org.junit.jupiter.api.Assertions.fail;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 import com.linecorp.decaton.processor.TaskMetadata;
 import com.linecorp.decaton.processor.internal.HashableByteArray;
 
+import lombok.Value;
+
 public class ProcessOrdering implements ProcessingGuarantee {
-    private final Map<TestTask, Long> taskToOffset = new HashMap<>();
-    private final Map<HashableByteArray, List<TestTask>> producedRecords = new HashMap<>();
-    private final Map<HashableByteArray, List<TestTask>> processedRecords = new HashMap<>();
+    private final ConcurrentMap<TestTask, Long> taskToOffset = new ConcurrentHashMap<>();
+    private final ConcurrentMap<HashableByteArray, List<TestTask>> producedRecords = new ConcurrentHashMap<>();
+    private final ConcurrentMap<HashableByteArray, List<TestTask>> processedRecords = new ConcurrentHashMap<>();
 
     @Override
-    public synchronized void onProduce(ProducedRecord record) {
+    public void onProduce(ProducedRecord record) {
         taskToOffset.put(record.task(), record.offset());
         producedRecords.computeIfAbsent(new HashableByteArray(record.key()),
                                         key -> new ArrayList<>()).add(record.task());
     }
 
     @Override
-    public synchronized void onProcess(TaskMetadata metadata, ProcessedRecord record) {
+    public void onProcess(TaskMetadata metadata, ProcessedRecord record) {
         processedRecords.computeIfAbsent(new HashableByteArray(record.key()),
                                          key -> new ArrayList<>()).add(record.task());
     }

@@ -56,10 +56,12 @@ import com.linecorp.decaton.processor.DeferredCompletion;
 import com.linecorp.decaton.processor.ProcessingContext;
 import com.linecorp.decaton.processor.TaskMetadata;
 import com.linecorp.decaton.processor.metrics.Metrics;
+import com.linecorp.decaton.processor.metrics.Metrics.TaskMetrics;
 import com.linecorp.decaton.processor.runtime.DecatonTask;
 import com.linecorp.decaton.processor.runtime.DefaultSubPartitioner;
 import com.linecorp.decaton.processor.runtime.DynamicProperty;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
+import com.linecorp.decaton.processor.runtime.SubPartitionRuntime;
 import com.linecorp.decaton.processor.runtime.TaskExtractor;
 import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider;
 import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider.NoopTrace;
@@ -84,6 +86,7 @@ public class ProcessPipelineTest {
     private final ThreadScope scope = new ThreadScope(
             new PartitionScope(
                     new SubscriptionScope("subscription", "topic",
+                                          SubPartitionRuntime.THREAD_POOL,
                                           Optional.empty(), Optional.empty(),
                                           ProcessorProperties.builder().set(completionTimeoutMsProp).build(),
                                           NoopTracingProvider.INSTANCE,
@@ -92,10 +95,11 @@ public class ProcessPipelineTest {
                     new TopicPartition("topic", 0)),
             0);
 
-    private static final Metrics METRICS = Metrics.withTags("subscription", "subscriptionId",
-                                                            "topic", "topic",
-                                                            "partition", "1",
-                                                            "subpartition", "0");
+    private static final TaskMetrics METRICS = Metrics.withTags("subscription", "subscriptionId",
+                                                                "topic", "topic",
+                                                                "partition", "1",
+                                                                "subpartition", "0")
+            .new TaskMetrics();
 
     private static TaskRequest taskRequest() {
         return new TaskRequest(
