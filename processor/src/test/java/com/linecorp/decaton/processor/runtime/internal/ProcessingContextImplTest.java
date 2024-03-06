@@ -67,6 +67,8 @@ import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
 import com.linecorp.decaton.protocol.Decaton.TaskMetadataProto;
 import com.linecorp.decaton.protocol.Sample.HelloTask;
 
+import lombok.RequiredArgsConstructor;
+
 @ExtendWith(MockitoExtension.class)
 public class ProcessingContextImplTest {
     private static class NamedProcessor implements DecatonProcessor<HelloTask> {
@@ -87,6 +89,22 @@ public class ProcessingContextImplTest {
         public void process(ProcessingContext<HelloTask> ctx, HelloTask task)
                 throws InterruptedException {
             impl.process(ctx, task);
+        }
+    }
+
+    @RequiredArgsConstructor
+    private static class AsyncCompleteProcessor implements DecatonProcessor<byte[]> {
+        private final CountDownLatch latch;
+
+        @Override
+        public void process(ProcessingContext<byte[]> context, byte[] task) throws InterruptedException {
+            Completion comp = context.deferCompletion();
+            new Thread(() -> {
+                try {
+                    latch.await();
+                } catch (InterruptedException ignored) {}
+                comp.complete();
+            }).start();
         }
     }
 
@@ -354,21 +372,7 @@ public class ProcessingContextImplTest {
     @Timeout(5)
     public void testRetry() throws InterruptedException {
         CountDownLatch retryLatch = new CountDownLatch(1);
-        DecatonProcessor<byte[]> retryProcessor = spy(
-                // This can't be a lambda for mockito
-                new DecatonProcessor<byte[]>() {
-                    @Override
-                    public void process(ProcessingContext<byte[]> context, byte[] task)
-                            throws InterruptedException {
-                        Completion comp = context.deferCompletion();
-                        new Thread(() -> {
-                            try {
-                                retryLatch.await();
-                            } catch (InterruptedException ignored) {}
-                            comp.complete();
-                        }).start();
-                    }
-                });
+        DecatonProcessor<byte[]> retryProcessor = new AsyncCompleteProcessor(retryLatch);
         TaskRequest request = new TaskRequest(
                 new TopicPartition("topic", 1), 1, null, "TEST".getBytes(StandardCharsets.UTF_8), null, null, REQUEST.toByteArray(), null);
         DecatonTask<byte[]> task = new DecatonTask<>(
@@ -399,21 +403,7 @@ public class ProcessingContextImplTest {
     @Timeout(5)
     public void testRetryAtCompletionTimeout() throws InterruptedException {
         CountDownLatch retryLatch = new CountDownLatch(1);
-        DecatonProcessor<byte[]> retryProcessor = spy(
-                // This can't be a lambda for mockito
-                new DecatonProcessor<byte[]>() {
-                    @Override
-                    public void process(ProcessingContext<byte[]> context, byte[] task)
-                            throws InterruptedException {
-                        Completion comp = context.deferCompletion();
-                        new Thread(() -> {
-                            try {
-                                retryLatch.await();
-                            } catch (InterruptedException ignored) {}
-                            comp.complete();
-                        }).start();
-                    }
-                });
+        DecatonProcessor<byte[]> retryProcessor = new AsyncCompleteProcessor(retryLatch);
         TaskRequest request = new TaskRequest(
                 new TopicPartition("topic", 1), 1, null, "TEST".getBytes(StandardCharsets.UTF_8), null, null, REQUEST.toByteArray(), null);
         DecatonTask<byte[]> task = new DecatonTask<>(
