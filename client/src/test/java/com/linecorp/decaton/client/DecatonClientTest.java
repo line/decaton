@@ -39,8 +39,7 @@ import com.linecorp.decaton.protocol.Sample.HelloTask;
 
 @ExtendWith(MockitoExtension.class)
 public class DecatonClientTest {
-    @Spy
-    private final DecatonClient<HelloTask> decaton = new DecatonClient<HelloTask>() {
+    private static class NoopClient implements DecatonClient<HelloTask> {
         @Override
         public CompletableFuture<PutTaskResult> put(String key, HelloTask task) {
             return null;
@@ -73,7 +72,10 @@ public class DecatonClientTest {
         public void close() throws Exception {
             // noop
         }
-    };
+    }
+
+    @Spy
+    private final DecatonClient<HelloTask> decaton = new NoopClient();
 
     @Test
     public void testPutAsyncHelperOnSuccess() throws Exception {

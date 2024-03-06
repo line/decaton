@@ -22,6 +22,8 @@ import java.util.concurrent.Executors;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.condition.EnabledForJreRange;
+import org.junit.jupiter.api.condition.JRE;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
@@ -33,6 +35,7 @@ import com.linecorp.decaton.testing.KafkaClusterExtension;
 import com.linecorp.decaton.testing.RandomExtension;
 import com.linecorp.decaton.testing.processor.ProcessorTestSuite;
 
+@EnabledForJreRange(min = JRE.JAVA_21)
 public class VThreadCoreFunctionalityTest {
     @RegisterExtension
     public static KafkaClusterExtension rule = new KafkaClusterExtension();
