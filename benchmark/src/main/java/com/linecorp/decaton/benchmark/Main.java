@@ -18,6 +18,7 @@ package com.linecorp.decaton.benchmark;
 
 import static java.util.Collections.emptyList;
 
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -95,6 +96,9 @@ public final class Main implements Callable<Integer> {
             defaultValue = "text")
     private String resultFormat;
 
+    @Option(names = "--file", description = "Result file to write output to. If not specified, output to stdout")
+    private Path resultFile;
+
     @Option(names = "--file-name-only",
             description = "Trim file paths in result from its path to filename only")
     private boolean fileNameOnly;
@@ -167,7 +171,13 @@ public final class Main implements Callable<Integer> {
         @SuppressWarnings("OptionalGetWithoutIsPresent")
         BenchmarkResult sum = results.stream().reduce(BenchmarkResult::plus).get();
         BenchmarkResult result = sum.div(results.size());
-        resultFormat.print(config, System.out, result);
+        if (resultFile != null) {
+            try (FileOutputStream fos = new FileOutputStream(resultFile.toFile())) {
+                resultFormat.print(config, fos, result);
+            }
+        } else {
+            resultFormat.print(config, System.out, result);
+        }
         return 0;
     }
 
