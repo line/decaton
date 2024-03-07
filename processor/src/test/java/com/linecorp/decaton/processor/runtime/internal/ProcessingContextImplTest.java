@@ -372,7 +372,7 @@ public class ProcessingContextImplTest {
     @Timeout(5)
     public void testRetry() throws InterruptedException {
         CountDownLatch retryLatch = new CountDownLatch(1);
-        DecatonProcessor<byte[]> retryProcessor = new AsyncCompleteProcessor(retryLatch);
+        DecatonProcessor<byte[]> retryProcessor = spy(new AsyncCompleteProcessor(retryLatch));
         TaskRequest request = new TaskRequest(
                 new TopicPartition("topic", 1), 1, null, "TEST".getBytes(StandardCharsets.UTF_8), null, null, REQUEST.toByteArray(), null);
         DecatonTask<byte[]> task = new DecatonTask<>(
@@ -403,7 +403,7 @@ public class ProcessingContextImplTest {
     @Timeout(5)
     public void testRetryAtCompletionTimeout() throws InterruptedException {
         CountDownLatch retryLatch = new CountDownLatch(1);
-        DecatonProcessor<byte[]> retryProcessor = new AsyncCompleteProcessor(retryLatch);
+        DecatonProcessor<byte[]> retryProcessor = spy(new AsyncCompleteProcessor(retryLatch));
         TaskRequest request = new TaskRequest(
                 new TopicPartition("topic", 1), 1, null, "TEST".getBytes(StandardCharsets.UTF_8), null, null, REQUEST.toByteArray(), null);
         DecatonTask<byte[]> task = new DecatonTask<>(
