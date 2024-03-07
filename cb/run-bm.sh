@@ -23,7 +23,7 @@ function run_with_opts() {
         --format=json \
         --profile \
         --profiler-bin="$PROFILER_BIN"  \
-        --profiler-opts="-f $out_dir/$name-profile.svg" \
+        --profiler-opts="-f $out_dir/$name-profile.html" \
         --taskstats \
         --taskstats-bin="$JTASKSTATS_BIN" \
         --taskstats-output="$out_dir/$name-taskstats.txt" \
