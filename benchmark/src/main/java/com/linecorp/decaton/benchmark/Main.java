@@ -96,8 +96,8 @@ public final class Main implements Callable<Integer> {
             defaultValue = "text")
     private String resultFormat;
 
-    @Option(names = "--file", description = "Result file to write output to. If not specified, output to stdout")
-    private Path resultFile;
+    @Option(names = "--output", description = "Result file to write output to. If not specified, output to stdout")
+    private Path resultOutput;
 
     @Option(names = "--file-name-only",
             description = "Trim file paths in result from its path to filename only")
@@ -171,8 +171,8 @@ public final class Main implements Callable<Integer> {
         @SuppressWarnings("OptionalGetWithoutIsPresent")
         BenchmarkResult sum = results.stream().reduce(BenchmarkResult::plus).get();
         BenchmarkResult result = sum.div(results.size());
-        if (resultFile != null) {
-            try (FileOutputStream fos = new FileOutputStream(resultFile.toFile())) {
+        if (resultOutput != null) {
+            try (FileOutputStream fos = new FileOutputStream(resultOutput.toFile())) {
                 resultFormat.print(config, fos, result);
             }
         } else {

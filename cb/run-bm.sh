@@ -27,7 +27,7 @@ function run_with_opts() {
         --file-name-only \
         --warmup 10000000 \
         --param=decaton.max.pending.records=10000 \
-        --file=$tmp \
+        --output=$tmp \
         "$@"
     mv $tmp $out_dir/$name-benchmark.json
 }
