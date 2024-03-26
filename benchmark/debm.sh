@@ -23,10 +23,10 @@ if [[ "$*" == *--profile* ]] && [[ "$*" != *--profiler-bin* ]] && ! which profil
         curl -L "$url" -o "$dir/async-profiler-${ASYNC_PROFILER_VERSION}-${platform}"
         if [[ "$platform" == *".zip" ]]; then
             unzip -d $dir "$dir/async-profiler-${ASYNC_PROFILER_VERSION}-${platform}"
-            mv $dir/*/* $dir/
         else
             tar zx -C $dir -f "$dir/async-profiler-${ASYNC_PROFILER_VERSION}-${platform}"
         fi
+        mv $dir/*/* $dir/
     fi
     extra_opts="$extra_opts --profiler-bin=$dir/profiler.sh"
 fi
