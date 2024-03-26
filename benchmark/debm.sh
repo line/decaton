@@ -23,10 +23,10 @@ if [[ "$*" == *--profile* ]] && [[ "$*" != *--profiler-bin* ]] && ! which profil
         curl -L "$url" -o "$dir/async-profiler-${ASYNC_PROFILER_VERSION}-${platform}"
         if [[ "$platform" == *".zip" ]]; then
             unzip -d $dir "$dir/async-profiler-${ASYNC_PROFILER_VERSION}-${platform}"
-            mv $dir/*/* $dir/
         else
             tar zx -C $dir -f "$dir/async-profiler-${ASYNC_PROFILER_VERSION}-${platform}"
         fi
+        mv $dir/*/* $dir/
     fi
     extra_opts="$extra_opts --profiler-bin=$dir/profiler.sh"
 fi
@@ -50,4 +50,4 @@ if [[ "$*" == *--taskstats* ]] && [[ "$*" != *--taskstats-bin* ]] && ! which jta
     extra_opts="$extra_opts --taskstats-bin=$file"
 fi
 
-exec java -server -Xmx8g -Xcomp -XX:+UseG1GC -cp "$classpath" com.linecorp.decaton.benchmark.Main $extra_opts "$@"
+exec java -Xmx8g -XX:+UseG1GC -cp "$classpath" com.linecorp.decaton.benchmark.Main $extra_opts "$@"
