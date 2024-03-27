@@ -36,3 +36,5 @@ $root_dir/cb/sysinfo.sh >$out_dir/sysinfo.json
 
 run_with_opts "tasks_100k_latency_10ms_concurrency_20" --tasks 100000 --simulate-latency=10 --param=decaton.partition.concurrency=20
 run_with_opts "tasks_1000k_latency_0ms_concurrency_20" --tasks 1000000 --simulate-latency=0 --param=decaton.partition.concurrency=20
+run_with_opts "tasks_100k_latency_20ms_vthread" --tasks 100000 --simulate-latency=4 --latency-count=5 --param=decaton.subpartition.runtime=VIRTUAL_THREAD
+run_with_opts "tasks_1000k_latency_0ms_vthread" --tasks 1000000 --simulate-latency=0 --param=decaton.subpartition.runtime=VIRTUAL_THREAD
