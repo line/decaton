@@ -78,6 +78,7 @@ public class InProcessExecution implements Execution {
                 awaitJITGetsSettled();
             }
             profiling.stop();
+            runner.onWarmupComplete(resourceTracker);
 
             profiling.start();
             JvmTracker jvmTracker = JvmTracker.create();
