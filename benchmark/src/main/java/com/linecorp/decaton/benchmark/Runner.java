@@ -46,6 +46,12 @@ public interface Runner extends AutoCloseable {
      */
     void init(Config config, Recording recording, ResourceTracker resourceTracker) throws InterruptedException;
 
+    /**
+     * Called after all warmup tasks are processed and before the stage to proceed for actual measurement.
+     * @param resourceTracker resource tracking interface (use is optional).
+     */
+    void onWarmupComplete(ResourceTracker resourceTracker);
+
     @Override
     default void close() throws Exception {
         // noop by default

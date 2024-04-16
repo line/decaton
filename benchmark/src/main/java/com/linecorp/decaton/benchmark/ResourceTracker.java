@@ -38,7 +38,6 @@ public class ResourceTracker {
         long allocatedBytes;
     }
 
-    private static final ThreadLocal<Boolean> tracking = ThreadLocal.withInitial(() -> false);
     private final ConcurrentMap<Long, TrackingValues> targetThreadIds;
     private final ThreadMXBean threadMxBean;
 
@@ -47,7 +46,7 @@ public class ResourceTracker {
         threadMxBean = getSunThreadMxBean();
     }
 
-    private static ThreadMXBean getSunThreadMxBean() {
+    static ThreadMXBean getSunThreadMxBean() {
         java.lang.management.ThreadMXBean mxBean = ManagementFactory.getThreadMXBean();
         if (mxBean instanceof ThreadMXBean) {
             return (ThreadMXBean) mxBean;
@@ -65,10 +64,6 @@ public class ResourceTracker {
      * @param threadId thread ID to start tracking.
      */
     public void track(long threadId) {
-        if (tracking.get()) {
-            return;
-        }
-        tracking.set(true);
         targetThreadIds.computeIfAbsent(
                 threadId,
                 key -> new TrackingValues(threadMxBean.getThreadCpuTime(threadId),
