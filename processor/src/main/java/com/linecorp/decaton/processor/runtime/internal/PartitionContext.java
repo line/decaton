@@ -103,7 +103,7 @@ public class PartitionContext implements AutoCloseable {
                 scope.props().get(ProcessorProperties.CONFIG_DEFERRED_COMPLETE_TIMEOUT_MS),
                 metricsCtor.new CommitControlMetrics());
         commitControl = new OutOfOrderCommitControl(scope.topicPartition(), capacity, offsetStateReaper);
-        if (scope.perKeyQuotaConfig().isPresent() && scope.topic().equals(scope.topicPartition().topic())) {
+        if (scope.perKeyQuotaConfig().isPresent() && scope.originTopic().equals(scope.topicPartition().topic())) {
             perKeyQuotaManager = PerKeyQuotaManager.create(scope);
         } else {
             perKeyQuotaManager = null;

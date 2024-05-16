@@ -69,7 +69,7 @@ public class ThreadPoolSubPartitions extends AbstractSubPartitions {
             ThreadScope threadScope = new ThreadScope(scope, threadId);
             ThreadUtilizationMetrics metrics =
                     Metrics.withTags("subscription", threadScope.subscriptionId(),
-                                     "topic", threadScope.topic(),
+                                     "topic", threadScope.originTopic(),
                                      "partition", String.valueOf(threadScope.topicPartition().partition()),
                                      "subpartition", String.valueOf(threadId))
                             .new ThreadUtilizationMetrics();

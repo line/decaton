@@ -322,7 +322,7 @@ public class SubscriptionBuilder {
                                 (properties, new ByteArraySerializer(), new ByteArraySerializer()));
         return new QuotaApplierImpl(
                 producerSupplier.apply(producerConfig),
-                perKeyQuotaConfig.callbackSupplier().apply(scope.topic()),
+                perKeyQuotaConfig.callbackSupplier().apply(scope.originTopic()),
                 scope);
     }
 }
