@@ -59,7 +59,7 @@ public abstract class AbstractSubPartitions implements SubPartitions {
         rateLimiter = new DynamicRateLimiter(rateProperty(scope));
         Metrics metrics = Metrics.withTags(
                 "subscription", scope.subscriptionId(),
-                "topic", scope.topic(),
+                "topic", scope.topicPartition().topic(),
                 "partition", String.valueOf(scope.topicPartition().partition()));
         taskMetrics = metrics.new TaskMetrics();
         schedulerMetrics = metrics.new SchedulerMetrics();
