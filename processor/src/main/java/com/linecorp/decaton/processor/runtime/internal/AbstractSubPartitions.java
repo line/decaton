@@ -58,11 +58,11 @@ public abstract class AbstractSubPartitions implements SubPartitions {
         shutdownTimeoutMillis = scope.props().get(
                 ProcessorProperties.CONFIG_PROCESSOR_THREADS_TERMINATION_TIMEOUT_MS);
         rateLimiter = new DynamicRateLimiter(rateProperty(scope));
-        TopicPartition tp = scope.topicPartition();
+        TopicPartition topicPartition = scope.topicPartition();
         Metrics metrics = Metrics.withTags(
                 "subscription", scope.subscriptionId(),
-                "topic", tp.topic(),
-                "partition", String.valueOf(tp.partition()));
+                "topic", topicPartition.topic(),
+                "partition", String.valueOf(topicPartition.partition()));
         taskMetrics = metrics.new TaskMetrics();
         schedulerMetrics = metrics.new SchedulerMetrics();
     }
