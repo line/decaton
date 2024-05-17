@@ -32,6 +32,7 @@ import com.linecorp.decaton.processor.runtime.internal.Utils.Timer;
 
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.kafka.common.TopicPartition;
 
 @Slf4j
 public class ThreadPoolSubPartitions extends AbstractSubPartitions {
@@ -67,10 +68,11 @@ public class ThreadPoolSubPartitions extends AbstractSubPartitions {
         SubPartition subPartition = subPartitions[threadId];
         if (subPartition == null) {
             ThreadScope threadScope = new ThreadScope(scope, threadId);
+            TopicPartition topicPartition = threadScope.topicPartition();
             ThreadUtilizationMetrics metrics =
                     Metrics.withTags("subscription", threadScope.subscriptionId(),
-                                     "topic", threadScope.topic(),
-                                     "partition", String.valueOf(threadScope.topicPartition().partition()),
+                                     "topic", topicPartition.topic(),
+                                     "partition", String.valueOf(topicPartition.partition()),
                                      "subpartition", String.valueOf(threadId))
                             .new ThreadUtilizationMetrics();
             ExecutorService executor = createExecutorService(threadScope, metrics);

@@ -38,7 +38,7 @@ import lombok.experimental.Accessors;
 @Getter
 public class SubscriptionScope {
     private final String subscriptionId;
-    private final String topic;
+    private final String originTopic;
     private final SubPartitionRuntime subPartitionRuntime;
     private final Optional<RetryConfig> retryConfig;
     private final Optional<PerKeyQuotaConfig> perKeyQuotaConfig;
@@ -48,11 +48,11 @@ public class SubscriptionScope {
     private final SubPartitionerSupplier subPartitionerSupplier;
 
     public Optional<String> retryTopic() {
-        return retryConfig.map(conf -> conf.retryTopicOrDefault(topic));
+        return retryConfig.map(conf -> conf.retryTopicOrDefault(originTopic));
     }
 
     public Set<String> shapingTopics() {
-        return perKeyQuotaConfig.map(conf -> conf.shapingTopicsSupplier().apply(topic))
+        return perKeyQuotaConfig.map(conf -> conf.shapingTopicsSupplier().apply(originTopic))
                                 .orElse(Collections.emptySet());
     }
 

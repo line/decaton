@@ -218,7 +218,7 @@ public class ProcessorSubscription extends Thread implements AsyncClosable {
 
     private Set<String> subscribeTopics() {
         return Stream.concat(
-                Stream.of(Optional.of(scope.topic()), scope.retryTopic())
+                Stream.of(Optional.of(scope.originTopic()), scope.retryTopic())
                       .filter(Optional::isPresent)
                       .map(Optional::get),
                 scope.shapingTopics().stream()).collect(Collectors.toSet());

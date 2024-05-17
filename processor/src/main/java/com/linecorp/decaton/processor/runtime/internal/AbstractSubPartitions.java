@@ -29,6 +29,7 @@ import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.Property;
 
 import lombok.extern.slf4j.Slf4j;
+import org.apache.kafka.common.TopicPartition;
 
 /**
  * This class is responsible for following portions:
@@ -57,10 +58,11 @@ public abstract class AbstractSubPartitions implements SubPartitions {
         shutdownTimeoutMillis = scope.props().get(
                 ProcessorProperties.CONFIG_PROCESSOR_THREADS_TERMINATION_TIMEOUT_MS);
         rateLimiter = new DynamicRateLimiter(rateProperty(scope));
+        TopicPartition topicPartition = scope.topicPartition();
         Metrics metrics = Metrics.withTags(
                 "subscription", scope.subscriptionId(),
-                "topic", scope.topic(),
-                "partition", String.valueOf(scope.topicPartition().partition()));
+                "topic", topicPartition.topic(),
+                "partition", String.valueOf(topicPartition.partition()));
         taskMetrics = metrics.new TaskMetrics();
         schedulerMetrics = metrics.new SchedulerMetrics();
     }
