@@ -17,7 +17,6 @@
 package com.linecorp.decaton.processor.runtime.internal;
 
 import java.time.Duration;
-import java.util.Arrays;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -71,7 +70,7 @@ public class QuotaApplierImpl implements QuotaApplier {
             try {
                 topic = callback.apply(record, quotaUsage.metrics());
             } catch (Exception e) {
-                log.error("Exception thrown from the quota callback for key: {}", Arrays.toString(record.key()), e);
+                log.error("Exception thrown from the quota callback", e);
                 metrics.shapingQueueingFailed.increment();
                 completion.complete();
                 return;
