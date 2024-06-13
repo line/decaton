@@ -81,7 +81,7 @@ public class ProcessorsBuilder<T> {
         DefaultTaskExtractor<byte[]> outerExtractor = new DefaultTaskExtractor<>(bytes -> bytes);
         TaskExtractor<T> retryTaskExtractor = record -> {
             DecatonTask<byte[]> rawTask = outerExtractor.extract(record);
-            ConsumerRecord<byte[], byte[]> extracted = new ConsumerRecord<>(
+            ConsumerRecord<byte[], byte[]> inner = new ConsumerRecord<>(
                     record.topic(),
                     record.partition(),
                     record.offset(),
@@ -94,7 +94,12 @@ public class ProcessorsBuilder<T> {
                     record.headers(),
                     record.leaderEpoch()
             );
-            return taskExtractor.extract(extracted);
+            DecatonTask<T> extracted = taskExtractor.extract(inner);
+            return new DecatonTask<>(
+                    // Use rawTask#metadata because retry count is stored in rawTask#metada not extracted#metadata
+                    rawTask.metadata(),
+                    extracted.taskData(),
+                    extracted.taskDataBytes());
         };
         return new ProcessorsBuilder<>(topic, taskExtractor, retryTaskExtractor);
     }
