@@ -72,12 +72,12 @@ public class ProcessingContextImpl<T> implements ProcessingContext<T> {
 
     @Override
     public byte[] key() {
-        return request.key();
+        return request.record().key();
     }
 
     @Override
     public Headers headers() {
-        return request.headers();
+        return request.record().headers();
     }
 
     @Override

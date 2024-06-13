@@ -49,9 +49,8 @@ import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 
-import com.google.protobuf.ByteString;
-
 import com.linecorp.decaton.client.DecatonClientBuilder.DefaultKafkaProducerSupplier;
+import com.linecorp.decaton.common.TaskMetadataUtil;
 import com.linecorp.decaton.processor.Completion;
 import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.runtime.PerKeyQuotaConfig;
@@ -69,7 +68,6 @@ import com.linecorp.decaton.processor.runtime.SubscriptionStateListener;
 import com.linecorp.decaton.processor.runtime.TaskExtractor;
 import com.linecorp.decaton.processor.runtime.internal.RateLimiter;
 import com.linecorp.decaton.processor.tracing.TracingProvider;
-import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
 import com.linecorp.decaton.protocol.Decaton.TaskMetadataProto;
 import com.linecorp.decaton.testing.KafkaClusterExtension;
 import com.linecorp.decaton.testing.TestUtils;
@@ -109,7 +107,7 @@ public class ProcessorTestSuite {
     private final Set<ProcessingGuarantee> semantics;
     private final SubscriptionStatesListener statesListener;
     private final TracingProvider tracingProvider;
-    private final Function<String, Producer<byte[], DecatonTaskRequest>> producerSupplier;
+    private final Function<String, Producer<byte[], byte[]>> producerSupplier;
     private final TaskExtractor<TestTask> customTaskExtractor;
 
     private static final int DEFAULT_NUM_TASKS = 10000;
@@ -179,7 +177,7 @@ public class ProcessorTestSuite {
          * Expected use case:
          *   supply a producer which adds tracing id to each message to test tracing-functionality in e2e
          */
-        private Function<String, Producer<byte[], DecatonTaskRequest>> producerSupplier = TestUtils::producer;
+        private Function<String, Producer<byte[], byte[]>> producerSupplier = TestUtils::producer;
         /**
          * Supply custom {@link TaskExtractor} to be used to extract a task.
          */
@@ -250,7 +248,7 @@ public class ProcessorTestSuite {
         CountDownLatch rollingRestartLatch = new CountDownLatch(numTasks / 2);
         ProcessorSubscription[] subscriptions = new ProcessorSubscription[NUM_SUBSCRIPTION_INSTANCES];
 
-        try (Producer<byte[], DecatonTaskRequest> producer = producerSupplier.apply(rule.bootstrapServers())) {
+        try (Producer<byte[], byte[]> producer = producerSupplier.apply(rule.bootstrapServers())) {
             ConcurrentMap<TopicPartition, Long> queuedTaskOffsets = new ConcurrentHashMap<>();
             for (int i = 0; i < subscriptions.length; i++) {
                 subscriptions[i] = newSubscription(i, topic, Optional.of(rollingRestartLatch), queuedTaskOffsets);
@@ -328,7 +326,7 @@ public class ProcessorTestSuite {
                     if (retryConfig != null) {
                         RetryConfigBuilder retryConfigBuilder = retryConfig.toBuilder();
                         retryConfigBuilder.producerSupplier(props -> {
-                            final Producer<byte[], DecatonTaskRequest> producer;
+                            final Producer<byte[], byte[]> producer;
                             if (retryConfig.producerSupplier() != null) {
                                 producer = retryConfig.producerSupplier().getProducer(props);
                             } else {
@@ -412,7 +410,7 @@ public class ProcessorTestSuite {
      * @return A CompletableFuture of Map, which holds partition as the key and max offset as the value
      */
     private CompletableFuture<Map<TopicPartition, Long>> produceTasks(
-            Producer<byte[], DecatonTaskRequest> producer,
+            Producer<byte[], byte[]> producer,
             String topic,
             Consumer<ProducedRecord> onProduce) {
         @SuppressWarnings("unchecked")
@@ -428,13 +426,9 @@ public class ProcessorTestSuite {
                                      .setSourceApplicationId("test-application")
                                      .setSourceInstanceId("test-instance")
                                      .build();
-            DecatonTaskRequest request =
-                    DecatonTaskRequest.newBuilder()
-                                      .setMetadata(taskMetadata)
-                                      .setSerializedTask(ByteString.copyFrom(serializer.serialize(task)))
-                                      .build();
-            ProducerRecord<byte[], DecatonTaskRequest> record =
-                    new ProducerRecord<>(topic, null, taskMetadata.getTimestampMillis(), key, request);
+            ProducerRecord<byte[], byte[]> record =
+                    new ProducerRecord<>(topic, null, taskMetadata.getTimestampMillis(), key, serializer.serialize(task));
+            TaskMetadataUtil.writeAsHeader(taskMetadata, record.headers());
             CompletableFuture<RecordMetadata> future = new CompletableFuture<>();
             produceFutures[i] = future;
 

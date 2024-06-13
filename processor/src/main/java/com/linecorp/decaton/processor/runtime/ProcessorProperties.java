@@ -30,6 +30,7 @@ import com.linecorp.decaton.processor.ProcessingContext;
 import com.linecorp.decaton.processor.runtime.internal.AbstractDecatonProperties;
 import com.linecorp.decaton.processor.runtime.internal.OutOfOrderCommitControl;
 import com.linecorp.decaton.processor.runtime.internal.RateLimiter;
+import com.linecorp.decaton.protocol.internal.DecatonInternal.DecatonTaskRequest;
 
 /**
  * Collection of properties that can be configured to adjust {@link DecatonProcessor}'s behavior.
@@ -224,6 +225,20 @@ public class ProcessorProperties extends AbstractDecatonProperties {
             PropertyDefinition.define("decaton.processor.threads.termination.timeout.ms", Long.class,
                                       Long.MAX_VALUE, v -> v instanceof Long && (Long) v >= 0);
 
+    /**
+     * Controls whether to produce retry tasks with task metadata as headers, instead of as deprecated
+     * {@link DecatonTaskRequest} format.
+     * <p>
+     * <b>CAUTION!!! YOU MAY NEED TO SET THIS TO FALSE WHEN YOU UPGRADE FROM 8.0.1 OR EARLIER</b>
+     * <p>
+     * Please read <a href="https://github.com/line/decaton/releases/tag/v8.0.1">Decaton 9.0.0 Release Note</a> carefully.
+     * <p>
+     * Reloadable: yes
+     */
+    public static final PropertyDefinition<Boolean> CONFIG_TASK_METADATA_AS_HEADER =
+            PropertyDefinition.define("decaton.task.metadata.as.header", Boolean.class, true,
+                                      v -> v instanceof Boolean);
+
     public static final List<PropertyDefinition<?>> PROPERTY_DEFINITIONS =
             Collections.unmodifiableList(Arrays.asList(
                     CONFIG_IGNORE_KEYS,
@@ -237,7 +252,8 @@ public class ProcessorProperties extends AbstractDecatonProperties {
                     CONFIG_BIND_CLIENT_METRICS,
                     CONFIG_DEFERRED_COMPLETE_TIMEOUT_MS,
                     CONFIG_PROCESSOR_THREADS_TERMINATION_TIMEOUT_MS,
-                    CONFIG_PER_KEY_QUOTA_PROCESSING_RATE));
+                    CONFIG_PER_KEY_QUOTA_PROCESSING_RATE,
+                    CONFIG_TASK_METADATA_AS_HEADER));
 
     /**
      * Find and return a {@link PropertyDefinition} from its name.

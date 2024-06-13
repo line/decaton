@@ -29,6 +29,7 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -37,7 +38,6 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 
 import com.linecorp.decaton.client.DecatonClient;
 import com.linecorp.decaton.client.kafka.PrintableAsciiStringSerializer;
-import com.linecorp.decaton.client.kafka.ProtocolBuffersKafkaSerializer;
 import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.ProcessorSubscription;
@@ -45,7 +45,6 @@ import com.linecorp.decaton.processor.runtime.ProcessorsBuilder;
 import com.linecorp.decaton.processor.runtime.Property;
 import com.linecorp.decaton.processor.runtime.StaticPropertySupplier;
 import com.linecorp.decaton.protobuf.ProtocolBuffersDeserializer;
-import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
 import com.linecorp.decaton.protocol.Sample.HelloTask;
 import com.linecorp.decaton.testing.KafkaClusterExtension;
 import com.linecorp.decaton.testing.TestUtils;
@@ -120,19 +119,15 @@ public class MetricsTest {
                                   .addProperties(StaticPropertySupplier.of(
                                           Property.ofStatic(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY, 1),
                                           Property.ofStatic(ProcessorProperties.CONFIG_MAX_PENDING_RECORDS, 1))));
-             Producer<String, DecatonTaskRequest> producer =
+             Producer<String, byte[]> producer =
                      new KafkaProducer<>(props,
                                          new PrintableAsciiStringSerializer(),
-                                         new ProtocolBuffersKafkaSerializer<>())) {
+                                         new ByteArraySerializer())) {
 
-            DecatonTaskRequest req = DecatonTaskRequest.newBuilder()
-                                                       .setSerializedTask(
-                                                               HelloTask.getDefaultInstance().toByteString())
-                                                       .build();
             for (int i = 0; i < PARTITIONS; i++) {
                 // What we need here is just simple round-robin but it's not possible with null keys anymore
                 // since https://cwiki.apache.org/confluence/display/KAFKA/KIP-480%3A+Sticky+Partitioner
-                producer.send(new ProducerRecord<>(topicName, i, null, req));
+                producer.send(new ProducerRecord<>(topicName, i, null, HelloTask.getDefaultInstance().toByteArray()));
             }
             processLatch.await();
 
@@ -230,19 +225,13 @@ public class MetricsTest {
                                   .addProperties(StaticPropertySupplier.of(
                                           Property.ofStatic(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY, 2),
                                           Property.ofStatic(ProcessorProperties.CONFIG_MAX_PENDING_RECORDS, 3))));
-             Producer<String, DecatonTaskRequest> producer =
+             Producer<String, byte[]> producer =
                      new KafkaProducer<>(props,
                                          new PrintableAsciiStringSerializer(),
-                                         new ProtocolBuffersKafkaSerializer<>())) {
+                                         new ByteArraySerializer())) {
             for (int i = 0; i < count; i++) {
-                DecatonTaskRequest req = DecatonTaskRequest.newBuilder()
-                                                           .setSerializedTask(
-                                                                   HelloTask.newBuilder()
-                                                                           .setAge(i)
-                                                                           .build().toByteString())
-                                                           .build();
                 // All requests will be sent on partition 0 for simplicity
-                producer.send(new ProducerRecord<>(topicName, 0, null, req));
+                producer.send(new ProducerRecord<>(topicName, 0, null, HelloTask.newBuilder().setAge(i).build().toByteArray()));
             }
             processLatch.await();
 

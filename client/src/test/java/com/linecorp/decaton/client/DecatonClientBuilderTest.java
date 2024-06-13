@@ -33,20 +33,20 @@ import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.linecorp.decaton.common.TaskMetadataUtil;
 import com.linecorp.decaton.protobuf.ProtocolBuffersSerializer;
-import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
 import com.linecorp.decaton.protocol.Decaton.TaskMetadataProto;
 import com.linecorp.decaton.protocol.Sample.HelloTask;
 
 @ExtendWith(MockitoExtension.class)
 public class DecatonClientBuilderTest {
     @Mock
-    private Producer<byte[], DecatonTaskRequest> producer;
+    private Producer<byte[], byte[]> producer;
 
     @Captor
-    private ArgumentCaptor<ProducerRecord<byte[], DecatonTaskRequest>> recordCaptor;
+    private ArgumentCaptor<ProducerRecord<byte[], byte[]>> recordCaptor;
 
-    private ProducerRecord<byte[], DecatonTaskRequest> doProduce(DecatonClient<HelloTask> dclient) {
+    private ProducerRecord<byte[], byte[]> doProduce(DecatonClient<HelloTask> dclient) {
         dclient.put(null, HelloTask.getDefaultInstance());
         verify(producer, times(1)).send(recordCaptor.capture(), any(Callback.class));
         return recordCaptor.getValue();
@@ -66,10 +66,10 @@ public class DecatonClientBuilderTest {
                              .producerSupplier(config -> producer)
                              .build();
 
-        ProducerRecord<byte[], DecatonTaskRequest> record = doProduce(dclient);
+        ProducerRecord<byte[], byte[]> record = doProduce(dclient);
         assertEquals(topic, record.topic());
 
-        TaskMetadataProto metadata = record.value().getMetadata();
+        TaskMetadataProto metadata = TaskMetadataUtil.readFromHeader(record.headers());
         assertEquals(applicationId, metadata.getSourceApplicationId());
         assertEquals(instanceId, metadata.getSourceInstanceId());
     }

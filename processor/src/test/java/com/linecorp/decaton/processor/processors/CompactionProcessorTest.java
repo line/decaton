@@ -37,7 +37,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 
-import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -99,8 +99,9 @@ public class CompactionProcessorTest {
                 TaskMetadata.builder().build(),
                 taskData,
                 taskData.toByteArray());
-        TaskRequest request = new TaskRequest(
-                new TopicPartition("topic", 1), 1, null, name.getBytes(StandardCharsets.UTF_8), null, NoopTrace.INSTANCE, null, null);
+        ConsumerRecord<byte[], byte[]> record = new ConsumerRecord<>(
+                "topic", 1, 1, name.getBytes(StandardCharsets.UTF_8), taskData.toByteArray());
+        TaskRequest request = new TaskRequest(null, record, NoopTrace.INSTANCE, null);
         ProcessingContext<HelloTask> context =
                 spy(new ProcessingContextImpl<>("subscription", request, task,
                                                 Arrays.asList(processor, downstream), null,

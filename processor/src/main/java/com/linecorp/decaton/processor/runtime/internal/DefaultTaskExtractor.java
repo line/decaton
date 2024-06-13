@@ -16,13 +16,17 @@
 
 package com.linecorp.decaton.processor.runtime.internal;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+
 import com.google.protobuf.InvalidProtocolBufferException;
 
 import com.linecorp.decaton.common.Deserializer;
+import com.linecorp.decaton.common.TaskMetadataUtil;
 import com.linecorp.decaton.processor.runtime.DecatonTask;
 import com.linecorp.decaton.processor.runtime.TaskExtractor;
 import com.linecorp.decaton.processor.TaskMetadata;
-import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
+import com.linecorp.decaton.protocol.internal.DecatonInternal.DecatonTaskRequest;
+import com.linecorp.decaton.protocol.Decaton.TaskMetadataProto;
 
 import lombok.RequiredArgsConstructor;
 
@@ -31,18 +35,27 @@ public class DefaultTaskExtractor<T> implements TaskExtractor<T> {
     private final Deserializer<T> taskDeserializer;
 
     @Override
-    public DecatonTask<T> extract(byte[] bytes) {
-        try {
-            DecatonTaskRequest taskRequest = DecatonTaskRequest.parseFrom(bytes);
-            TaskMetadata metadata = TaskMetadata.fromProto(taskRequest.getMetadata());
-            byte[] taskDataBytes = taskRequest.getSerializedTask().toByteArray();
-
+    public DecatonTask<T> extract(ConsumerRecord<byte[], byte[]> record) {
+        TaskMetadataProto headerMeta = TaskMetadataUtil.readFromHeader(record.headers());
+        if (headerMeta != null) {
+            byte[] taskDataBytes = record.value();
             return new DecatonTask<>(
-                    metadata,
+                    TaskMetadata.fromProto(headerMeta),
                     taskDeserializer.deserialize(taskDataBytes),
                     taskDataBytes);
-        } catch (InvalidProtocolBufferException e) {
-            throw new IllegalArgumentException(e);
+        } else {
+            try {
+                DecatonTaskRequest taskRequest = DecatonTaskRequest.parseFrom(record.value());
+                TaskMetadata metadata = TaskMetadata.fromProto(taskRequest.getMetadata());
+                byte[] taskDataBytes = taskRequest.getSerializedTask().toByteArray();
+
+                return new DecatonTask<>(
+                        metadata,
+                        taskDeserializer.deserialize(taskDataBytes),
+                        taskDataBytes);
+            } catch (InvalidProtocolBufferException e) {
+                throw new IllegalArgumentException(e);
+            }
         }
     }
 }

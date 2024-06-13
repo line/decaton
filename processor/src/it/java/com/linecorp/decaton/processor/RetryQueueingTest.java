@@ -16,8 +16,6 @@
 
 package com.linecorp.decaton.processor;
 
-import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.time.Duration;
 import java.util.Properties;
 import java.util.Set;
@@ -26,6 +24,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -39,7 +38,6 @@ import com.linecorp.decaton.processor.runtime.Property;
 import com.linecorp.decaton.processor.runtime.RetryConfig;
 import com.linecorp.decaton.processor.runtime.StaticPropertySupplier;
 import com.linecorp.decaton.processor.runtime.TaskExtractor;
-import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
 import com.linecorp.decaton.testing.KafkaClusterExtension;
 import com.linecorp.decaton.testing.TestUtils;
 import com.linecorp.decaton.testing.processor.ProcessedRecord;
@@ -107,16 +105,10 @@ public class RetryQueueingTest {
 
     private static class TestTaskExtractor implements TaskExtractor<TestTask> {
         @Override
-        public DecatonTask<TestTask> extract(byte[] bytes) {
-            try {
-                TaskMetadata meta = TaskMetadata.builder().build();
-                DecatonTaskRequest request = DecatonTaskRequest.parseFrom(bytes);
-                TestTask task = new TestTask.TestTaskDeserializer().deserialize(
-                        request.getSerializedTask().toByteArray());
-                return new DecatonTask<>(meta, task, bytes);
-            } catch (IOException e) {
-                throw new UncheckedIOException(e);
-            }
+        public DecatonTask<TestTask> extract(ConsumerRecord<byte[], byte[]> record) {
+            TaskMetadata meta = TaskMetadata.builder().build();
+            TestTask task = new TestTask.TestTaskDeserializer().deserialize(record.value());
+            return new DecatonTask<>(meta, task, record.value());
         }
     }
 

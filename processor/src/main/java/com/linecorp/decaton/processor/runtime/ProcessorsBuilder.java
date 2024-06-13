@@ -20,6 +20,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Supplier;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+
 import com.linecorp.decaton.common.Deserializer;
 import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.runtime.internal.DecatonProcessorSupplierImpl;
@@ -65,28 +67,35 @@ public class ProcessorsBuilder<T> {
 
     /**
      * Create new {@link ProcessorsBuilder} that consumes message from topic expecting tasks of type
-     * which can be parsed by valueParser.
+     * which can be parsed by taskExtractor.
      * @param topic the name of topic to consume.
      * @param taskExtractor the extractor to extract task of type {@link T} from message bytes.
      * @param <T> the type of instantiated tasks.
      * @return an instance of {@link ProcessorsBuilder}.
      */
     public static <T> ProcessorsBuilder<T> consuming(String topic, TaskExtractor<T> taskExtractor) {
+        // Retry tasks might be stored in retry-topic in DecatonTaskRequest format depending on
+        // decaton.task.metadata.as.header configuration.
+        // Hence, we need to extract the task with DefaultTaskExtractor to "unwrap" the task first,
+        // then extract the task with the given taskExtractor.
         DefaultTaskExtractor<byte[]> outerExtractor = new DefaultTaskExtractor<>(bytes -> bytes);
-        TaskExtractor<T> retryTaskExtractor = bytes -> {
-            // Retry tasks are serialized as PB DecatonTaskRequest.
-            // First, deserialize PB from raw bytes.
-            DecatonTask<byte[]> wrappedTask = outerExtractor.extract(bytes);
-
-            // Original raw task bytes is stored in DecatonTaskRequest#serializedTask.
-            // Extract DecatonTask from DecatonTaskRequest#serializedTask using given taskExtractor.
-            DecatonTask<T> task = taskExtractor.extract(wrappedTask.taskData());
-
-            // Instantiate DecatonTask.
-            // Use wrappedTask#metadata because retry count is stored in wrappedTask#metada not task#metadata
-            return new DecatonTask<>(wrappedTask.metadata(), task.taskData(), task.taskDataBytes());
+        TaskExtractor<T> retryTaskExtractor = record -> {
+            DecatonTask<byte[]> rawTask = outerExtractor.extract(record);
+            ConsumerRecord<byte[], byte[]> extracted = new ConsumerRecord<>(
+                    record.topic(),
+                    record.partition(),
+                    record.offset(),
+                    record.timestamp(),
+                    record.timestampType(),
+                    record.serializedKeySize(),
+                    rawTask.taskDataBytes().length,
+                    record.key(),
+                    rawTask.taskDataBytes(),
+                    record.headers(),
+                    record.leaderEpoch()
+            );
+            return taskExtractor.extract(extracted);
         };
-
         return new ProcessorsBuilder<>(topic, taskExtractor, retryTaskExtractor);
     }
 

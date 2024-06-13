@@ -18,7 +18,6 @@ package com.linecorp.decaton.processor.runtime.internal;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
@@ -41,6 +40,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -65,20 +65,12 @@ import com.linecorp.decaton.processor.runtime.SubPartitionRuntime;
 import com.linecorp.decaton.processor.runtime.TaskExtractor;
 import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider;
 import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider.NoopTrace;
-import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
-import com.linecorp.decaton.protocol.Decaton.TaskMetadataProto;
 import com.linecorp.decaton.protocol.Sample.HelloTask;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
 public class ProcessPipelineTest {
     private static final HelloTask TASK = HelloTask.getDefaultInstance();
-
-    private static final DecatonTaskRequest REQUEST =
-            DecatonTaskRequest.newBuilder()
-                              .setMetadata(TaskMetadataProto.getDefaultInstance())
-                              .setSerializedTask(TASK.toByteString())
-                              .build();
 
     private final DynamicProperty<Long> completionTimeoutMsProp =
             new DynamicProperty<>(ProcessorProperties.CONFIG_DEFERRED_COMPLETE_TIMEOUT_MS);
@@ -102,8 +94,10 @@ public class ProcessPipelineTest {
             .new TaskMetrics();
 
     private static TaskRequest taskRequest() {
-        return new TaskRequest(
-                new TopicPartition("topic", 1), 1, new OffsetState(1234), "TEST".getBytes(StandardCharsets.UTF_8), null, NoopTrace.INSTANCE, REQUEST.toByteArray(), null);
+        return new TaskRequest(new OffsetState(1234), new ConsumerRecord<>(
+                "topic", 1, 1, "TEST".getBytes(StandardCharsets.UTF_8), TASK.toByteArray()),
+                               NoopTrace.INSTANCE,
+                               null);
     }
 
     @Mock
@@ -131,11 +125,11 @@ public class ProcessPipelineTest {
     @Test
     public void testScheduleThenProcess_SYNC_COMPLETE() throws InterruptedException {
         when(extractorMock.extract(any()))
-                .thenReturn(new DecatonTask<>(TaskMetadata.fromProto(REQUEST.getMetadata()), TASK, TASK.toByteArray()));
+                .thenReturn(new DecatonTask<>(TaskMetadata.builder().build(), TASK, TASK.toByteArray()));
 
         TaskRequest request = taskRequest();
         pipeline.scheduleThenProcess(request);
-        verify(schedulerMock, times(1)).schedule(eq(TaskMetadata.fromProto(REQUEST.getMetadata())));
+        verify(schedulerMock, times(1)).schedule(eq(TaskMetadata.builder().build()));
         verify(processorMock, times(1)).process(any(), eq(TASK));
         assertTrue(request.offsetState().completion().isComplete());
         assertEquals(completionTimeoutMsProp.value() + clock.millis(),
@@ -145,7 +139,7 @@ public class ProcessPipelineTest {
     @Test
     public void testScheduleThenProcess_ASYNC_COMPLETE() throws InterruptedException {
         when(extractorMock.extract(any()))
-                .thenReturn(new DecatonTask<>(TaskMetadata.fromProto(REQUEST.getMetadata()), TASK, TASK.toByteArray()));
+                .thenReturn(new DecatonTask<>(TaskMetadata.builder().build(), TASK, TASK.toByteArray()));
         CountDownLatch beforeComplete = new CountDownLatch(1);
         CountDownLatch afterComplete = new CountDownLatch(1);
         doAnswer(invocation -> {
@@ -166,7 +160,7 @@ public class ProcessPipelineTest {
 
         TaskRequest request = taskRequest();
         pipeline.scheduleThenProcess(request);
-        verify(schedulerMock, times(1)).schedule(eq(TaskMetadata.fromProto(REQUEST.getMetadata())));
+        verify(schedulerMock, times(1)).schedule(eq(TaskMetadata.builder().build()));
         verify(processorMock, times(1)).process(any(), eq(TASK));
 
         // Should complete only after processor completes it
@@ -219,19 +213,8 @@ public class ProcessPipelineTest {
     }
 
     @Test
-    public void testExtract_PurgeRawRequestBytes() {
-        when(extractorMock.extract(any()))
-                .thenReturn(new DecatonTask<>(TaskMetadata.fromProto(REQUEST.getMetadata()), TASK, TASK.toByteArray()));
-
-        TaskRequest request = taskRequest();
-        pipeline.extract(request);
-
-        assertNull(request.rawRequestBytes());
-    }
-
-    @Test
     public void testScheduleThenProcess_SynchronousFailure() throws InterruptedException {
-        DecatonTask<HelloTask> task = new DecatonTask<>(TaskMetadata.fromProto(REQUEST.getMetadata()), TASK, TASK.toByteArray());
+        DecatonTask<HelloTask> task = new DecatonTask<>(TaskMetadata.builder().build(), TASK, TASK.toByteArray());
         when(extractorMock.extract(any())).thenReturn(task);
 
         doThrow(new RuntimeException()).when(processorMock).process(any(), eq(TASK));
@@ -245,7 +228,7 @@ public class ProcessPipelineTest {
     @Test
     @Timeout(5)
     public void testScheduleThenProcess_Terminate() throws InterruptedException {
-        DecatonTask<HelloTask> task = new DecatonTask<>(TaskMetadata.fromProto(REQUEST.getMetadata()), TASK, TASK.toByteArray());
+        DecatonTask<HelloTask> task = new DecatonTask<>(TaskMetadata.builder().build(), TASK, TASK.toByteArray());
         when(extractorMock.extract(any())).thenReturn(task);
 
         CountDownLatch atSchedule = new CountDownLatch(1);

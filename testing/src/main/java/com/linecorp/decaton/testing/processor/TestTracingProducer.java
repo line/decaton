@@ -27,14 +27,13 @@ import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.header.internals.RecordHeader;
 
 import com.linecorp.decaton.processor.tracing.TestTracingProvider;
-import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
 
-public class TestTracingProducer extends ProducerAdaptor<byte[], DecatonTaskRequest> {
-    public TestTracingProducer(Producer<byte[], DecatonTaskRequest> delegate) {
+public class TestTracingProducer extends ProducerAdaptor<byte[], byte[]> {
+    public TestTracingProducer(Producer<byte[], byte[]> delegate) {
         super(delegate);
     }
 
-    private static void propagateCurrentTrace(ProducerRecord<byte[], DecatonTaskRequest> record) {
+    private static void propagateCurrentTrace(ProducerRecord<byte[], byte[]> record) {
         String traceId = TestTracingProvider.getCurrentTraceId();
         if (null == traceId) {
             traceId = "trace-" + UUID.randomUUID();
@@ -45,13 +44,13 @@ public class TestTracingProducer extends ProducerAdaptor<byte[], DecatonTaskRequ
     }
 
     @Override
-    public Future<RecordMetadata> send(ProducerRecord<byte[], DecatonTaskRequest> record) {
+    public Future<RecordMetadata> send(ProducerRecord<byte[], byte[]> record) {
         propagateCurrentTrace(record);
         return super.send(record);
     }
 
     @Override
-    public Future<RecordMetadata> send(ProducerRecord<byte[], DecatonTaskRequest> record, Callback callback) {
+    public Future<RecordMetadata> send(ProducerRecord<byte[], byte[]> record, Callback callback) {
         propagateCurrentTrace(record);
         return super.send(record, callback);
     }
