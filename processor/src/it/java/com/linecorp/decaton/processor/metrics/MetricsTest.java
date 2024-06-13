@@ -38,6 +38,7 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 
 import com.linecorp.decaton.client.DecatonClient;
 import com.linecorp.decaton.client.kafka.PrintableAsciiStringSerializer;
+import com.linecorp.decaton.common.TaskMetadataUtil;
 import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.ProcessorSubscription;
@@ -45,6 +46,7 @@ import com.linecorp.decaton.processor.runtime.ProcessorsBuilder;
 import com.linecorp.decaton.processor.runtime.Property;
 import com.linecorp.decaton.processor.runtime.StaticPropertySupplier;
 import com.linecorp.decaton.protobuf.ProtocolBuffersDeserializer;
+import com.linecorp.decaton.protocol.Decaton.TaskMetadataProto;
 import com.linecorp.decaton.protocol.Sample.HelloTask;
 import com.linecorp.decaton.testing.KafkaClusterExtension;
 import com.linecorp.decaton.testing.TestUtils;
@@ -231,7 +233,11 @@ public class MetricsTest {
                                          new ByteArraySerializer())) {
             for (int i = 0; i < count; i++) {
                 // All requests will be sent on partition 0 for simplicity
-                producer.send(new ProducerRecord<>(topicName, 0, null, HelloTask.newBuilder().setAge(i).build().toByteArray()));
+                ProducerRecord<String, byte[]> record = new ProducerRecord<>(
+                        topicName, 0, null, HelloTask.newBuilder().setAge(i).build().toByteArray());
+                // simulate produces from DecatonClient
+                TaskMetadataUtil.writeAsHeader(TaskMetadataProto.getDefaultInstance(), record.headers());
+                producer.send(record);
             }
             processLatch.await();
 
