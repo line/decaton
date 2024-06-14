@@ -19,6 +19,7 @@ package com.linecorp.decaton.processor.runtime.internal;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
@@ -50,10 +51,12 @@ import com.linecorp.decaton.processor.ProcessingContext;
 import com.linecorp.decaton.processor.TaskMetadata;
 import com.linecorp.decaton.processor.runtime.DefaultSubPartitioner;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
+import com.linecorp.decaton.processor.runtime.Property;
 import com.linecorp.decaton.processor.runtime.RetryConfig;
 import com.linecorp.decaton.processor.runtime.SubPartitionRuntime;
 import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider;
 import com.linecorp.decaton.protocol.Sample.HelloTask;
+import com.linecorp.decaton.protocol.internal.DecatonInternal.DecatonTaskRequest;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -147,5 +150,52 @@ public class DecatonTaskRetryQueueingProcessorTest {
         }
 
         verify(context, never()).deferCompletion();
+    }
+
+    @Test
+    public void testLegacyRetryTaskFormat() throws Exception {
+        byte[] key = "key".getBytes(StandardCharsets.UTF_8);
+        TaskMetadata meta =
+                TaskMetadata.builder()
+                            .sourceApplicationId("unit-test")
+                            .sourceInstanceId("testing")
+                            .timestampMillis(12345)
+                            .retryCount(1)
+                            .scheduledTimeMillis(67891)
+                            .build();
+        doReturn(key).when(context).key();
+        doReturn(meta).when(context).metadata();
+
+        SubscriptionScope scope = new SubscriptionScope(
+                "subscription", "topic",
+                SubPartitionRuntime.THREAD_POOL,
+                Optional.of(RetryConfig.builder().backoff(RETRY_BACKOFF).build()), Optional.empty(),
+                ProcessorProperties.builder()
+                                   .set(Property.ofStatic(ProcessorProperties.CONFIG_TASK_METADATA_AS_HEADER,
+                                                          false))
+                                   .build(), NoopTracingProvider.INSTANCE,
+                ConsumerSupplier.DEFAULT_MAX_POLL_RECORDS,
+                DefaultSubPartitioner::new);
+
+        DecatonTaskRetryQueueingProcessor processor = new DecatonTaskRetryQueueingProcessor(scope, producer);
+
+        HelloTask task = HelloTask.getDefaultInstance();
+        long currentTime = System.currentTimeMillis();
+        processor.process(context, task.toByteArray());
+
+        ArgumentCaptor<ProducerRecord<byte[], byte[]>> captor = ArgumentCaptor.forClass(ProducerRecord.class);
+        verify(producer, times(1)).sendRequest(captor.capture());
+
+        ProducerRecord<byte[], byte[]> record = captor.getValue();
+        DecatonTaskRequest taskRequest = DecatonTaskRequest.parseFrom(record.value());
+
+        assertArrayEquals(task.toByteArray(), taskRequest.getSerializedTask().toByteArray());
+        assertNull(TaskMetadataUtil.readFromHeader(record.headers()));
+
+        assertEquals(meta.sourceApplicationId(), taskRequest.getMetadata().getSourceApplicationId());
+        assertEquals(meta.sourceInstanceId(), taskRequest.getMetadata().getSourceInstanceId());
+        assertEquals(meta.timestampMillis(), taskRequest.getMetadata().getTimestampMillis());
+        assertEquals(meta.retryCount() + 1, taskRequest.getMetadata().getRetryCount());
+        assertTrue(taskRequest.getMetadata().getScheduledTimeMillis() >= currentTime + RETRY_BACKOFF.toMillis());
     }
 }

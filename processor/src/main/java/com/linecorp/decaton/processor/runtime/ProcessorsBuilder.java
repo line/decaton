@@ -29,6 +29,7 @@ import com.linecorp.decaton.processor.runtime.internal.DefaultTaskExtractor;
 import com.linecorp.decaton.processor.runtime.internal.Processors;
 
 import lombok.Getter;
+import lombok.RequiredArgsConstructor;
 import lombok.experimental.Accessors;
 
 /**
@@ -74,34 +75,7 @@ public class ProcessorsBuilder<T> {
      * @return an instance of {@link ProcessorsBuilder}.
      */
     public static <T> ProcessorsBuilder<T> consuming(String topic, TaskExtractor<T> taskExtractor) {
-        // Retry tasks might be stored in retry-topic in DecatonTaskRequest format depending on
-        // decaton.task.metadata.as.header configuration.
-        // Hence, we need to extract the task with DefaultTaskExtractor to "unwrap" the task first,
-        // then extract the task with the given taskExtractor.
-        DefaultTaskExtractor<byte[]> outerExtractor = new DefaultTaskExtractor<>(bytes -> bytes);
-        TaskExtractor<T> retryTaskExtractor = record -> {
-            DecatonTask<byte[]> rawTask = outerExtractor.extract(record);
-            ConsumerRecord<byte[], byte[]> inner = new ConsumerRecord<>(
-                    record.topic(),
-                    record.partition(),
-                    record.offset(),
-                    record.timestamp(),
-                    record.timestampType(),
-                    record.serializedKeySize(),
-                    rawTask.taskDataBytes().length,
-                    record.key(),
-                    rawTask.taskDataBytes(),
-                    record.headers(),
-                    record.leaderEpoch()
-            );
-            DecatonTask<T> extracted = taskExtractor.extract(inner);
-            return new DecatonTask<>(
-                    // Use rawTask#metadata because retry count is stored in rawTask#metada not extracted#metadata
-                    rawTask.metadata(),
-                    extracted.taskData(),
-                    extracted.taskDataBytes());
-        };
-        return new ProcessorsBuilder<>(topic, taskExtractor, retryTaskExtractor);
+        return new ProcessorsBuilder<>(topic, taskExtractor, new RetryTaskExtractor<>(taskExtractor));
     }
 
     /**
@@ -146,5 +120,39 @@ public class ProcessorsBuilder<T> {
 
     Processors<T> build(DecatonProcessorSupplier<byte[]> retryProcessorSupplier) {
         return new Processors<>(suppliers, retryProcessorSupplier, taskExtractor, retryTaskExtractor);
+    }
+
+    @RequiredArgsConstructor
+    private static class RetryTaskExtractor<T> implements TaskExtractor<T> {
+        private final DefaultTaskExtractor<byte[]> outerExtractor = new DefaultTaskExtractor<>(bytes -> bytes);
+        private final TaskExtractor<T> innerExtractor;
+
+        @Override
+        public DecatonTask<T> extract(ConsumerRecord<byte[], byte[]> record) {
+            // Retry tasks might be stored in retry-topic in DecatonTaskRequest format depending on
+            // decaton.task.metadata.as.header configuration.
+            // Hence, we need to extract the task with DefaultTaskExtractor to "unwrap" the task first,
+            // then extract the task with the given taskExtractor.
+            DecatonTask<byte[]> outerTask = outerExtractor.extract(record);
+            ConsumerRecord<byte[], byte[]> inner = new ConsumerRecord<>(
+                    record.topic(),
+                    record.partition(),
+                    record.offset(),
+                    record.timestamp(),
+                    record.timestampType(),
+                    record.serializedKeySize(),
+                    outerTask.taskDataBytes().length,
+                    record.key(),
+                    outerTask.taskDataBytes(),
+                    record.headers(),
+                    record.leaderEpoch()
+            );
+            DecatonTask<T> extracted = innerExtractor.extract(inner);
+            return new DecatonTask<>(
+                    // Use rawTask#metadata because retry count is stored in rawTask#metada not extracted#metadata
+                    outerTask.metadata(),
+                    extracted.taskData(),
+                    extracted.taskDataBytes());
+        }
     }
 }
