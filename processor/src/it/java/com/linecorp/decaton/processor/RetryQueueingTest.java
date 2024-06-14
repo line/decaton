@@ -20,9 +20,11 @@ import java.time.Duration;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.AfterEach;
@@ -33,6 +35,7 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 
 import com.linecorp.decaton.processor.Completion.TimeoutChoice;
 import com.linecorp.decaton.processor.runtime.DecatonTask;
+import com.linecorp.decaton.processor.runtime.DynamicProperty;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.Property;
 import com.linecorp.decaton.processor.runtime.RetryConfig;
@@ -239,6 +242,47 @@ public class RetryQueueingTest {
                             }
                             return TimeoutChoice.EXTEND;
                         });
+                    }
+                }))
+                .retryConfig(RetryConfig.builder()
+                                        .retryTopic(retryTopic)
+                                        .backoff(Duration.ofMillis(10))
+                                        .build())
+                .excludeSemantics(GuaranteeType.PROCESS_ORDERING,
+                                  GuaranteeType.SERIAL_PROCESSING)
+                .customSemantics(new ProcessRetriedTask())
+                .build()
+                .run();
+    }
+
+    @Test
+    @Timeout(60)
+    public void testRetryQueueingMigrateToHeader() throws Exception {
+        DynamicProperty<Boolean> metadataAsHeader =
+                new DynamicProperty<>(ProcessorProperties.CONFIG_TASK_METADATA_AS_HEADER);
+        metadataAsHeader.set(false);
+
+        AtomicInteger processCount = new AtomicInteger(0);
+        CountDownLatch migrationLatch = new CountDownLatch(1);
+        ProcessorTestSuite
+                .builder(rule)
+                .numTasks(100)
+                .propertySupplier(StaticPropertySupplier.of(metadataAsHeader))
+                .produceTasksWithHeaderMetadata(false)
+                .configureProcessorsBuilder(builder -> builder.thenProcess((ctx, task) -> {
+                    if (ctx.metadata().retryCount() == 0) {
+                        int cnt = processCount.incrementAndGet();
+                        // Enable header-mode after 50 tasks are processed
+                        if (cnt < 50) {
+                            ctx.retry();
+                        } else if (cnt == 50) {
+                            metadataAsHeader.set(true);
+                            migrationLatch.countDown();
+                            ctx.retry();
+                        } else {
+                            migrationLatch.await();
+                            ctx.retry();
+                        }
                     }
                 }))
                 .retryConfig(RetryConfig.builder()

@@ -49,6 +49,8 @@ import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 
+import com.google.protobuf.ByteString;
+
 import com.linecorp.decaton.client.DecatonClientBuilder.DefaultKafkaProducerSupplier;
 import com.linecorp.decaton.common.TaskMetadataUtil;
 import com.linecorp.decaton.processor.Completion;
@@ -69,6 +71,7 @@ import com.linecorp.decaton.processor.runtime.TaskExtractor;
 import com.linecorp.decaton.processor.runtime.internal.RateLimiter;
 import com.linecorp.decaton.processor.tracing.TracingProvider;
 import com.linecorp.decaton.protocol.Decaton.TaskMetadataProto;
+import com.linecorp.decaton.protocol.internal.DecatonInternal.DecatonTaskRequest;
 import com.linecorp.decaton.testing.KafkaClusterExtension;
 import com.linecorp.decaton.testing.TestUtils;
 import com.linecorp.decaton.testing.processor.ProcessingGuarantee.GuaranteeType;
@@ -109,6 +112,7 @@ public class ProcessorTestSuite {
     private final TracingProvider tracingProvider;
     private final Function<String, Producer<byte[], byte[]>> producerSupplier;
     private final TaskExtractor<TestTask> customTaskExtractor;
+    private final boolean produceTasksWithHeaderMetadata;
 
     private static final int DEFAULT_NUM_TASKS = 10000;
     private static final int NUM_KEYS = 100;
@@ -182,6 +186,10 @@ public class ProcessorTestSuite {
          * Supply custom {@link TaskExtractor} to be used to extract a task.
          */
         private TaskExtractor<TestTask> customTaskExtractor;
+        /**
+         * Specify whether to produce tasks with header metadata instead of DecatonTaskRequest format
+         */
+        private boolean produceTasksWithHeaderMetadata = true;
 
         /**
          * Exclude semantics from assertion.
@@ -229,7 +237,8 @@ public class ProcessorTestSuite {
                                           statesListener,
                                           tracingProvider,
                                           producerSupplier,
-                                          customTaskExtractor);
+                                          customTaskExtractor,
+                                          produceTasksWithHeaderMetadata);
         }
     }
 
@@ -426,9 +435,19 @@ public class ProcessorTestSuite {
                                      .setSourceApplicationId("test-application")
                                      .setSourceInstanceId("test-instance")
                                      .build();
-            ProducerRecord<byte[], byte[]> record =
-                    new ProducerRecord<>(topic, null, taskMetadata.getTimestampMillis(), key, serializer.serialize(task));
-            TaskMetadataUtil.writeAsHeader(taskMetadata, record.headers());
+            final ProducerRecord<byte[], byte[]> record;
+            if (produceTasksWithHeaderMetadata) {
+                record = new ProducerRecord<>(topic, null, taskMetadata.getTimestampMillis(), key, serializer.serialize(task));
+                TaskMetadataUtil.writeAsHeader(taskMetadata, record.headers());
+            } else {
+                DecatonTaskRequest request =
+                        DecatonTaskRequest.newBuilder()
+                                          .setMetadata(taskMetadata)
+                                          .setSerializedTask(ByteString.copyFrom(serializer.serialize(task)))
+                                          .build();
+                record = new ProducerRecord<>(topic, null, taskMetadata.getTimestampMillis(), key, request.toByteArray());
+            }
+
             CompletableFuture<RecordMetadata> future = new CompletableFuture<>();
             produceFutures[i] = future;
 
