@@ -14,7 +14,7 @@
  * under the License.
  */
 
-package com.linecorp.decaton.common;
+package com.linecorp.decaton.client.internal;
 
 import java.io.UncheckedIOException;
 

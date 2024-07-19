@@ -20,8 +20,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Supplier;
 
-import org.apache.kafka.clients.consumer.ConsumerRecord;
-
 import com.linecorp.decaton.common.Deserializer;
 import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.runtime.internal.DecatonProcessorSupplierImpl;
@@ -128,28 +126,21 @@ public class ProcessorsBuilder<T> {
         private final TaskExtractor<T> innerExtractor;
 
         @Override
-        public DecatonTask<T> extract(ConsumerRecord<byte[], byte[]> record) {
+        public DecatonTask<T> extract(ConsumedRecord record) {
             // Retry tasks might be stored in retry-topic in DecatonTaskRequest format depending on
             // decaton.task.metadata.as.header configuration.
             // Hence, we need to extract the task with DefaultTaskExtractor to "unwrap" the task first,
             // then extract the task with the given taskExtractor.
             DecatonTask<byte[]> outerTask = outerExtractor.extract(record);
-            ConsumerRecord<byte[], byte[]> inner = new ConsumerRecord<>(
-                    record.topic(),
-                    record.partition(),
-                    record.offset(),
-                    record.timestamp(),
-                    record.timestampType(),
-                    record.serializedKeySize(),
-                    outerTask.taskDataBytes().length,
-                    record.key(),
-                    outerTask.taskDataBytes(),
-                    record.headers(),
-                    record.leaderEpoch()
-            );
+            ConsumedRecord inner = ConsumedRecord
+                    .builder()
+                    .headers(record.headers())
+                    .key(record.key())
+                    .value(outerTask.taskDataBytes())
+                    .build();
             DecatonTask<T> extracted = innerExtractor.extract(inner);
             return new DecatonTask<>(
-                    // Use rawTask#metadata because retry count is stored in rawTask#metada not extracted#metadata
+                    // Use outerTask#metadata because retry count is stored in rawTask#metada not extracted#metadata
                     outerTask.metadata(),
                     extracted.taskData(),
                     extracted.taskDataBytes());

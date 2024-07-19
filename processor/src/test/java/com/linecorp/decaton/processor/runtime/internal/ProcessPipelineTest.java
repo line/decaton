@@ -18,6 +18,7 @@ package com.linecorp.decaton.processor.runtime.internal;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
@@ -94,10 +95,8 @@ public class ProcessPipelineTest {
             .new TaskMetrics();
 
     private static TaskRequest taskRequest() {
-        return new TaskRequest(new OffsetState(1234), new ConsumerRecord<>(
-                "topic", 1, 1, "TEST".getBytes(StandardCharsets.UTF_8), TASK.toByteArray()),
-                               NoopTrace.INSTANCE,
-                               null);
+        return new TaskRequest(
+                new TopicPartition("topic", 1), 1, new OffsetState(1234), "TEST".getBytes(StandardCharsets.UTF_8), null, NoopTrace.INSTANCE, TASK.toByteArray(), null);
     }
 
     @Mock
@@ -210,6 +209,17 @@ public class ProcessPipelineTest {
         verify(schedulerMock, never()).schedule(any());
         verify(processorMock, never()).process(any(), any());
         assertTrue(request.offsetState().completion().isComplete());
+    }
+
+    @Test
+    public void testExtract_PurgeRawRequestBytes() {
+        when(extractorMock.extract(any()))
+                .thenReturn(new DecatonTask<>(TaskMetadata.builder().build(), TASK, TASK.toByteArray()));
+
+        TaskRequest request = taskRequest();
+        pipeline.extract(request);
+
+        assertNull(request.rawRequestBytes());
     }
 
     @Test

@@ -44,7 +44,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 
-import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.TopicPartition;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -108,10 +108,6 @@ public class ProcessingContextImplTest {
 
     private static final HelloTask TASK = HelloTask.getDefaultInstance();
 
-    private static ConsumerRecord<byte[], byte[]> record(String topic, int partition, long offset, byte[] key) {
-        return new ConsumerRecord<>(topic, partition, offset, key, TASK.toByteArray());
-    }
-
     @Mock
     private NamedProcessor processorMock;
 
@@ -123,8 +119,9 @@ public class ProcessingContextImplTest {
     @SafeVarargs
     private static ProcessingContextImpl<HelloTask> context(RecordTraceHandle traceHandle,
                                                             DecatonProcessor<HelloTask>... processors) {
-        TaskRequest request = new TaskRequest(null, record("topic", 1, 1, "TEST".getBytes(StandardCharsets.UTF_8)),
-                                              traceHandle, null);
+        TaskRequest request = new TaskRequest(
+                new TopicPartition("topic", 1), 1, null, "TEST".getBytes(StandardCharsets.UTF_8),
+                null, traceHandle, TASK.toByteArray(), null);
         DecatonTask<HelloTask> task = new DecatonTask<>(
                 TaskMetadata.builder().build(), TASK, TASK.toByteArray());
         return new ProcessingContextImpl<>("subscription", request, task, Arrays.asList(processors),
@@ -368,8 +365,8 @@ public class ProcessingContextImplTest {
     public void testRetry() throws InterruptedException {
         CountDownLatch retryLatch = new CountDownLatch(1);
         DecatonProcessor<byte[]> retryProcessor = spy(new AsyncCompleteProcessor(retryLatch));
-        TaskRequest request = new TaskRequest(null, record("topic", 1, 1, "TEST".getBytes(StandardCharsets.UTF_8)),
-                                              null, null);
+        TaskRequest request = new TaskRequest(
+                new TopicPartition("topic", 1), 1, null, "TEST".getBytes(StandardCharsets.UTF_8), null, null, TASK.toByteArray(), null);
         DecatonTask<byte[]> task = new DecatonTask<>(
                 TaskMetadata.builder().build(), TASK.toByteArray(), TASK.toByteArray());
 
@@ -399,8 +396,8 @@ public class ProcessingContextImplTest {
     public void testRetryAtCompletionTimeout() throws InterruptedException {
         CountDownLatch retryLatch = new CountDownLatch(1);
         DecatonProcessor<byte[]> retryProcessor = spy(new AsyncCompleteProcessor(retryLatch));
-        TaskRequest request = new TaskRequest(null, record("topic", 1, 1, "TEST".getBytes(StandardCharsets.UTF_8)),
-                                              null, null);
+        TaskRequest request = new TaskRequest(
+                new TopicPartition("topic", 1), 1, null, "TEST".getBytes(StandardCharsets.UTF_8), null, null, TASK.toByteArray(), null);
         DecatonTask<byte[]> task = new DecatonTask<>(
                 TaskMetadata.builder().build(), TASK.toByteArray(), TASK.toByteArray());
 

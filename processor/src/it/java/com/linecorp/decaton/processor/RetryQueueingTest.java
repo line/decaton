@@ -26,7 +26,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -34,6 +33,7 @@ import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import com.linecorp.decaton.processor.Completion.TimeoutChoice;
+import com.linecorp.decaton.processor.runtime.ConsumedRecord;
 import com.linecorp.decaton.processor.runtime.DecatonTask;
 import com.linecorp.decaton.processor.runtime.DynamicProperty;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
@@ -108,7 +108,7 @@ public class RetryQueueingTest {
 
     private static class TestTaskExtractor implements TaskExtractor<TestTask> {
         @Override
-        public DecatonTask<TestTask> extract(ConsumerRecord<byte[], byte[]> record) {
+        public DecatonTask<TestTask> extract(ConsumedRecord record) {
             TaskMetadata meta = TaskMetadata.builder().build();
             TestTask task = new TestTask.TestTaskDeserializer().deserialize(record.value());
             return new DecatonTask<>(meta, task, record.value());

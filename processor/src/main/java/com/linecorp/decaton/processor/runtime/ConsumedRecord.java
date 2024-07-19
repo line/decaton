@@ -14,7 +14,33 @@
  * under the License.
  */
 
-dependencies {
-    api project(":protocol")
-    implementation "org.apache.kafka:kafka-clients:$kafkaVersion"
+package com.linecorp.decaton.processor.runtime;
+
+import org.apache.kafka.common.header.Headers;
+
+import lombok.Builder;
+import lombok.Value;
+import lombok.experimental.Accessors;
+
+/**
+ * Represents a single record consumed by Decaton and to be extracted as task
+ */
+@Value
+@Builder
+@Accessors(fluent = true)
+public class ConsumedRecord {
+    /**
+     * Headers of the record
+     */
+    Headers headers;
+
+    /**
+     * Key of the record
+     */
+    byte[] key;
+
+    /**
+     * Value of the record
+     */
+    byte[] value;
 }

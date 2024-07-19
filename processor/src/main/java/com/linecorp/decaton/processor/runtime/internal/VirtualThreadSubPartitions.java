@@ -43,7 +43,7 @@ public class VirtualThreadSubPartitions extends AbstractSubPartitions {
 
     @Override
     public void addTask(TaskRequest request) {
-        int threadId = subPartitioner.subPartitionFor(request.record().key());
+        int threadId = subPartitioner.subPartitionFor(request.key());
         units.computeIfAbsent(threadId, key -> {
             ExecutorService executor = Executors.newSingleThreadExecutor(
                     Utils.namedVirtualThreadFactory("PartitionProcessorVThread-" + scope));

@@ -52,7 +52,7 @@ import org.apache.kafka.common.serialization.ByteArraySerializer;
 import com.google.protobuf.ByteString;
 
 import com.linecorp.decaton.client.DecatonClientBuilder.DefaultKafkaProducerSupplier;
-import com.linecorp.decaton.common.TaskMetadataUtil;
+import com.linecorp.decaton.client.internal.TaskMetadataUtil;
 import com.linecorp.decaton.processor.Completion;
 import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.runtime.PerKeyQuotaConfig;

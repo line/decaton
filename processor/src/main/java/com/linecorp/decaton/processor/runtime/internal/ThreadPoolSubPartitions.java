@@ -64,7 +64,7 @@ public class ThreadPoolSubPartitions extends AbstractSubPartitions {
 
     @Override
     public void addTask(TaskRequest request) {
-        int threadId = subPartitioner.subPartitionFor(request.record().key());
+        int threadId = subPartitioner.subPartitionFor(request.key());
         SubPartition subPartition = subPartitions[threadId];
         if (subPartition == null) {
             ThreadScope threadScope = new ThreadScope(scope, threadId);

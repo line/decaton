@@ -28,7 +28,6 @@ import com.linecorp.decaton.client.KafkaProducerSupplier;
 import com.linecorp.decaton.client.PutTaskResult;
 import com.linecorp.decaton.client.kafka.PrintableAsciiStringSerializer;
 import com.linecorp.decaton.common.Serializer;
-import com.linecorp.decaton.common.TaskMetadataUtil;
 import com.linecorp.decaton.protocol.Decaton.TaskMetadataProto;
 
 public class DecatonClientImpl<T> implements DecatonClient<T> {

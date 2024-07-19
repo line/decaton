@@ -25,7 +25,7 @@ import com.google.protobuf.ByteString;
 
 import com.linecorp.decaton.client.internal.DecatonTaskProducer;
 import com.linecorp.decaton.client.PutTaskResult;
-import com.linecorp.decaton.common.TaskMetadataUtil;
+import com.linecorp.decaton.client.internal.TaskMetadataUtil;
 import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.ProcessingContext;
 import com.linecorp.decaton.processor.TaskMetadata;

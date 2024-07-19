@@ -27,7 +27,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 
-import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -67,10 +66,8 @@ public class ProcessorUnitTest {
                 0);
 
         unit = spy(new ProcessorUnit(scope, pipeline, Executors.newSingleThreadExecutor()));
-        ConsumerRecord<byte[], byte[]> record = new ConsumerRecord<>(
-                topicPartition.topic(), topicPartition.partition(), 1234, null, HelloTask.getDefaultInstance().toByteArray());
 
-        taskRequest = new TaskRequest(new OffsetState(1234), record, null, null);
+        taskRequest = new TaskRequest(topicPartition, 1, new OffsetState(1234), null, null, null, HelloTask.getDefaultInstance().toByteArray(), null);
     }
 
     @Test

@@ -16,12 +16,11 @@
 
 package com.linecorp.decaton.processor.runtime.internal;
 
-import org.apache.kafka.clients.consumer.ConsumerRecord;
-
 import com.google.protobuf.InvalidProtocolBufferException;
 
 import com.linecorp.decaton.common.Deserializer;
-import com.linecorp.decaton.common.TaskMetadataUtil;
+import com.linecorp.decaton.client.internal.TaskMetadataUtil;
+import com.linecorp.decaton.processor.runtime.ConsumedRecord;
 import com.linecorp.decaton.processor.runtime.DecatonTask;
 import com.linecorp.decaton.processor.runtime.TaskExtractor;
 import com.linecorp.decaton.processor.TaskMetadata;
@@ -35,7 +34,7 @@ public class DefaultTaskExtractor<T> implements TaskExtractor<T> {
     private final Deserializer<T> taskDeserializer;
 
     @Override
-    public DecatonTask<T> extract(ConsumerRecord<byte[], byte[]> record) {
+    public DecatonTask<T> extract(ConsumedRecord record) {
         TaskMetadataProto headerMeta = TaskMetadataUtil.readFromHeader(record.headers());
         if (headerMeta != null) {
             byte[] taskDataBytes = record.value();

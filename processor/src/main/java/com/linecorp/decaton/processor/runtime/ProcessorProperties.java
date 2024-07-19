@@ -231,7 +231,7 @@ public class ProcessorProperties extends AbstractDecatonProperties {
      * <p>
      * <b>CAUTION!!! YOU MAY NEED TO SET THIS TO FALSE WHEN YOU UPGRADE FROM 8.0.1 OR EARLIER</b>
      * <p>
-     * Please read <a href="https://github.com/line/decaton/releases/tag/v8.0.1">Decaton 9.0.0 Release Note</a> carefully.
+     * Please read <a href="https://github.com/line/decaton/releases/tag/v9.0.0">Decaton 9.0.0 Release Note</a> carefully.
      * <p>
      * Reloadable: yes
      */

@@ -29,6 +29,7 @@ import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.LoggingContext;
 import com.linecorp.decaton.processor.ProcessingContext;
 import com.linecorp.decaton.processor.metrics.Metrics.TaskMetrics;
+import com.linecorp.decaton.processor.runtime.ConsumedRecord;
 import com.linecorp.decaton.processor.runtime.DecatonTask;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.TaskExtractor;
@@ -124,10 +125,16 @@ public class ProcessPipeline<T> implements AutoCloseable {
     // visible for testing
     DecatonTask<T> extract(TaskRequest request) {
         final DecatonTask<T> extracted;
-        extracted = taskExtractor.extract(request.record());
+        extracted = taskExtractor.extract(
+                ConsumedRecord.builder()
+                              .headers(request.headers())
+                              .key(request.key())
+                              .value(request.rawRequestBytes())
+                              .build());
         if (!validateTask(extracted)) {
             throw new RuntimeException("Invalid task");
         }
+        request.purgeRawRequestBytes();
 
         return extracted;
     }

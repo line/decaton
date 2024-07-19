@@ -45,11 +45,11 @@ public class LoggingContext implements AutoCloseable {
         this.enabled = enabled;
         if (enabled) {
             MDC.put(METADATA_KEY, metadata.toString());
-            MDC.put(TASK_KEY, ByteArrays.toString(request.record().key()));
+            MDC.put(TASK_KEY, ByteArrays.toString(request.key()));
             MDC.put(SUBSCRIPTION_ID_KEY, subscriptionId);
-            MDC.put(OFFSET_KEY, String.valueOf(request.record().offset()));
-            MDC.put(TOPIC_KEY, request.record().topic());
-            MDC.put(PARTITION_KEY, String.valueOf(request.record().partition()));
+            MDC.put(OFFSET_KEY, String.valueOf(request.recordOffset()));
+            MDC.put(TOPIC_KEY, request.topicPartition().topic());
+            MDC.put(PARTITION_KEY, String.valueOf(request.topicPartition().partition()));
         }
     }
 

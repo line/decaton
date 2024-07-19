@@ -19,9 +19,10 @@ package com.linecorp.decaton.processor.runtime.internal;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.junit.jupiter.api.Test;
 
+import com.linecorp.decaton.processor.runtime.ConsumedRecord;
 import com.linecorp.decaton.processor.runtime.DecatonTask;
 import com.linecorp.decaton.protobuf.ProtocolBuffersDeserializer;
 import com.linecorp.decaton.protocol.internal.DecatonInternal.DecatonTaskRequest;
@@ -41,8 +42,11 @@ public class DefaultTaskExtractorTest {
         DefaultTaskExtractor<HelloTask> extractor = new DefaultTaskExtractor<>(
                 new ProtocolBuffersDeserializer<>(HelloTask.parser()));
 
-        ConsumerRecord<byte[], byte[]> record = new ConsumerRecord<>(
-                "topic", 0, 0, null, LEGACY_REQUEST.toByteArray());
+        ConsumedRecord record = ConsumedRecord
+                .builder()
+                .headers(new RecordHeaders())
+                .value(LEGACY_REQUEST.toByteArray())
+                .build();
 
         DecatonTask<HelloTask> extracted = extractor.extract(record);
 

@@ -21,7 +21,6 @@ import java.time.Duration;
 import java.util.concurrent.CountDownLatch;
 import java.util.function.Consumer;
 
-import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
@@ -36,6 +35,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
+import com.linecorp.decaton.processor.runtime.ConsumedRecord;
 import com.linecorp.decaton.processor.runtime.DecatonTask;
 import com.linecorp.decaton.processor.runtime.ProcessorSubscription;
 import com.linecorp.decaton.processor.runtime.ProcessorsBuilder;
@@ -78,7 +78,7 @@ public class ArbitraryTopicTypeTest {
         }
 
         @Override
-        public DecatonTask<T> extract(ConsumerRecord<byte[], byte[]> record) {
+        public DecatonTask<T> extract(ConsumedRecord record) {
             final T value = deserializer.deserialize(topic, record.value());
             final TaskMetadata metadata = TaskMetadata.builder().build();
             return new DecatonTask<>(metadata, value, record.value());
