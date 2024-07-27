@@ -33,7 +33,7 @@ import com.linecorp.decaton.processor.runtime.SubscriptionBuilder;
 import com.linecorp.decaton.processor.runtime.TaskExtractor;
 import com.linecorp.decaton.protocol.Sample.HelloTask;
 
-import example.processors.InsertHelloTask;
+import example.processors.InsertHelloTaskBatchingProcessor;
 
 public class TaskBatchingMain {
     public static void main(String[] args) throws Exception {
@@ -73,6 +73,6 @@ public class TaskBatchingMain {
     }
 
     private static BatchingProcessor<HelloTask> createBatchingProcessor(long lingerMillis, int capacity) {
-        return new InsertHelloTask(lingerMillis, capacity); // <1>
+        return new InsertHelloTaskBatchingProcessor(lingerMillis, capacity); // <1>
     }
 }

@@ -22,8 +22,8 @@ import java.util.stream.Collectors;
 import com.linecorp.decaton.processor.processors.BatchingProcessor;
 import com.linecorp.decaton.protocol.Sample.HelloTask;
 
-public class InsertHelloTask extends BatchingProcessor<HelloTask> {
-    public InsertHelloTask(long lingerMillis, int capacity) {
+public class InsertHelloTaskBatchingProcessor extends BatchingProcessor<HelloTask> {
+    public InsertHelloTaskBatchingProcessor(long lingerMillis, int capacity) {
         super(lingerMillis, capacity);
     }
 
@@ -31,7 +31,9 @@ public class InsertHelloTask extends BatchingProcessor<HelloTask> {
     protected void processBatchingTasks(List<BatchingTask<HelloTask>> batchingTasks) {
         List<HelloTask> helloTasks =
                 batchingTasks.stream().map(BatchingTask::task).collect(Collectors.toList());
-        helloTasks.forEach(task -> System.out.println("Processing task: " + task)); // (Process helloTasks)
+        helloTasks.forEach(
+                task -> System.out.println("Processing task: " + task) // (If it's real, insert tasks.)
+        );
         batchingTasks.forEach(batchingTask -> batchingTask.completion().complete());
     }
 }
