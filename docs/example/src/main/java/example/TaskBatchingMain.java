@@ -73,6 +73,6 @@ public class TaskBatchingMain {
     }
 
     private static BatchingProcessor<HelloTask> createBatchingProcessor(long lingerMillis, int capacity) {
-        return new InsertHelloTaskBatchingProcessor(lingerMillis, capacity); // <1>
+        return new InsertHelloTaskBatchingProcessor(lingerMillis, capacity);
     }
 }
