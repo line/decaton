@@ -1,0 +1,114 @@
+= Task Batching
+:base_version: 8.0.0
+:modules: processor
+
+== Introduction
+Task Batching is a feature to batch several tasks of type `T` to `List<T>` and process them at once.
+
+Decaton provides a *time-based* way and *size-based* way to batch multiple tasks.
+The *time-based* means that tasks in past linger time are processed on every linger time.
+The *size-based* means that tasks in past before reaching capacity are processed every time tasks’size reaches capacity.
+
+== When to use (Example)
+When downstream-DB supports batching I/O (which often very efficient)
+
+== Usage
+To use `Task Batching`, you need to create a class that inherits `BatchingProcessor`.
+
+=== BatchingProcessor
+`BatchingProcessor` is an abstract `DecatonProcessor` to batch several tasks of type `T` to `List<T>`. To implement this class, pass two arguments to the constructor and implement one abstract method:
+
+|===
+|parameter |Description
+
+|`lingerMillis`
+|Time limit for this processor. On every lingerMillis milliseconds, tasks in past lingerMillis milliseconds are pushed to `BatchingProcessor#processBatchingTasks(List)`.
+
+|`capacity`
+|Capacity size limit for this processor. Every time tasks’size reaches capacity, tasks in past before reaching capacity are pushed to `BatchingProcessor#processBatchingTasks(List)`.
+|===
+
+|===
+|abstract method |Description
+
+|`void processBatchingTasks(List<BatchingTask<T>> batchingTasks)`
+|When the size or time reach each limit, this method is called with stored `batchingTasks`. +
+After complete processing batch of tasks, *MUST* call `BatchingTask#completion` 's `DeferredCompletion#complete()` or `BatchingTask#context` 's `ProcessingContext#retry()` method for each `BatchingTask`. +
+The above methods is not called automatically even when an error occurs in this method, so design it so that they are called finally by yourself. Otherwise, consumption will stick. +
+`BatchingProcessor` realizes its function by using `ProcessingContext#deferCompletion()`. Reading `ProcessingContext#deferCompletion()` 's description will help you. +
+This method runs in different thread from the `process(ProcessingContext<T>, T)` thread.
+|===
+
+[CAUTION]
+====
+* Batch-flush is done in `BatchingProcessor` 's scheduled executor thread.
+* This means the parallelism of flushing has to be controlled by `ProcessorScope`, not only by `decaton.partition.concurrency` config. i.e.:
+
+** Parallelize flushing per partition: `ProcessorScope.PARTITION`
+** Parallelize flushing per processor thread: `ProcessorScope.THREAD`
+====
+
+Before getting started with the example, let's create a `HelloTask` domain object which can be used to simulate the scenario we described:
+
+[source,java]
+.HelloTask.java
+----
+public class HelloTask {
+    private String name;
+    private int age;
+    private String text;
+
+    // ... (Getter and Setter)
+}
+----
+Create a class that inherits `BatchingProcessor`, as shown in the following example `InsertHelloTaskBatchingProcessor`:
+
+[source,java]
+.InsertHelloTaskBatchingProcessor.java
+----
+public class InsertHelloTaskBatchingProcessor extends BatchingProcessor<HelloTask> {
+    public InsertHelloTaskBatchingProcessor(long lingerMillis, int capacity) {
+        super(lingerMillis, capacity); // <1>
+    }
+
+    @Override
+    protected void processBatchingTasks(List<BatchingTask<HelloTask>> batchingTasks) { // <2>
+        List<HelloTask> helloTasks =
+                batchingTasks.stream().map(BatchingTask::task).collect(Collectors.toList());
+        helloTasks.forEach(
+                task -> System.out.println("Processing task: " + task) // <3> (If it's real, insert tasks.)
+        );
+        batchingTasks.forEach(batchingTask -> batchingTask.completion().complete());
+    }
+}
+----
+Then, use this `InsertHelloTaskBatchingProcessor` class in your `ProcessorSubscription` setup:
+
+[source,java]
+.TaskBatchingMain.java
+----
+public class TaskBatchingMain {
+    public static void main(String[] args) {
+        // ... (Set up other options like default DecatonProcessor)
+        long lingerMillis = 1000;
+        int capacity = 100;
+        ProcessorSubscription subscription =
+                SubscriptionBuilder.newBuilder("my-decaton-processor")
+                                   .processorsBuilder(
+                                           ProcessorsBuilder
+                                                   .consuming("my-decaton-topic", extractor)
+                                                   .thenProcess(() -> createBatchingProcessor(lingerMillis,
+                                                                                              capacity),
+                                                                ProcessorScope.THREAD)
+                                   )
+                                    // ... (Set up other options and build)
+    }
+
+    private static BatchingProcessor<HelloTask> createBatchingProcessor(long lingerMillis, int capacity) {
+        return new InsertHelloTaskBatchingProcessor(lingerMillis, capacity); // <1>
+    }
+}
+----
+<1> Pass `lingerMillis` and `capacity` to the constructor.
+<2> Implement `processBatchingTasks(List)`.
+<3> Call `BatchingTask#completion` 's `DeferredCompletion#complete()`.
