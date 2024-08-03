@@ -19,18 +19,20 @@ package com.linecorp.decaton.processor.runtime.internal;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.junit.jupiter.api.Test;
 
+import com.linecorp.decaton.processor.runtime.ConsumedRecord;
 import com.linecorp.decaton.processor.runtime.DecatonTask;
 import com.linecorp.decaton.protobuf.ProtocolBuffersDeserializer;
-import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
+import com.linecorp.decaton.protocol.internal.DecatonInternal.DecatonTaskRequest;
 import com.linecorp.decaton.protocol.Decaton.TaskMetadataProto;
 import com.linecorp.decaton.protocol.Sample.HelloTask;
 
 public class DefaultTaskExtractorTest {
     private static final HelloTask TASK = HelloTask.getDefaultInstance();
 
-    private static final DecatonTaskRequest REQUEST =
+    private static final DecatonTaskRequest LEGACY_REQUEST =
             DecatonTaskRequest.newBuilder()
                               .setMetadata(TaskMetadataProto.newBuilder().setTimestampMillis(1561709151628L).build())
                               .setSerializedTask(TASK.toByteString())
@@ -40,9 +42,15 @@ public class DefaultTaskExtractorTest {
         DefaultTaskExtractor<HelloTask> extractor = new DefaultTaskExtractor<>(
                 new ProtocolBuffersDeserializer<>(HelloTask.parser()));
 
-        DecatonTask<HelloTask> extracted = extractor.extract(REQUEST.toByteArray());
+        ConsumedRecord record = ConsumedRecord
+                .builder()
+                .headers(new RecordHeaders())
+                .value(LEGACY_REQUEST.toByteArray())
+                .build();
 
-        assertEquals(REQUEST.getMetadata(), extracted.metadata().toProto());
+        DecatonTask<HelloTask> extracted = extractor.extract(record);
+
+        assertEquals(LEGACY_REQUEST.getMetadata(), extracted.metadata().toProto());
         assertEquals(TASK, extracted.taskData());
 
         assertArrayEquals(TASK.toByteArray(), extracted.taskDataBytes());

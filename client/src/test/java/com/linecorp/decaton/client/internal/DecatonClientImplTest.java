@@ -43,7 +43,7 @@ import org.mockito.quality.Strictness;
 
 import com.linecorp.decaton.client.DecatonClient.TaskMetadata;
 import com.linecorp.decaton.protobuf.ProtocolBuffersSerializer;
-import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
+import com.linecorp.decaton.protocol.Decaton.TaskMetadataProto;
 import com.linecorp.decaton.protocol.Sample.HelloTask;
 
 @ExtendWith(MockitoExtension.class)
@@ -54,7 +54,7 @@ public class DecatonClientImplTest {
     private static final String INSTANCE_ID = "instance";
 
     @Mock
-    private Producer<byte[], DecatonTaskRequest> producer;
+    private Producer<byte[], byte[]> producer;
 
     @Mock
     private Supplier<Long> timestampSupplier;
@@ -62,7 +62,7 @@ public class DecatonClientImplTest {
     private DecatonClientImpl<HelloTask> client;
 
     @Captor
-    private ArgumentCaptor<ProducerRecord<byte[], DecatonTaskRequest>> captor;
+    private ArgumentCaptor<ProducerRecord<byte[], byte[]>> captor;
 
     @BeforeEach
     public void setUp() {
@@ -78,9 +78,9 @@ public class DecatonClientImplTest {
         client.put("key", HelloTask.getDefaultInstance());
 
         verify(producer, times(1)).send(captor.capture(), any(Callback.class));
-        ProducerRecord<byte[], DecatonTaskRequest> record = captor.getValue();
+        ProducerRecord<byte[], byte[]> record = captor.getValue();
         assertNull(record.timestamp());
-        assertEquals(1234, record.value().getMetadata().getTimestampMillis());
+        assertEquals(1234, TaskMetadataUtil.readFromHeader(record.headers()).getTimestampMillis());
     }
 
     @Test
@@ -90,9 +90,9 @@ public class DecatonClientImplTest {
         client.put("key", HelloTask.getDefaultInstance(), ignored -> {});
 
         verify(producer, times(1)).send(captor.capture(), any(Callback.class));
-        ProducerRecord<byte[], DecatonTaskRequest> record = captor.getValue();
+        ProducerRecord<byte[], byte[]> record = captor.getValue();
         assertNull(record.timestamp());
-        assertEquals(1234, record.value().getMetadata().getTimestampMillis());
+        assertEquals(1234, TaskMetadataUtil.readFromHeader(record.headers()).getTimestampMillis());
     }
 
     @Test
@@ -102,9 +102,9 @@ public class DecatonClientImplTest {
         client.put("key", HelloTask.getDefaultInstance(), 5678L);
 
         verify(producer, times(1)).send(captor.capture(), any(Callback.class));
-        ProducerRecord<byte[], DecatonTaskRequest> record = captor.getValue();
+        ProducerRecord<byte[], byte[]> record = captor.getValue();
         assertNull(record.timestamp());
-        assertEquals(5678L, record.value().getMetadata().getTimestampMillis());
+        assertEquals(5678, TaskMetadataUtil.readFromHeader(record.headers()).getTimestampMillis());
     }
 
     @Test
@@ -115,9 +115,9 @@ public class DecatonClientImplTest {
         });
 
         verify(producer, times(1)).send(captor.capture(), any(Callback.class));
-        ProducerRecord<byte[], DecatonTaskRequest> record = captor.getValue();
+        ProducerRecord<byte[], byte[]> record = captor.getValue();
         assertNull(record.timestamp());
-        assertEquals(5678, record.value().getMetadata().getTimestampMillis());
+        assertEquals(5678, TaskMetadataUtil.readFromHeader(record.headers()).getTimestampMillis());
     }
 
     @Test
@@ -150,10 +150,11 @@ public class DecatonClientImplTest {
         client.put("key", HelloTask.getDefaultInstance(), TaskMetadata.builder().build());
 
         verify(producer, times(1)).send(captor.capture(), any(Callback.class));
-        ProducerRecord<byte[], DecatonTaskRequest> record = captor.getValue();
-        assertTrue(record.value().getMetadata().getTimestampMillis() > 0);
-        assertNotNull(record.value().getMetadata().getSourceApplicationId());
-        assertNotNull(record.value().getMetadata().getSourceInstanceId());
+        ProducerRecord<byte[], byte[]> record = captor.getValue();
+        TaskMetadataProto metadata = TaskMetadataUtil.readFromHeader(record.headers());
+        assertTrue(metadata.getTimestampMillis() > 0);
+        assertNotNull(metadata.getSourceApplicationId());
+        assertNotNull(metadata.getSourceInstanceId());
     }
 
     @Test
@@ -167,12 +168,13 @@ public class DecatonClientImplTest {
                                .build(), 4);
 
         verify(producer, times(1)).send(captor.capture(), any(Callback.class));
-        ProducerRecord<byte[], DecatonTaskRequest> record = captor.getValue();
+        ProducerRecord<byte[], byte[]> record = captor.getValue();
         assertNotNull(record.partition());
         assertEquals(4, record.partition().intValue());
         assertNull(record.timestamp());
-        assertEquals(5678L, record.value().getMetadata().getTimestampMillis());
-        assertEquals(6912L, record.value().getMetadata().getScheduledTimeMillis());
+        TaskMetadataProto metadata = TaskMetadataUtil.readFromHeader(record.headers());
+        assertEquals(5678L, metadata.getTimestampMillis());
+        assertEquals(6912L, metadata.getScheduledTimeMillis());
     }
 
     @Test
@@ -182,18 +184,19 @@ public class DecatonClientImplTest {
         client.put("key", HelloTask.getDefaultInstance(), null, 4);
 
         verify(producer, times(1)).send(captor.capture(), any(Callback.class));
-        ProducerRecord<byte[], DecatonTaskRequest> record = captor.getValue();
+        ProducerRecord<byte[], byte[]> record = captor.getValue();
         assertNotNull(record.partition());
         assertEquals(4, record.partition().intValue());
     }
 
     private void verifyAndAssertTaskMetadata(long timestamp, long scheduledTime) {
         verify(producer, times(1)).send(captor.capture(), any(Callback.class));
-        ProducerRecord<byte[], DecatonTaskRequest> record = captor.getValue();
+        ProducerRecord<byte[], byte[]> record = captor.getValue();
         assertNull(record.timestamp());
-        assertEquals(timestamp, record.value().getMetadata().getTimestampMillis());
-        assertEquals(scheduledTime, record.value().getMetadata().getScheduledTimeMillis());
-        assertNotNull(record.value().getMetadata().getSourceApplicationId());
-        assertNotNull(record.value().getMetadata().getSourceInstanceId());
+        TaskMetadataProto metadata = TaskMetadataUtil.readFromHeader(record.headers());
+        assertEquals(timestamp, metadata.getTimestampMillis());
+        assertEquals(scheduledTime, metadata.getScheduledTimeMillis());
+        assertNotNull(metadata.getSourceApplicationId());
+        assertNotNull(metadata.getSourceInstanceId());
     }
 }

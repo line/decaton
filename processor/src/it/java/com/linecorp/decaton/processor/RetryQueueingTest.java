@@ -16,15 +16,15 @@
 
 package com.linecorp.decaton.processor;
 
-import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.time.Duration;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -33,13 +33,14 @@ import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import com.linecorp.decaton.processor.Completion.TimeoutChoice;
+import com.linecorp.decaton.processor.runtime.ConsumedRecord;
 import com.linecorp.decaton.processor.runtime.DecatonTask;
+import com.linecorp.decaton.processor.runtime.DynamicProperty;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.Property;
 import com.linecorp.decaton.processor.runtime.RetryConfig;
 import com.linecorp.decaton.processor.runtime.StaticPropertySupplier;
 import com.linecorp.decaton.processor.runtime.TaskExtractor;
-import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
 import com.linecorp.decaton.testing.KafkaClusterExtension;
 import com.linecorp.decaton.testing.TestUtils;
 import com.linecorp.decaton.testing.processor.ProcessedRecord;
@@ -107,16 +108,10 @@ public class RetryQueueingTest {
 
     private static class TestTaskExtractor implements TaskExtractor<TestTask> {
         @Override
-        public DecatonTask<TestTask> extract(byte[] bytes) {
-            try {
-                TaskMetadata meta = TaskMetadata.builder().build();
-                DecatonTaskRequest request = DecatonTaskRequest.parseFrom(bytes);
-                TestTask task = new TestTask.TestTaskDeserializer().deserialize(
-                        request.getSerializedTask().toByteArray());
-                return new DecatonTask<>(meta, task, bytes);
-            } catch (IOException e) {
-                throw new UncheckedIOException(e);
-            }
+        public DecatonTask<TestTask> extract(ConsumedRecord record) {
+            TaskMetadata meta = TaskMetadata.builder().build();
+            TestTask task = new TestTask.TestTaskDeserializer().deserialize(record.value());
+            return new DecatonTask<>(meta, task, record.value());
         }
     }
 
@@ -247,6 +242,47 @@ public class RetryQueueingTest {
                             }
                             return TimeoutChoice.EXTEND;
                         });
+                    }
+                }))
+                .retryConfig(RetryConfig.builder()
+                                        .retryTopic(retryTopic)
+                                        .backoff(Duration.ofMillis(10))
+                                        .build())
+                .excludeSemantics(GuaranteeType.PROCESS_ORDERING,
+                                  GuaranteeType.SERIAL_PROCESSING)
+                .customSemantics(new ProcessRetriedTask())
+                .build()
+                .run();
+    }
+
+    @Test
+    @Timeout(60)
+    public void testRetryQueueingMigrateToHeader() throws Exception {
+        DynamicProperty<Boolean> metadataAsHeader =
+                new DynamicProperty<>(ProcessorProperties.CONFIG_TASK_METADATA_AS_HEADER);
+        metadataAsHeader.set(false);
+
+        AtomicInteger processCount = new AtomicInteger(0);
+        CountDownLatch migrationLatch = new CountDownLatch(1);
+        ProcessorTestSuite
+                .builder(rule)
+                .numTasks(100)
+                .propertySupplier(StaticPropertySupplier.of(metadataAsHeader))
+                .produceTasksWithHeaderMetadata(false)
+                .configureProcessorsBuilder(builder -> builder.thenProcess((ctx, task) -> {
+                    if (ctx.metadata().retryCount() == 0) {
+                        int cnt = processCount.incrementAndGet();
+                        // Enable header-mode after 50 tasks are processed
+                        if (cnt < 50) {
+                            ctx.retry();
+                        } else if (cnt == 50) {
+                            metadataAsHeader.set(true);
+                            migrationLatch.countDown();
+                            ctx.retry();
+                        } else {
+                            migrationLatch.await();
+                            ctx.retry();
+                        }
                     }
                 }))
                 .retryConfig(RetryConfig.builder()

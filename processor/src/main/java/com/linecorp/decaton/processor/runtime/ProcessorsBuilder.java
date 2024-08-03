@@ -27,6 +27,7 @@ import com.linecorp.decaton.processor.runtime.internal.DefaultTaskExtractor;
 import com.linecorp.decaton.processor.runtime.internal.Processors;
 
 import lombok.Getter;
+import lombok.RequiredArgsConstructor;
 import lombok.experimental.Accessors;
 
 /**
@@ -65,29 +66,14 @@ public class ProcessorsBuilder<T> {
 
     /**
      * Create new {@link ProcessorsBuilder} that consumes message from topic expecting tasks of type
-     * which can be parsed by valueParser.
+     * which can be parsed by taskExtractor.
      * @param topic the name of topic to consume.
      * @param taskExtractor the extractor to extract task of type {@link T} from message bytes.
      * @param <T> the type of instantiated tasks.
      * @return an instance of {@link ProcessorsBuilder}.
      */
     public static <T> ProcessorsBuilder<T> consuming(String topic, TaskExtractor<T> taskExtractor) {
-        DefaultTaskExtractor<byte[]> outerExtractor = new DefaultTaskExtractor<>(bytes -> bytes);
-        TaskExtractor<T> retryTaskExtractor = bytes -> {
-            // Retry tasks are serialized as PB DecatonTaskRequest.
-            // First, deserialize PB from raw bytes.
-            DecatonTask<byte[]> wrappedTask = outerExtractor.extract(bytes);
-
-            // Original raw task bytes is stored in DecatonTaskRequest#serializedTask.
-            // Extract DecatonTask from DecatonTaskRequest#serializedTask using given taskExtractor.
-            DecatonTask<T> task = taskExtractor.extract(wrappedTask.taskData());
-
-            // Instantiate DecatonTask.
-            // Use wrappedTask#metadata because retry count is stored in wrappedTask#metada not task#metadata
-            return new DecatonTask<>(wrappedTask.metadata(), task.taskData(), task.taskDataBytes());
-        };
-
-        return new ProcessorsBuilder<>(topic, taskExtractor, retryTaskExtractor);
+        return new ProcessorsBuilder<>(topic, taskExtractor, new RetryTaskExtractor<>(taskExtractor));
     }
 
     /**
@@ -132,5 +118,32 @@ public class ProcessorsBuilder<T> {
 
     Processors<T> build(DecatonProcessorSupplier<byte[]> retryProcessorSupplier) {
         return new Processors<>(suppliers, retryProcessorSupplier, taskExtractor, retryTaskExtractor);
+    }
+
+    @RequiredArgsConstructor
+    private static class RetryTaskExtractor<T> implements TaskExtractor<T> {
+        private final DefaultTaskExtractor<byte[]> outerExtractor = new DefaultTaskExtractor<>(bytes -> bytes);
+        private final TaskExtractor<T> innerExtractor;
+
+        @Override
+        public DecatonTask<T> extract(ConsumedRecord record) {
+            // Retry tasks might be stored in retry-topic in DecatonTaskRequest format depending on
+            // decaton.task.metadata.as.header configuration.
+            // Hence, we need to extract the task with DefaultTaskExtractor to "unwrap" the task first,
+            // then extract the task with the given taskExtractor.
+            DecatonTask<byte[]> outerTask = outerExtractor.extract(record);
+            ConsumedRecord inner = ConsumedRecord
+                    .builder()
+                    .headers(record.headers())
+                    .key(record.key())
+                    .value(outerTask.taskDataBytes())
+                    .build();
+            DecatonTask<T> extracted = innerExtractor.extract(inner);
+            return new DecatonTask<>(
+                    // Use outerTask#metadata because retry count is stored in rawTask#metada not extracted#metadata
+                    outerTask.metadata(),
+                    extracted.taskData(),
+                    extracted.taskDataBytes());
+        }
     }
 }

@@ -21,14 +21,13 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-import com.google.protobuf.ByteString;
+import org.apache.kafka.clients.producer.ProducerRecord;
 
 import com.linecorp.decaton.client.DecatonClient;
 import com.linecorp.decaton.client.KafkaProducerSupplier;
 import com.linecorp.decaton.client.PutTaskResult;
 import com.linecorp.decaton.client.kafka.PrintableAsciiStringSerializer;
 import com.linecorp.decaton.common.Serializer;
-import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
 import com.linecorp.decaton.protocol.Decaton.TaskMetadataProto;
 
 public class DecatonClientImpl<T> implements DecatonClient<T> {
@@ -52,7 +51,7 @@ public class DecatonClientImpl<T> implements DecatonClient<T> {
         this.serializer = serializer;
         this.applicationId = applicationId;
         this.instanceId = instanceId;
-        producer = new DecatonTaskProducer(topic, producerConfig, producerSupplier);
+        producer = new DecatonTaskProducer(producerConfig, producerSupplier);
         this.timestampSupplier = timestampSupplier;
     }
 
@@ -109,13 +108,11 @@ public class DecatonClientImpl<T> implements DecatonClient<T> {
         byte[] serializedKey = keySerializer.serialize(topic, key);
         byte[] serializedTask = serializer.serialize(task);
 
-        DecatonTaskRequest request =
-                DecatonTaskRequest.newBuilder()
-                                  .setMetadata(taskMetadataProto)
-                                  .setSerializedTask(ByteString.copyFrom(serializedTask))
-                                  .build();
+        ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(
+                topic, partition, serializedKey, serializedTask);
+        TaskMetadataUtil.writeAsHeader(taskMetadataProto, record.headers());
 
-        return producer.sendRequest(serializedKey, request, partition);
+        return producer.sendRequest(record);
     }
 
     private TaskMetadataProto convertToTaskMetadataProto(TaskMetadata overrideTaskMetadata) {

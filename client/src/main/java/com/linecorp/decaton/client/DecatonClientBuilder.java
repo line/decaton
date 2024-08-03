@@ -27,9 +27,7 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 
 import com.linecorp.decaton.client.internal.DecatonClientImpl;
-import com.linecorp.decaton.client.kafka.ProtocolBuffersKafkaSerializer;
 import com.linecorp.decaton.common.Serializer;
-import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
 
 import lombok.AccessLevel;
 import lombok.Setter;
@@ -54,10 +52,10 @@ public class DecatonClientBuilder<T> {
 
     public static class DefaultKafkaProducerSupplier implements KafkaProducerSupplier {
         @Override
-        public Producer<byte[], DecatonTaskRequest> getProducer(Properties config) {
+        public Producer<byte[], byte[]> getProducer(Properties config) {
             return new KafkaProducer<>(config,
                                        new ByteArraySerializer(),
-                                       new ProtocolBuffersKafkaSerializer<>());
+                                       new ByteArraySerializer());
         }
     }
 

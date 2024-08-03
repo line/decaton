@@ -118,11 +118,11 @@ public class DecatonRunner implements Runner {
                 .subPartitionRuntime(subPartitionRuntime)
                 .processorsBuilder(
                         ProcessorsBuilder.consuming(config.topic(),
-                                                    (TaskExtractor<Task>) bytes -> {
+                                                    (TaskExtractor<Task>) record -> {
                                                         Task task = config.taskDeserializer()
-                                                                          .deserialize(config.topic(), bytes);
+                                                                          .deserialize(config.topic(), record.value());
                                                         return new DecatonTask<>(
-                                                                TaskMetadata.builder().build(), task, bytes);
+                                                                TaskMetadata.builder().build(), task, record.value());
                                                     })
                                          .thenProcess(
                                                  (ctx, task) -> recording.process(task)))

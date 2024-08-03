@@ -28,10 +28,9 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import com.linecorp.decaton.client.DecatonClient;
 import com.linecorp.decaton.client.KafkaProducerSupplier;
 import com.linecorp.decaton.client.PutTaskResult;
-import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
 
 /**
- * A raw interface to put a built {@link DecatonTaskRequest} directly.
+ * A raw interface to put decaton tasks.
  * This interface isn't expected to be used by applications unless it's really necessary.
  * Use {@link DecatonClient} to put task into a Decaton topic instead.
  */
@@ -44,8 +43,7 @@ public class DecatonTaskProducer implements AutoCloseable {
         presetProducerConfig.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "1");
     }
 
-    private final Producer<byte[], DecatonTaskRequest> producer;
-    private final String topic;
+    private final Producer<byte[], byte[]> producer;
 
     private static Properties completeProducerConfig(Properties producerConfig) {
         final Properties result = new Properties();
@@ -54,20 +52,13 @@ public class DecatonTaskProducer implements AutoCloseable {
         return result;
     }
 
-    public DecatonTaskProducer(String topic, Properties producerConfig,
+    public DecatonTaskProducer(Properties producerConfig,
                                KafkaProducerSupplier producerSupplier) {
         Properties completeProducerConfig = completeProducerConfig(producerConfig);
         producer = producerSupplier.getProducer(completeProducerConfig);
-        this.topic = topic;
     }
 
-    public CompletableFuture<PutTaskResult> sendRequest(byte[] key, DecatonTaskRequest request,
-                                                        Integer partition) {
-        ProducerRecord<byte[], DecatonTaskRequest> record = new ProducerRecord<>(topic, partition, key, request);
-        return sendRequest(record);
-    }
-
-    private CompletableFuture<PutTaskResult> sendRequest(ProducerRecord<byte[], DecatonTaskRequest> record) {
+    public CompletableFuture<PutTaskResult> sendRequest(ProducerRecord<byte[], byte[]> record) {
         CompletableFuture<PutTaskResult> result = new CompletableFuture<>();
         producer.send(record, (metadata, exception) -> {
             if (exception == null) {

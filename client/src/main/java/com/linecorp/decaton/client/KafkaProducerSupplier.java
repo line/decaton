@@ -21,7 +21,6 @@ import java.util.Properties;
 import org.apache.kafka.clients.producer.Producer;
 
 import com.linecorp.decaton.client.internal.DecatonClientImpl;
-import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
 
 /**
  * An interface to specify a custom instantiation function for {@link Producer}.
@@ -39,5 +38,5 @@ public interface KafkaProducerSupplier {
      * @return an Kafka producer instance which implements {@link Producer}. The returned instance will be
      * closed along with {@link DecatonClient#close} being called.
      */
-    Producer<byte[], DecatonTaskRequest> getProducer(Properties config);
+    Producer<byte[], byte[]> getProducer(Properties config);
 }

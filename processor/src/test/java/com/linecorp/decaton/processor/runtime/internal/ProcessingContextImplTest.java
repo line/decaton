@@ -63,8 +63,6 @@ import com.linecorp.decaton.processor.tracing.TestTraceHandle;
 import com.linecorp.decaton.processor.tracing.TestTracingProvider;
 import com.linecorp.decaton.processor.tracing.TracingProvider.RecordTraceHandle;
 import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider.NoopTrace;
-import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
-import com.linecorp.decaton.protocol.Decaton.TaskMetadataProto;
 import com.linecorp.decaton.protocol.Sample.HelloTask;
 
 import lombok.RequiredArgsConstructor;
@@ -110,12 +108,6 @@ public class ProcessingContextImplTest {
 
     private static final HelloTask TASK = HelloTask.getDefaultInstance();
 
-    private static final DecatonTaskRequest REQUEST =
-            DecatonTaskRequest.newBuilder()
-                              .setMetadata(TaskMetadataProto.getDefaultInstance())
-                              .setSerializedTask(TASK.toByteString())
-                              .build();
-
     @Mock
     private NamedProcessor processorMock;
 
@@ -129,9 +121,9 @@ public class ProcessingContextImplTest {
                                                             DecatonProcessor<HelloTask>... processors) {
         TaskRequest request = new TaskRequest(
                 new TopicPartition("topic", 1), 1, null, "TEST".getBytes(StandardCharsets.UTF_8),
-                null, traceHandle, REQUEST.toByteArray(), null);
+                null, traceHandle, TASK.toByteArray(), null);
         DecatonTask<HelloTask> task = new DecatonTask<>(
-                TaskMetadata.fromProto(REQUEST.getMetadata()), TASK, TASK.toByteArray());
+                TaskMetadata.builder().build(), TASK, TASK.toByteArray());
         return new ProcessingContextImpl<>("subscription", request, task, Arrays.asList(processors),
                                            null, ProcessorProperties.builder().build());
     }
@@ -374,9 +366,9 @@ public class ProcessingContextImplTest {
         CountDownLatch retryLatch = new CountDownLatch(1);
         DecatonProcessor<byte[]> retryProcessor = spy(new AsyncCompleteProcessor(retryLatch));
         TaskRequest request = new TaskRequest(
-                new TopicPartition("topic", 1), 1, null, "TEST".getBytes(StandardCharsets.UTF_8), null, null, REQUEST.toByteArray(), null);
+                new TopicPartition("topic", 1), 1, null, "TEST".getBytes(StandardCharsets.UTF_8), null, null, TASK.toByteArray(), null);
         DecatonTask<byte[]> task = new DecatonTask<>(
-                TaskMetadata.fromProto(REQUEST.getMetadata()), TASK.toByteArray(), TASK.toByteArray());
+                TaskMetadata.builder().build(), TASK.toByteArray(), TASK.toByteArray());
 
         ProcessingContextImpl<byte[]> context =
                 spy(new ProcessingContextImpl<>("subscription", request, task,
@@ -405,9 +397,9 @@ public class ProcessingContextImplTest {
         CountDownLatch retryLatch = new CountDownLatch(1);
         DecatonProcessor<byte[]> retryProcessor = spy(new AsyncCompleteProcessor(retryLatch));
         TaskRequest request = new TaskRequest(
-                new TopicPartition("topic", 1), 1, null, "TEST".getBytes(StandardCharsets.UTF_8), null, null, REQUEST.toByteArray(), null);
+                new TopicPartition("topic", 1), 1, null, "TEST".getBytes(StandardCharsets.UTF_8), null, null, TASK.toByteArray(), null);
         DecatonTask<byte[]> task = new DecatonTask<>(
-                TaskMetadata.fromProto(REQUEST.getMetadata()), TASK.toByteArray(), TASK.toByteArray());
+                TaskMetadata.builder().build(), TASK.toByteArray(), TASK.toByteArray());
 
         DecatonProcessor<byte[]> processor = (context, ignored) -> context.deferCompletion(comp -> {
             try {

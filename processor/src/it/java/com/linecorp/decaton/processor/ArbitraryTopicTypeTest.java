@@ -35,6 +35,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
+import com.linecorp.decaton.processor.runtime.ConsumedRecord;
 import com.linecorp.decaton.processor.runtime.DecatonTask;
 import com.linecorp.decaton.processor.runtime.ProcessorSubscription;
 import com.linecorp.decaton.processor.runtime.ProcessorsBuilder;
@@ -77,10 +78,10 @@ public class ArbitraryTopicTypeTest {
         }
 
         @Override
-        public DecatonTask<T> extract(byte[] bytes) {
-            final T value = deserializer.deserialize(topic, bytes);
+        public DecatonTask<T> extract(ConsumedRecord record) {
+            final T value = deserializer.deserialize(topic, record.value());
             final TaskMetadata metadata = TaskMetadata.builder().build();
-            return new DecatonTask<>(metadata, value, bytes);
+            return new DecatonTask<>(metadata, value, record.value());
         }
     }
 

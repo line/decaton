@@ -16,6 +16,8 @@
 
 package com.linecorp.decaton.processor.runtime;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+
 import com.linecorp.decaton.processor.TaskMetadata;
 
 import lombok.Value;
@@ -62,7 +64,7 @@ public class DecatonTask<T> {
     /**
      * Holds serialized task bytes.
      * <p>
-     * This field must be exactly same as the bytes passed to {@link TaskExtractor#extract}.
+     * This field must be exactly same as the {@link ConsumerRecord#value()} bytes passed to {@link TaskExtractor#extract}.
      * </p>
      */
     byte[] taskDataBytes;

@@ -35,13 +35,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import com.linecorp.decaton.processor.DeferredCompletion;
 import com.linecorp.decaton.processor.runtime.DefaultSubPartitioner;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.SubPartitionRuntime;
 import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider;
-import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
-import com.linecorp.decaton.protocol.Decaton.TaskMetadataProto;
 import com.linecorp.decaton.protocol.Sample.HelloTask;
 
 @ExtendWith(MockitoExtension.class)
@@ -69,13 +66,8 @@ public class ProcessorUnitTest {
                 0);
 
         unit = spy(new ProcessorUnit(scope, pipeline, Executors.newSingleThreadExecutor()));
-        DecatonTaskRequest request =
-                DecatonTaskRequest.newBuilder()
-                                  .setMetadata(TaskMetadataProto.getDefaultInstance())
-                                  .setSerializedTask(HelloTask.getDefaultInstance().toByteString())
-                                  .build();
 
-        taskRequest = new TaskRequest(topicPartition, 1, new OffsetState(1234), null, null, null, request.toByteArray(), null);
+        taskRequest = new TaskRequest(topicPartition, 1, new OffsetState(1234), null, null, null, HelloTask.getDefaultInstance().toByteArray(), null);
     }
 
     @Test
