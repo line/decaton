@@ -303,7 +303,7 @@ public class SubscriptionBuilder {
         KafkaProducerSupplier producerSupplier = Optional.ofNullable(retryConfig.producerSupplier())
                                                          .orElseGet(DefaultKafkaProducerSupplier::new);
         return new DecatonProcessorSupplierImpl<>(() -> {
-            DecatonTaskProducer producer = new DecatonTaskProducer(scope.retryTopic().get(), producerConfig, producerSupplier);
+            DecatonTaskProducer producer = new DecatonTaskProducer(producerConfig, producerSupplier);
             return new DecatonTaskRetryQueueingProcessor(scope, producer);
         }, ProcessorScope.SINGLETON);
     }

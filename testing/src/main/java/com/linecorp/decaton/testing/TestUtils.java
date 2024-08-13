@@ -39,7 +39,6 @@ import org.apache.kafka.common.serialization.ByteArraySerializer;
 import com.google.protobuf.MessageLite;
 
 import com.linecorp.decaton.client.DecatonClient;
-import com.linecorp.decaton.client.kafka.ProtocolBuffersKafkaSerializer;
 import com.linecorp.decaton.common.Serializer;
 import com.linecorp.decaton.processor.runtime.ProcessorSubscription;
 import com.linecorp.decaton.processor.runtime.Property;
@@ -48,7 +47,6 @@ import com.linecorp.decaton.processor.runtime.SubscriptionBuilder;
 import com.linecorp.decaton.processor.runtime.SubscriptionStateListener;
 import com.linecorp.decaton.processor.runtime.SubscriptionStateListener.State;
 import com.linecorp.decaton.protobuf.ProtocolBuffersSerializer;
-import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
 
 public class TestUtils {
     private static final AtomicInteger sequence = new AtomicInteger(0);
@@ -110,10 +108,10 @@ public class TestUtils {
      * @param bootstrapServers bootstrap servers to connect
      * @return {@link Producer} instance with preset configurations
      */
-    public static Producer<byte[], DecatonTaskRequest> producer(String bootstrapServers) {
+    public static Producer<byte[], byte[]> producer(String bootstrapServers) {
         return producer(bootstrapServers,
                         new ByteArraySerializer(),
-                        new ProtocolBuffersKafkaSerializer<>());
+                        new ByteArraySerializer());
     }
 
     /**

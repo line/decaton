@@ -16,12 +16,13 @@
 
 package com.linecorp.decaton.processor.runtime.internal;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
@@ -33,6 +34,7 @@ import java.time.Duration;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.KafkaException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -44,15 +46,17 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import com.linecorp.decaton.client.internal.DecatonTaskProducer;
+import com.linecorp.decaton.client.internal.TaskMetadataUtil;
 import com.linecorp.decaton.processor.ProcessingContext;
 import com.linecorp.decaton.processor.TaskMetadata;
 import com.linecorp.decaton.processor.runtime.DefaultSubPartitioner;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
+import com.linecorp.decaton.processor.runtime.Property;
 import com.linecorp.decaton.processor.runtime.RetryConfig;
 import com.linecorp.decaton.processor.runtime.SubPartitionRuntime;
 import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider;
-import com.linecorp.decaton.protocol.Decaton.DecatonTaskRequest;
 import com.linecorp.decaton.protocol.Sample.HelloTask;
+import com.linecorp.decaton.protocol.internal.DecatonInternal.DecatonTaskRequest;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -78,13 +82,14 @@ public class DecatonTaskRetryQueueingProcessorTest {
     @BeforeEach
     public void setUp() {
         processor = new DecatonTaskRetryQueueingProcessor(scope, producer);
-        doReturn(CompletableFuture.completedFuture(null)).when(producer).sendRequest(any(), any(), any());
+        doReturn(CompletableFuture.completedFuture(null)).when(producer).sendRequest(any());
         doReturn(new CompletionImpl()).when(context).deferCompletion();
         doReturn("key".getBytes(StandardCharsets.UTF_8)).when(context).key();
         doReturn(TaskMetadata.builder().build()).when(context).metadata();
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     public void testRetryRequest() throws InterruptedException {
         byte[] key = "key".getBytes(StandardCharsets.UTF_8);
         TaskMetadata meta =
@@ -103,13 +108,13 @@ public class DecatonTaskRetryQueueingProcessorTest {
         long currentTime = System.currentTimeMillis();
         processor.process(context, task.toByteArray());
 
-        ArgumentCaptor<DecatonTaskRequest> captor = ArgumentCaptor.forClass(DecatonTaskRequest.class);
-        verify(producer, times(1)).sendRequest(eq(key), captor.capture(), eq(null));
+        ArgumentCaptor<ProducerRecord<byte[], byte[]>> captor = ArgumentCaptor.forClass(ProducerRecord.class);
+        verify(producer, times(1)).sendRequest(captor.capture());
 
-        DecatonTaskRequest request = captor.getValue();
-        assertEquals(task.toByteString(), request.getSerializedTask());
+        ProducerRecord<byte[], byte[]> record = captor.getValue();
+        assertArrayEquals(task.toByteArray(), record.value());
 
-        TaskMetadata gotMeta = TaskMetadata.fromProto(request.getMetadata());
+        TaskMetadata gotMeta = TaskMetadata.fromProto(TaskMetadataUtil.readFromHeader(record.headers()));
         assertEquals(meta.sourceApplicationId(), gotMeta.sourceApplicationId());
         assertEquals(meta.sourceInstanceId(), gotMeta.sourceInstanceId());
         assertEquals(meta.timestampMillis(), gotMeta.timestampMillis());
@@ -123,7 +128,7 @@ public class DecatonTaskRetryQueueingProcessorTest {
         CompletionImpl comp = new CompletionImpl();
 
         doReturn(comp).when(context).deferCompletion();
-        doReturn(future).when(producer).sendRequest(any(), any(), any());
+        doReturn(future).when(producer).sendRequest(any());
 
         processor.process(context, HelloTask.getDefaultInstance().toByteArray());
 
@@ -136,7 +141,7 @@ public class DecatonTaskRetryQueueingProcessorTest {
 
     @Test
     public void testDeferCompletion_EXCEPTION() throws InterruptedException {
-        doThrow(new KafkaException("kafka")).when(producer).sendRequest(any(), any(), any());
+        doThrow(new KafkaException("kafka")).when(producer).sendRequest(any());
 
         try {
             processor.process(context, HelloTask.getDefaultInstance().toByteArray());
@@ -145,5 +150,52 @@ public class DecatonTaskRetryQueueingProcessorTest {
         }
 
         verify(context, never()).deferCompletion();
+    }
+
+    @Test
+    public void testLegacyRetryTaskFormat() throws Exception {
+        byte[] key = "key".getBytes(StandardCharsets.UTF_8);
+        TaskMetadata meta =
+                TaskMetadata.builder()
+                            .sourceApplicationId("unit-test")
+                            .sourceInstanceId("testing")
+                            .timestampMillis(12345)
+                            .retryCount(1)
+                            .scheduledTimeMillis(67891)
+                            .build();
+        doReturn(key).when(context).key();
+        doReturn(meta).when(context).metadata();
+
+        SubscriptionScope scope = new SubscriptionScope(
+                "subscription", "topic",
+                SubPartitionRuntime.THREAD_POOL,
+                Optional.of(RetryConfig.builder().backoff(RETRY_BACKOFF).build()), Optional.empty(),
+                ProcessorProperties.builder()
+                                   .set(Property.ofStatic(ProcessorProperties.CONFIG_TASK_METADATA_AS_HEADER,
+                                                          false))
+                                   .build(), NoopTracingProvider.INSTANCE,
+                ConsumerSupplier.DEFAULT_MAX_POLL_RECORDS,
+                DefaultSubPartitioner::new);
+
+        DecatonTaskRetryQueueingProcessor processor = new DecatonTaskRetryQueueingProcessor(scope, producer);
+
+        HelloTask task = HelloTask.getDefaultInstance();
+        long currentTime = System.currentTimeMillis();
+        processor.process(context, task.toByteArray());
+
+        ArgumentCaptor<ProducerRecord<byte[], byte[]>> captor = ArgumentCaptor.forClass(ProducerRecord.class);
+        verify(producer, times(1)).sendRequest(captor.capture());
+
+        ProducerRecord<byte[], byte[]> record = captor.getValue();
+        DecatonTaskRequest taskRequest = DecatonTaskRequest.parseFrom(record.value());
+
+        assertArrayEquals(task.toByteArray(), taskRequest.getSerializedTask().toByteArray());
+        assertNull(TaskMetadataUtil.readFromHeader(record.headers()));
+
+        assertEquals(meta.sourceApplicationId(), taskRequest.getMetadata().getSourceApplicationId());
+        assertEquals(meta.sourceInstanceId(), taskRequest.getMetadata().getSourceInstanceId());
+        assertEquals(meta.timestampMillis(), taskRequest.getMetadata().getTimestampMillis());
+        assertEquals(meta.retryCount() + 1, taskRequest.getMetadata().getRetryCount());
+        assertTrue(taskRequest.getMetadata().getScheduledTimeMillis() >= currentTime + RETRY_BACKOFF.toMillis());
     }
 }
