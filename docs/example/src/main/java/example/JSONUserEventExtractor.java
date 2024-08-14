@@ -23,6 +23,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import com.linecorp.decaton.processor.TaskMetadata;
 
+import com.linecorp.decaton.processor.runtime.ConsumedRecord;
 import com.linecorp.decaton.processor.runtime.DecatonTask;
 import com.linecorp.decaton.processor.runtime.TaskExtractor;
 import example.models.UserEvent;
@@ -31,9 +32,9 @@ public class JSONUserEventExtractor implements TaskExtractor<UserEvent> {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     @Override
-    public DecatonTask<UserEvent> extract(byte[] bytes) {
+    public DecatonTask<UserEvent> extract(ConsumedRecord record) {
         try {
-            UserEvent event = MAPPER.readValue(bytes, UserEvent.class);
+            UserEvent event = MAPPER.readValue(record.value(), UserEvent.class);
             TaskMetadata metadata = TaskMetadata.builder()
                                                 // Filling timestampMillis is not mandatory, but it would be useful
                                                 // when you monitor delivery latency between event production time and event processing time.
@@ -43,7 +44,7 @@ public class JSONUserEventExtractor implements TaskExtractor<UserEvent> {
                                                 // You can set other TaskMetadata fields as you needed
                                                 .build();
 
-            return new DecatonTask<>(metadata, event, bytes);
+            return new DecatonTask<>(metadata, event, record.value());
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }

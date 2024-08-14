@@ -44,16 +44,16 @@ public class TaskCompactionMain {
                                    System.getProperty("bootstrap.servers"));
         consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "my-decaton-processor");
 
-        TaskExtractor<LocationEvent> extractor = bytes -> {
+        TaskExtractor<LocationEvent> extractor = record -> {
             TaskMetadata metadata = TaskMetadata.builder().build();
             LocationEvent data;
             try {
-                data = new ObjectMapper().readValue(bytes, LocationEvent.class);
+                data = new ObjectMapper().readValue(record.value(), LocationEvent.class);
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
 
-            return new DecatonTask<>(metadata, data, bytes);
+            return new DecatonTask<>(metadata, data, record.value());
         };
 
         ProcessorSubscription subscription =
