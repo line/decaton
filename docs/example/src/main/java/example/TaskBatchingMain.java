@@ -43,16 +43,16 @@ public class TaskBatchingMain {
         consumerConfig.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "my-decaton-processor");
 
-        TaskExtractor<HelloTask> extractor = bytes -> {
+        TaskExtractor<HelloTask> extractor = record -> {
             TaskMetadata metadata = TaskMetadata.builder().build();
             HelloTask data;
             try {
-                data = new ObjectMapper().readValue(bytes, HelloTask.class);
+                data = new ObjectMapper().readValue(record.value(), HelloTask.class);
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
 
-            return new DecatonTask<>(metadata, data, bytes);
+            return new DecatonTask<>(metadata, data, record.value());
         };
         long lingerMillis = 1000;
         int capacity = 100;
