@@ -71,7 +71,7 @@ public class DefaultTaskExtractor<T> implements TaskExtractor<T> {
                 T task = taskDeserializer.deserialize(record.value());
                 return new DecatonTask<>(
                         TaskMetadata.builder()
-                                    .timestampMillis(record.recordTimestamp())
+                                    .timestampMillis(record.recordTimestampMillis())
                                     .build(),
                         task,
                         record.value());

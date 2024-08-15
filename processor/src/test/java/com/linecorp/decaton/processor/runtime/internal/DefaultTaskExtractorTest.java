@@ -46,7 +46,7 @@ public class DefaultTaskExtractorTest {
 
         ConsumedRecord record = ConsumedRecord
                 .builder()
-                .recordTimestamp(1561709151628L)
+                .recordTimestampMillis(1561709151628L)
                 .headers(new RecordHeaders())
                 .value(LEGACY_REQUEST.toByteArray())
                 .build();
@@ -67,7 +67,7 @@ public class DefaultTaskExtractorTest {
 
         ConsumedRecord record = ConsumedRecord
                 .builder()
-                .recordTimestamp(1561709151628L)
+                .recordTimestampMillis(1561709151628L)
                 .headers(new RecordHeaders())
                 .value(TASK.toByteArray())
                 .build();

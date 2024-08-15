@@ -141,7 +141,7 @@ public class ProcessorsBuilder<T> {
             DecatonTask<byte[]> outerTask = outerExtractor.extract(record);
             ConsumedRecord inner = ConsumedRecord
                     .builder()
-                    .recordTimestamp(record.recordTimestamp())
+                    .recordTimestampMillis(record.recordTimestampMillis())
                     .headers(record.headers())
                     .key(record.key())
                     .value(outerTask.taskDataBytes())

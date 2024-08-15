@@ -32,7 +32,7 @@ public class ConsumedRecord {
     /**
      * The timestamp of the record
      */
-    long recordTimestamp;
+    long recordTimestampMillis;
 
     /**
      * Headers of the record
