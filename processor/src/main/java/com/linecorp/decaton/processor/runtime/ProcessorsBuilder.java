@@ -18,7 +18,6 @@ package com.linecorp.decaton.processor.runtime;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.function.Function;
 import java.util.function.Supplier;
 
 import com.linecorp.decaton.common.Deserializer;
@@ -40,17 +39,15 @@ import lombok.experimental.Accessors;
 public class ProcessorsBuilder<T> {
     @Getter
     private final String topic;
-    private final Function<Property<Boolean>, TaskExtractor<T>> taskExtractorConstructor;
-    private final Function<Property<Boolean>, TaskExtractor<T>> retryTaskExtractorConstructor;
+    private final Deserializer<T> userSuppliedDeserializer;
+    private final TaskExtractor<T> userSuppliedTaskExtractor;
 
     private final List<DecatonProcessorSupplier<T>> suppliers;
 
-    ProcessorsBuilder(String topic,
-                      Function<Property<Boolean>, TaskExtractor<T>> taskExtractorConstructor,
-                      Function<Property<Boolean>, TaskExtractor<T>> retryTaskExtractorConstructor) {
+    ProcessorsBuilder(String topic, Deserializer<T> userSuppliedDeserializer, TaskExtractor<T> userSuppliedTaskExtractor) {
         this.topic = topic;
-        this.taskExtractorConstructor = taskExtractorConstructor;
-        this.retryTaskExtractorConstructor = retryTaskExtractorConstructor;
+        this.userSuppliedDeserializer = userSuppliedDeserializer;
+        this.userSuppliedTaskExtractor = userSuppliedTaskExtractor;
         suppliers = new ArrayList<>();
     }
 
@@ -69,8 +66,7 @@ public class ProcessorsBuilder<T> {
      * @return an instance of {@link ProcessorsBuilder}.
      */
     public static <T> ProcessorsBuilder<T> consuming(String topic, Deserializer<T> deserializer) {
-        Function<Property<Boolean>, TaskExtractor<T>> constructor = prop -> new DefaultTaskExtractor<>(deserializer, prop);
-        return new ProcessorsBuilder<>(topic, constructor, constructor);
+        return new ProcessorsBuilder<>(topic, deserializer, null);
     }
 
     /**
@@ -82,9 +78,7 @@ public class ProcessorsBuilder<T> {
      * @return an instance of {@link ProcessorsBuilder}.
      */
     public static <T> ProcessorsBuilder<T> consuming(String topic, TaskExtractor<T> taskExtractor) {
-        return new ProcessorsBuilder<>(topic,
-                                       ignored -> taskExtractor,
-                                       prop -> new RetryTaskExtractor<>(prop, taskExtractor));
+        return new ProcessorsBuilder<>(topic, null, taskExtractor);
     }
 
     /**
@@ -129,10 +123,22 @@ public class ProcessorsBuilder<T> {
 
     Processors<T> build(DecatonProcessorSupplier<byte[]> retryProcessorSupplier, ProcessorProperties properties) {
         Property<Boolean> legacyFallbackEnabledProperty = properties.get(ProcessorProperties.CONFIG_LEGACY_PARSE_FALLBACK_ENABLED);
-        return new Processors<>(suppliers,
-                                retryProcessorSupplier,
-                                taskExtractorConstructor.apply(legacyFallbackEnabledProperty),
-                                retryTaskExtractorConstructor.apply(legacyFallbackEnabledProperty));
+
+        final TaskExtractor<T> taskExtractor;
+        final TaskExtractor<T> retryTaskExtractor;
+
+        // consuming(String, Deserializer) is used
+        if (userSuppliedDeserializer != null) {
+            DefaultTaskExtractor<T> extractor = new DefaultTaskExtractor<>(userSuppliedDeserializer, legacyFallbackEnabledProperty);
+            taskExtractor = extractor;
+            retryTaskExtractor = extractor;
+        } else {
+            // consuming(String, TaskExtractor) is used
+            taskExtractor = userSuppliedTaskExtractor;
+            retryTaskExtractor = new RetryTaskExtractor<>(legacyFallbackEnabledProperty, userSuppliedTaskExtractor);
+        }
+
+        return new Processors<>(suppliers, retryProcessorSupplier, taskExtractor, retryTaskExtractor);
     }
 
     private static class RetryTaskExtractor<T> implements TaskExtractor<T> {
