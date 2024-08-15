@@ -22,6 +22,7 @@ import java.util.function.Supplier;
 
 import com.linecorp.decaton.common.Deserializer;
 import com.linecorp.decaton.processor.DecatonProcessor;
+import com.linecorp.decaton.processor.TaskMetadata;
 import com.linecorp.decaton.processor.runtime.internal.DecatonProcessorSupplierImpl;
 import com.linecorp.decaton.processor.runtime.internal.DefaultTaskExtractor;
 import com.linecorp.decaton.processor.runtime.internal.Processors;
@@ -53,7 +54,13 @@ public class ProcessorsBuilder<T> {
 
     /**
      * Create new {@link ProcessorsBuilder} that consumes message from topic expecting tasks of type
-     * which can be parsed by valueParser.
+     * which can be parsed by deserializer.
+     * <p>
+     * From Decaton 9.0.0, you can use this overload to consume tasks from arbitrary topics not only
+     * topics that are produced by DecatonClient.
+     * <p>
+     * If you want to extract custom {@link TaskMetadata} (e.g. for delayed processing), you can use
+     * {@link #consuming(String, TaskExtractor)} instead.
      * @param topic the name of topic to consume.
      * @param deserializer the deserializer to instantiate task of type {@link T} from serialized bytes.
      * @param <T> the type of instantiated tasks.
@@ -134,6 +141,7 @@ public class ProcessorsBuilder<T> {
             DecatonTask<byte[]> outerTask = outerExtractor.extract(record);
             ConsumedRecord inner = ConsumedRecord
                     .builder()
+                    .recordTimestamp(record.recordTimestamp())
                     .headers(record.headers())
                     .key(record.key())
                     .value(outerTask.taskDataBytes())

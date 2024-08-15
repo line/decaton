@@ -69,6 +69,8 @@ import lombok.RequiredArgsConstructor;
 
 @ExtendWith(MockitoExtension.class)
 public class ProcessingContextImplTest {
+    private static final long NOW = 1723687072569L;
+
     private static class NamedProcessor implements DecatonProcessor<HelloTask> {
         private final String name;
         private final DecatonProcessor<HelloTask> impl;
@@ -120,7 +122,7 @@ public class ProcessingContextImplTest {
     private static ProcessingContextImpl<HelloTask> context(RecordTraceHandle traceHandle,
                                                             DecatonProcessor<HelloTask>... processors) {
         TaskRequest request = new TaskRequest(
-                new TopicPartition("topic", 1), 1, null, "TEST".getBytes(StandardCharsets.UTF_8),
+                NOW, new TopicPartition("topic", 1), 1, null, "TEST".getBytes(StandardCharsets.UTF_8),
                 null, traceHandle, TASK.toByteArray(), null);
         DecatonTask<HelloTask> task = new DecatonTask<>(
                 TaskMetadata.builder().build(), TASK, TASK.toByteArray());
@@ -366,7 +368,7 @@ public class ProcessingContextImplTest {
         CountDownLatch retryLatch = new CountDownLatch(1);
         DecatonProcessor<byte[]> retryProcessor = spy(new AsyncCompleteProcessor(retryLatch));
         TaskRequest request = new TaskRequest(
-                new TopicPartition("topic", 1), 1, null, "TEST".getBytes(StandardCharsets.UTF_8), null, null, TASK.toByteArray(), null);
+                NOW, new TopicPartition("topic", 1), 1, null, "TEST".getBytes(StandardCharsets.UTF_8), null, null, TASK.toByteArray(), null);
         DecatonTask<byte[]> task = new DecatonTask<>(
                 TaskMetadata.builder().build(), TASK.toByteArray(), TASK.toByteArray());
 
@@ -397,7 +399,7 @@ public class ProcessingContextImplTest {
         CountDownLatch retryLatch = new CountDownLatch(1);
         DecatonProcessor<byte[]> retryProcessor = spy(new AsyncCompleteProcessor(retryLatch));
         TaskRequest request = new TaskRequest(
-                new TopicPartition("topic", 1), 1, null, "TEST".getBytes(StandardCharsets.UTF_8), null, null, TASK.toByteArray(), null);
+                NOW, new TopicPartition("topic", 1), 1, null, "TEST".getBytes(StandardCharsets.UTF_8), null, null, TASK.toByteArray(), null);
         DecatonTask<byte[]> task = new DecatonTask<>(
                 TaskMetadata.builder().build(), TASK.toByteArray(), TASK.toByteArray());
 

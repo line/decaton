@@ -31,7 +31,12 @@ import lombok.RequiredArgsConstructor;
 
 @RequiredArgsConstructor
 public class DefaultTaskExtractor<T> implements TaskExtractor<T> {
+    private static final ThreadLocal<Boolean> parseAsLegacyWhenHeaderMissing = ThreadLocal.withInitial(() -> false);
     private final Deserializer<T> taskDeserializer;
+
+    public static void setParseAsLegacyWhenHeaderMissing(boolean parseAsLegacy) {
+        parseAsLegacyWhenHeaderMissing.set(parseAsLegacy);
+    }
 
     @Override
     public DecatonTask<T> extract(ConsumedRecord record) {
@@ -43,17 +48,33 @@ public class DefaultTaskExtractor<T> implements TaskExtractor<T> {
                     taskDeserializer.deserialize(taskDataBytes),
                     taskDataBytes);
         } else {
-            try {
-                DecatonTaskRequest taskRequest = DecatonTaskRequest.parseFrom(record.value());
-                TaskMetadata metadata = TaskMetadata.fromProto(taskRequest.getMetadata());
-                byte[] taskDataBytes = taskRequest.getSerializedTask().toByteArray();
+            // There are two cases where task metadata header is missing:
+            // 1. The task is produced by an old producer which wraps tasks in DecatonTaskRequest proto.
+            // 2. The task is produced by non-DecatonClient producer.
+            //
+            // From Decaton perspective, there is no way to distinguish between these two cases,
+            // so we need to rely on a configuration to determine how to deserialize the task.
+            if (parseAsLegacyWhenHeaderMissing.get()) {
+                try {
+                    DecatonTaskRequest taskRequest = DecatonTaskRequest.parseFrom(record.value());
+                    TaskMetadata metadata = TaskMetadata.fromProto(taskRequest.getMetadata());
+                    byte[] taskDataBytes = taskRequest.getSerializedTask().toByteArray();
 
+                    return new DecatonTask<>(
+                            metadata,
+                            taskDeserializer.deserialize(taskDataBytes),
+                            taskDataBytes);
+                } catch (InvalidProtocolBufferException e) {
+                    throw new IllegalArgumentException(e);
+                }
+            } else {
+                T task = taskDeserializer.deserialize(record.value());
                 return new DecatonTask<>(
-                        metadata,
-                        taskDeserializer.deserialize(taskDataBytes),
-                        taskDataBytes);
-            } catch (InvalidProtocolBufferException e) {
-                throw new IllegalArgumentException(e);
+                        TaskMetadata.builder()
+                                    .timestampMillis(record.recordTimestamp())
+                                    .build(),
+                        task,
+                        record.value());
             }
         }
     }

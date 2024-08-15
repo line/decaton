@@ -22,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.junit.jupiter.api.Test;
 
+import com.linecorp.decaton.processor.TaskMetadata;
 import com.linecorp.decaton.processor.runtime.ConsumedRecord;
 import com.linecorp.decaton.processor.runtime.DecatonTask;
 import com.linecorp.decaton.protobuf.ProtocolBuffersDeserializer;
@@ -39,11 +40,13 @@ public class DefaultTaskExtractorTest {
                               .build();
     @Test
     public void testExtract() {
+        DefaultTaskExtractor.setParseAsLegacyWhenHeaderMissing(true);
         DefaultTaskExtractor<HelloTask> extractor = new DefaultTaskExtractor<>(
                 new ProtocolBuffersDeserializer<>(HelloTask.parser()));
 
         ConsumedRecord record = ConsumedRecord
                 .builder()
+                .recordTimestamp(1561709151628L)
                 .headers(new RecordHeaders())
                 .value(LEGACY_REQUEST.toByteArray())
                 .build();
@@ -51,6 +54,30 @@ public class DefaultTaskExtractorTest {
         DecatonTask<HelloTask> extracted = extractor.extract(record);
 
         assertEquals(LEGACY_REQUEST.getMetadata(), extracted.metadata().toProto());
+        assertEquals(TASK, extracted.taskData());
+
+        assertArrayEquals(TASK.toByteArray(), extracted.taskDataBytes());
+    }
+
+    @Test
+    public void testExtractBypassLegacyFormatWhenHeaderMissing() {
+        DefaultTaskExtractor.setParseAsLegacyWhenHeaderMissing(false);
+        DefaultTaskExtractor<HelloTask> extractor = new DefaultTaskExtractor<>(
+                new ProtocolBuffersDeserializer<>(HelloTask.parser()));
+
+        ConsumedRecord record = ConsumedRecord
+                .builder()
+                .recordTimestamp(1561709151628L)
+                .headers(new RecordHeaders())
+                .value(TASK.toByteArray())
+                .build();
+
+        DecatonTask<HelloTask> extracted = extractor.extract(record);
+
+        // check that reasonably default metadata is filled
+        assertEquals(TaskMetadata.builder()
+                                 .timestampMillis(1561709151628L)
+                                 .build(), extracted.metadata());
         assertEquals(TASK, extracted.taskData());
 
         assertArrayEquals(TASK.toByteArray(), extracted.taskDataBytes());

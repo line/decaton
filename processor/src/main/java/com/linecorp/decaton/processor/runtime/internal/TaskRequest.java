@@ -32,6 +32,7 @@ import lombok.experimental.Accessors;
 @Accessors(fluent = true)
 @AllArgsConstructor
 public class TaskRequest {
+    private final long recordTimestamp;
     private final TopicPartition topicPartition;
     private final long recordOffset;
     private final OffsetState offsetState;

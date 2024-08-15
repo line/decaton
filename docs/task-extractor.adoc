@@ -1,16 +1,33 @@
-Consuming Arbitrary Topic
-=========================
+TaskExtractor
+=============
 :base_version: 9.0.0
 :modules: common,protocol,processor
 
-This document guides you how to consume and process topics containing records not produced by DecatonClient using Decaton processors.
+[NOTE]
+====
+From Decaton 9.0.0, you can just use link:../processor/src/main/java/com/linecorp/decaton/processor/runtime/ProcessorsBuilder.java[ProcessorsBuilder#consuming(String topic, Deserializer<T> deserializer)] to consume arbitrary topics,
+without worrying if the topic is produced by DecatonClient or not.
 
-By default, Decaton assumes messages are produced `DecatonClient`, where task metadata are stored as link:../protocol/src/main/proto/decaton.proto[TaskMetadataProto] in record headers.
-But Decaton has the capability to consume arbitrary topics other than topics produced by `DecatonClient`.
+You may need to read through this guide *ONLY* in specific situations described just below.
+====
 
-This means you can use Decaton as a drop-in replacement for a vanilla KafkaConsumer to leverage powerful features like deferred completion, delayed processing and so on.
+Decaton provides two ways to consume topics in link:../processor/src/main/java/com/linecorp/decaton/processor/runtime/ProcessorsBuilder.java[ProcessorsBuilder]:
 
-Through this guide, we assume the topic is JSON-serialized and use link:https://github.com/FasterXML/jackson-databind[jackson-databind] for deserialization, but it's trivial to consume arbitrary formats other than JSON.
+* `ProcessorsBuilder#consuming(String topic, Deserializer<T> deserializer)`
+* `ProcessorsBuilder#consuming(String topic, TaskExtractor<T> deserializer)`
+
+As you may have learned through link:./getting-started.adoc[Getting Started], former is the most common and convenient way to consume topics, where you can just pass a value deserializer.
+
+However, sometimes you may need to apply custom logic to extract a task from raw consumed messages:
+
+* You need to extract custom task metadata on consumption. (e.g. Set `scheduledTimeMillis` for delayed processing)
+* You need to access additional information (e.g. record headers) for deserialization
+
+This is where latter way with `TaskExtractor` comes in.
+
+This guide will show you how to implement `TaskExtractor` and use it.
+
+Through this guide, we assume the topic is JSON-serialized and use link:https://github.com/FasterXML/jackson-databind[jackson-databind] for deserialization.
 
 == TaskExtractor
 
@@ -29,6 +46,7 @@ public class JSONUserEventExtractor implements TaskExtractor<UserEvent> {
             TaskMetadata metadata = TaskMetadata.builder()
                                                 // Filling timestampMillis is not mandatory, but it would be useful
                                                 // when you monitor delivery latency between event production time and event processing time.
+                                                // Also, this will be used for scheduling tasks when scheduledTimeMillis is set.
                                                 .timestampMillis(event.getEventTimestampMillis())
                                                 // This field is not mandatory too, but you can track which application produced the task by filling this.
                                                 .sourceApplicationId("event-tracker")
@@ -66,7 +84,7 @@ public class UserEventProcessor implements DecatonProcessor<UserEvent> {
 }
 ----
 
-As you can see, once you implement TaskExtractor, the implementation of the DecatonProcessor can be done as when you consume a regular Decaton topic.
+As you can see, there's no difference the implementation of the DecatonProcessor from the case where you use `Deserializer`.
 
 Lastly, you need to instantiate link:../processor/src/main/java/com/linecorp/decaton/processor/runtime/ProcessorSubscription.java[ProcessorSubscription] as follows.
 
@@ -84,11 +102,9 @@ ProcessorsBuilder.consuming(
 ...
 ----
 
-You have to pass TaskExtractor which you implemented above instead of link:../common/src/main/java/com/linecorp/decaton/common/Deserializer.java[Deseiralizer].
-
 == Run Example
 
-Now we are ready to process a JSON topic.
+Now we are ready to process a JSON topic with custom task extraction logic.
 
 Before trying out, let's download and extract the kafka binary from https://kafka.apache.org/downloads to use `kafka-console-producer.sh`.
 

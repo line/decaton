@@ -259,15 +259,17 @@ public class RetryQueueingTest {
     @Timeout(60)
     public void testRetryQueueingMigrateToHeader() throws Exception {
         DynamicProperty<Boolean> metadataAsHeader =
-                new DynamicProperty<>(ProcessorProperties.CONFIG_TASK_METADATA_AS_HEADER);
-        metadataAsHeader.set(false);
+                new DynamicProperty<>(ProcessorProperties.CONFIG_RETRY_TASK_AS_LEGACY_FORMAT);
+        metadataAsHeader.set(true);
 
         AtomicInteger processCount = new AtomicInteger(0);
         CountDownLatch migrationLatch = new CountDownLatch(1);
         ProcessorTestSuite
                 .builder(rule)
                 .numTasks(100)
-                .propertySupplier(StaticPropertySupplier.of(metadataAsHeader))
+                .propertySupplier(StaticPropertySupplier.of(
+                        metadataAsHeader,
+                        Property.ofStatic(ProcessorProperties.CONFIG_PARSE_AS_LEGACY_FORMAT_WHEN_HEADER_MISSING, true)))
                 .produceTasksWithHeaderMetadata(false)
                 .configureProcessorsBuilder(builder -> builder.thenProcess((ctx, task) -> {
                     if (ctx.metadata().retryCount() == 0) {
