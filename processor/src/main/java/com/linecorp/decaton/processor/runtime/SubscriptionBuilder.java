@@ -263,7 +263,7 @@ public class SubscriptionBuilder {
         return new ProcessorSubscription(scope,
                                          consumerSupplier.get(),
                                          quotaApplier(scope),
-                                         processorsBuilder.build(maybeRetryProcessorSupplier(scope)),
+                                         processorsBuilder.build(maybeRetryProcessorSupplier(scope), props),
                                          props,
                                          stateListener);
     }

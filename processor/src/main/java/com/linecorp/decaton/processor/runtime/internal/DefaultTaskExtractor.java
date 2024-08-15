@@ -22,6 +22,7 @@ import com.linecorp.decaton.common.Deserializer;
 import com.linecorp.decaton.client.internal.TaskMetadataUtil;
 import com.linecorp.decaton.processor.runtime.ConsumedRecord;
 import com.linecorp.decaton.processor.runtime.DecatonTask;
+import com.linecorp.decaton.processor.runtime.Property;
 import com.linecorp.decaton.processor.runtime.TaskExtractor;
 import com.linecorp.decaton.processor.TaskMetadata;
 import com.linecorp.decaton.protocol.internal.DecatonInternal.DecatonTaskRequest;
@@ -31,12 +32,8 @@ import lombok.RequiredArgsConstructor;
 
 @RequiredArgsConstructor
 public class DefaultTaskExtractor<T> implements TaskExtractor<T> {
-    private static final ThreadLocal<Boolean> parseAsLegacyWhenHeaderMissing = ThreadLocal.withInitial(() -> false);
     private final Deserializer<T> taskDeserializer;
-
-    public static void setParseAsLegacyWhenHeaderMissing(boolean parseAsLegacy) {
-        parseAsLegacyWhenHeaderMissing.set(parseAsLegacy);
-    }
+    private final Property<Boolean> legacyFallbackEnabledProperty;
 
     @Override
     public DecatonTask<T> extract(ConsumedRecord record) {
@@ -54,7 +51,7 @@ public class DefaultTaskExtractor<T> implements TaskExtractor<T> {
             //
             // From Decaton perspective, there is no way to distinguish between these two cases,
             // so we need to rely on a configuration to determine how to deserialize the task.
-            if (parseAsLegacyWhenHeaderMissing.get()) {
+            if (legacyFallbackEnabledProperty.value()) {
                 try {
                     DecatonTaskRequest taskRequest = DecatonTaskRequest.parseFrom(record.value());
                     TaskMetadata metadata = TaskMetadata.fromProto(taskRequest.getMetadata());

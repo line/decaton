@@ -149,7 +149,7 @@ public class ProcessorSubscriptionTest {
                 scope,
                 consumer,
                 NoopQuotaApplier.INSTANCE,
-                builder.build(null),
+                builder.build(null, scope.props()),
                 scope.props(),
                 listener);
     }
@@ -280,7 +280,7 @@ public class ProcessorSubscriptionTest {
                                             (ConsumedRecord record) -> new DecatonTask<>(
                                                     TaskMetadata.builder().build(), "dummy", record.value()))
                                  .thenProcess(processor)
-                                 .build(null),
+                                 .build(null, scope.props()),
                 scope.props(),
                 newState -> {
                     if (newState == State.RUNNING) {
@@ -357,7 +357,7 @@ public class ProcessorSubscriptionTest {
                                      ctx.deferCompletion().complete();
                                      taskCompleted.countDown();
                                  })
-                                 .build(null),
+                                 .build(null, scope.props()),
                 scope.props(),
                 null);
         subscription.start();

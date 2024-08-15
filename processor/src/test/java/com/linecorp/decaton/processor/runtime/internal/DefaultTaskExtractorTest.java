@@ -25,6 +25,8 @@ import org.junit.jupiter.api.Test;
 import com.linecorp.decaton.processor.TaskMetadata;
 import com.linecorp.decaton.processor.runtime.ConsumedRecord;
 import com.linecorp.decaton.processor.runtime.DecatonTask;
+import com.linecorp.decaton.processor.runtime.ProcessorProperties;
+import com.linecorp.decaton.processor.runtime.Property;
 import com.linecorp.decaton.protobuf.ProtocolBuffersDeserializer;
 import com.linecorp.decaton.protocol.internal.DecatonInternal.DecatonTaskRequest;
 import com.linecorp.decaton.protocol.Decaton.TaskMetadataProto;
@@ -40,9 +42,9 @@ public class DefaultTaskExtractorTest {
                               .build();
     @Test
     public void testExtract() {
-        DefaultTaskExtractor.setParseAsLegacyWhenHeaderMissing(true);
         DefaultTaskExtractor<HelloTask> extractor = new DefaultTaskExtractor<>(
-                new ProtocolBuffersDeserializer<>(HelloTask.parser()));
+                new ProtocolBuffersDeserializer<>(HelloTask.parser()),
+                Property.ofStatic(ProcessorProperties.CONFIG_LEGACY_PARSE_FALLBACK_ENABLED, true));
 
         ConsumedRecord record = ConsumedRecord
                 .builder()
@@ -61,9 +63,9 @@ public class DefaultTaskExtractorTest {
 
     @Test
     public void testExtractBypassLegacyFormatWhenHeaderMissing() {
-        DefaultTaskExtractor.setParseAsLegacyWhenHeaderMissing(false);
         DefaultTaskExtractor<HelloTask> extractor = new DefaultTaskExtractor<>(
-                new ProtocolBuffersDeserializer<>(HelloTask.parser()));
+                new ProtocolBuffersDeserializer<>(HelloTask.parser()),
+                Property.ofStatic(ProcessorProperties.CONFIG_LEGACY_PARSE_FALLBACK_ENABLED, false));
 
         ConsumedRecord record = ConsumedRecord
                 .builder()

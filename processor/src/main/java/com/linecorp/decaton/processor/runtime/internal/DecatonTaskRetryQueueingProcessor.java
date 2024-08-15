@@ -45,14 +45,14 @@ public class DecatonTaskRetryQueueingProcessor implements DecatonProcessor<byte[
     private final Duration backoff;
     private final RetryMetrics metrics;
     private final String retryTopic;
-    private final Property<Boolean> retryTaskAsLegacyFormatProperty;
+    private final Property<Boolean> retryTaskInLegacyFormatProperty;
 
     public DecatonTaskRetryQueueingProcessor(SubscriptionScope scope, DecatonTaskProducer producer) {
         RetryConfig retryConfig = scope.retryConfig().get(); // This won't be instantiated unless it present
         this.producer = producer;
         backoff = retryConfig.backoff();
         retryTopic = scope.retryTopic().get(); // This won't be instantiated unless it present
-        retryTaskAsLegacyFormatProperty = scope.props().get(ProcessorProperties.CONFIG_RETRY_TASK_AS_LEGACY_FORMAT);
+        retryTaskInLegacyFormatProperty = scope.props().get(ProcessorProperties.CONFIG_RETRY_TASK_IN_LEGACY_FORMAT);
 
         metrics = Metrics.withTags("subscription", scope.subscriptionId()).new RetryMetrics();
     }
@@ -70,7 +70,7 @@ public class DecatonTaskRetryQueueingProcessor implements DecatonProcessor<byte[
                                  .build();
 
         final ProducerRecord<byte[], byte[]> record;
-        if (retryTaskAsLegacyFormatProperty.value()) {
+        if (retryTaskInLegacyFormatProperty.value()) {
             DecatonTaskRequest request =
                     DecatonTaskRequest.newBuilder()
                                       .setMetadata(taskMetadata)

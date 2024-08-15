@@ -124,11 +124,6 @@ public class ProcessPipeline<T> implements AutoCloseable {
 
     // visible for testing
     DecatonTask<T> extract(TaskRequest request) {
-        // This is a workaround to pass the config to TaskExtractor
-        // since it doesn't have a reference to ProcessorProperties.
-        DefaultTaskExtractor.setParseAsLegacyWhenHeaderMissing(
-                scope.props().get(ProcessorProperties.CONFIG_PARSE_AS_LEGACY_FORMAT_WHEN_HEADER_MISSING).value());
-
         final DecatonTask<T> extracted;
         extracted = taskExtractor.extract(
                 ConsumedRecord.builder()

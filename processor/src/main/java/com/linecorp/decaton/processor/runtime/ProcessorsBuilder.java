@@ -18,6 +18,7 @@ package com.linecorp.decaton.processor.runtime;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 import com.linecorp.decaton.common.Deserializer;
@@ -28,7 +29,6 @@ import com.linecorp.decaton.processor.runtime.internal.DefaultTaskExtractor;
 import com.linecorp.decaton.processor.runtime.internal.Processors;
 
 import lombok.Getter;
-import lombok.RequiredArgsConstructor;
 import lombok.experimental.Accessors;
 
 /**
@@ -40,15 +40,17 @@ import lombok.experimental.Accessors;
 public class ProcessorsBuilder<T> {
     @Getter
     private final String topic;
-    private final TaskExtractor<T> taskExtractor;
-    private final TaskExtractor<T> retryTaskExtractor;
+    private final Function<Property<Boolean>, TaskExtractor<T>> taskExtractorConstructor;
+    private final Function<Property<Boolean>, TaskExtractor<T>> retryTaskExtractorConstructor;
 
     private final List<DecatonProcessorSupplier<T>> suppliers;
 
-    public ProcessorsBuilder(String topic, TaskExtractor<T> taskExtractor, TaskExtractor<T> retryTaskExtractor) {
+    ProcessorsBuilder(String topic,
+                      Function<Property<Boolean>, TaskExtractor<T>> taskExtractorConstructor,
+                      Function<Property<Boolean>, TaskExtractor<T>> retryTaskExtractorConstructor) {
         this.topic = topic;
-        this.taskExtractor = taskExtractor;
-        this.retryTaskExtractor = retryTaskExtractor;
+        this.taskExtractorConstructor = taskExtractorConstructor;
+        this.retryTaskExtractorConstructor = retryTaskExtractorConstructor;
         suppliers = new ArrayList<>();
     }
 
@@ -67,8 +69,8 @@ public class ProcessorsBuilder<T> {
      * @return an instance of {@link ProcessorsBuilder}.
      */
     public static <T> ProcessorsBuilder<T> consuming(String topic, Deserializer<T> deserializer) {
-        DefaultTaskExtractor<T> taskExtractor = new DefaultTaskExtractor<>(deserializer);
-        return new ProcessorsBuilder<>(topic, taskExtractor, taskExtractor);
+        Function<Property<Boolean>, TaskExtractor<T>> constructor = prop -> new DefaultTaskExtractor<>(deserializer, prop);
+        return new ProcessorsBuilder<>(topic, constructor, constructor);
     }
 
     /**
@@ -80,7 +82,9 @@ public class ProcessorsBuilder<T> {
      * @return an instance of {@link ProcessorsBuilder}.
      */
     public static <T> ProcessorsBuilder<T> consuming(String topic, TaskExtractor<T> taskExtractor) {
-        return new ProcessorsBuilder<>(topic, taskExtractor, new RetryTaskExtractor<>(taskExtractor));
+        return new ProcessorsBuilder<>(topic,
+                                       ignored -> taskExtractor,
+                                       prop -> new RetryTaskExtractor<>(prop, taskExtractor));
     }
 
     /**
@@ -123,14 +127,23 @@ public class ProcessorsBuilder<T> {
         return thenProcess(new DecatonProcessorSupplierImpl<>(() -> processor, ProcessorScope.PROVIDED));
     }
 
-    Processors<T> build(DecatonProcessorSupplier<byte[]> retryProcessorSupplier) {
-        return new Processors<>(suppliers, retryProcessorSupplier, taskExtractor, retryTaskExtractor);
+    Processors<T> build(DecatonProcessorSupplier<byte[]> retryProcessorSupplier, ProcessorProperties properties) {
+        Property<Boolean> legacyFallbackEnabledProperty = properties.get(ProcessorProperties.CONFIG_LEGACY_PARSE_FALLBACK_ENABLED);
+        return new Processors<>(suppliers,
+                                retryProcessorSupplier,
+                                taskExtractorConstructor.apply(legacyFallbackEnabledProperty),
+                                retryTaskExtractorConstructor.apply(legacyFallbackEnabledProperty));
     }
 
-    @RequiredArgsConstructor
     private static class RetryTaskExtractor<T> implements TaskExtractor<T> {
-        private final DefaultTaskExtractor<byte[]> outerExtractor = new DefaultTaskExtractor<>(bytes -> bytes);
+        private final DefaultTaskExtractor<byte[]> outerExtractor;
         private final TaskExtractor<T> innerExtractor;
+
+        RetryTaskExtractor(Property<Boolean> legacyFallbackEnabledProperty,
+                           TaskExtractor<T> innerExtractor) {
+            this.innerExtractor = innerExtractor;
+            this.outerExtractor = new DefaultTaskExtractor<>(bytes -> bytes, legacyFallbackEnabledProperty);
+        }
 
         @Override
         public DecatonTask<T> extract(ConsumedRecord record) {

@@ -235,8 +235,8 @@ public class ProcessorProperties extends AbstractDecatonProperties {
      * <p>
      * Reloadable: yes
      */
-    public static final PropertyDefinition<Boolean> CONFIG_RETRY_TASK_AS_LEGACY_FORMAT =
-            PropertyDefinition.define("decaton.retry.task.as.legacy.format", Boolean.class, false,
+    public static final PropertyDefinition<Boolean> CONFIG_RETRY_TASK_IN_LEGACY_FORMAT =
+            PropertyDefinition.define("decaton.retry.task.in.legacy.format", Boolean.class, false,
                                       v -> v instanceof Boolean);
 
     /**
@@ -250,8 +250,8 @@ public class ProcessorProperties extends AbstractDecatonProperties {
      * <p>
      * Reloadable: yes
      */
-    public static final PropertyDefinition<Boolean> CONFIG_PARSE_AS_LEGACY_FORMAT_WHEN_HEADER_MISSING =
-            PropertyDefinition.define("decaton.parse.as.legacy.format.when.header.missing", Boolean.class, false,
+    public static final PropertyDefinition<Boolean> CONFIG_LEGACY_PARSE_FALLBACK_ENABLED =
+            PropertyDefinition.define("decaton.legacy.parse.fallback.enabled", Boolean.class, false,
                                       v -> v instanceof Boolean);
 
     public static final List<PropertyDefinition<?>> PROPERTY_DEFINITIONS =
@@ -268,8 +268,8 @@ public class ProcessorProperties extends AbstractDecatonProperties {
                     CONFIG_DEFERRED_COMPLETE_TIMEOUT_MS,
                     CONFIG_PROCESSOR_THREADS_TERMINATION_TIMEOUT_MS,
                     CONFIG_PER_KEY_QUOTA_PROCESSING_RATE,
-                    CONFIG_RETRY_TASK_AS_LEGACY_FORMAT,
-                    CONFIG_PARSE_AS_LEGACY_FORMAT_WHEN_HEADER_MISSING));
+                    CONFIG_RETRY_TASK_IN_LEGACY_FORMAT,
+                    CONFIG_LEGACY_PARSE_FALLBACK_ENABLED));
 
     /**
      * Find and return a {@link PropertyDefinition} from its name.
