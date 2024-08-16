@@ -171,8 +171,8 @@ public class DecatonTaskRetryQueueingProcessorTest {
                 SubPartitionRuntime.THREAD_POOL,
                 Optional.of(RetryConfig.builder().backoff(RETRY_BACKOFF).build()), Optional.empty(),
                 ProcessorProperties.builder()
-                                   .set(Property.ofStatic(ProcessorProperties.CONFIG_TASK_METADATA_AS_HEADER,
-                                                          false))
+                                   .set(Property.ofStatic(ProcessorProperties.CONFIG_RETRY_TASK_IN_LEGACY_FORMAT,
+                                                          true))
                                    .build(), NoopTracingProvider.INSTANCE,
                 ConsumerSupplier.DEFAULT_MAX_POLL_RECORDS,
                 DefaultSubPartitioner::new);

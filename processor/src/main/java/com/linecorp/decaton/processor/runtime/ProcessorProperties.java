@@ -24,6 +24,7 @@ import java.util.Map;
 
 import org.slf4j.MDC;
 
+import com.linecorp.decaton.common.Deserializer;
 import com.linecorp.decaton.processor.Completion;
 import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.ProcessingContext;
@@ -226,17 +227,31 @@ public class ProcessorProperties extends AbstractDecatonProperties {
                                       Long.MAX_VALUE, v -> v instanceof Long && (Long) v >= 0);
 
     /**
-     * Controls whether to produce retry tasks with task metadata as headers, instead of as deprecated
-     * {@link DecatonTaskRequest} format.
+     * Controls whether to produce retry tasks in deprecated {@link DecatonTaskRequest} format.
      * <p>
-     * <b>CAUTION!!! YOU MAY NEED TO SET THIS TO FALSE WHEN YOU UPGRADE FROM 8.0.1 OR EARLIER</b>
+     * <b>CAUTION!!! YOU MAY NEED TO SET THIS TO TRUE WHEN YOU UPGRADE FROM 8.0.1 OR EARLIER</b>
      * <p>
      * Please read <a href="https://github.com/line/decaton/releases/tag/v9.0.0">Decaton 9.0.0 Release Note</a> carefully.
      * <p>
      * Reloadable: yes
      */
-    public static final PropertyDefinition<Boolean> CONFIG_TASK_METADATA_AS_HEADER =
-            PropertyDefinition.define("decaton.task.metadata.as.header", Boolean.class, true,
+    public static final PropertyDefinition<Boolean> CONFIG_RETRY_TASK_IN_LEGACY_FORMAT =
+            PropertyDefinition.define("decaton.retry.task.in.legacy.format", Boolean.class, false,
+                                      v -> v instanceof Boolean);
+
+    /**
+     * Controls whether to parse records as {@link DecatonTaskRequest} format when task metadata header is missing
+     * when {@link Deserializer} is used, instead of parsing task directly with the deserializer and
+     * fill reasonably-default task metadata.
+     * <p>
+     * <b>CAUTION!!! YOU MAY NEED TO SET THIS TO TRUE WHEN YOU UPGRADE FROM 8.0.1 OR EARLIER</b>
+     * <p>
+     * Please read <a href="https://github.com/line/decaton/releases/tag/v9.0.0">Decaton 9.0.0 Release Note</a> carefully.
+     * <p>
+     * Reloadable: yes
+     */
+    public static final PropertyDefinition<Boolean> CONFIG_LEGACY_PARSE_FALLBACK_ENABLED =
+            PropertyDefinition.define("decaton.legacy.parse.fallback.enabled", Boolean.class, false,
                                       v -> v instanceof Boolean);
 
     public static final List<PropertyDefinition<?>> PROPERTY_DEFINITIONS =
@@ -253,7 +268,8 @@ public class ProcessorProperties extends AbstractDecatonProperties {
                     CONFIG_DEFERRED_COMPLETE_TIMEOUT_MS,
                     CONFIG_PROCESSOR_THREADS_TERMINATION_TIMEOUT_MS,
                     CONFIG_PER_KEY_QUOTA_PROCESSING_RATE,
-                    CONFIG_TASK_METADATA_AS_HEADER));
+                    CONFIG_RETRY_TASK_IN_LEGACY_FORMAT,
+                    CONFIG_LEGACY_PARSE_FALLBACK_ENABLED));
 
     /**
      * Find and return a {@link PropertyDefinition} from its name.

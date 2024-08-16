@@ -22,8 +22,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.junit.jupiter.api.Test;
 
+import com.linecorp.decaton.processor.TaskMetadata;
 import com.linecorp.decaton.processor.runtime.ConsumedRecord;
 import com.linecorp.decaton.processor.runtime.DecatonTask;
+import com.linecorp.decaton.processor.runtime.ProcessorProperties;
+import com.linecorp.decaton.processor.runtime.Property;
 import com.linecorp.decaton.protobuf.ProtocolBuffersDeserializer;
 import com.linecorp.decaton.protocol.internal.DecatonInternal.DecatonTaskRequest;
 import com.linecorp.decaton.protocol.Decaton.TaskMetadataProto;
@@ -40,10 +43,12 @@ public class DefaultTaskExtractorTest {
     @Test
     public void testExtract() {
         DefaultTaskExtractor<HelloTask> extractor = new DefaultTaskExtractor<>(
-                new ProtocolBuffersDeserializer<>(HelloTask.parser()));
+                new ProtocolBuffersDeserializer<>(HelloTask.parser()),
+                Property.ofStatic(ProcessorProperties.CONFIG_LEGACY_PARSE_FALLBACK_ENABLED, true));
 
         ConsumedRecord record = ConsumedRecord
                 .builder()
+                .recordTimestampMillis(1561709151628L)
                 .headers(new RecordHeaders())
                 .value(LEGACY_REQUEST.toByteArray())
                 .build();
@@ -51,6 +56,30 @@ public class DefaultTaskExtractorTest {
         DecatonTask<HelloTask> extracted = extractor.extract(record);
 
         assertEquals(LEGACY_REQUEST.getMetadata(), extracted.metadata().toProto());
+        assertEquals(TASK, extracted.taskData());
+
+        assertArrayEquals(TASK.toByteArray(), extracted.taskDataBytes());
+    }
+
+    @Test
+    public void testExtractBypassLegacyFormatWhenHeaderMissing() {
+        DefaultTaskExtractor<HelloTask> extractor = new DefaultTaskExtractor<>(
+                new ProtocolBuffersDeserializer<>(HelloTask.parser()),
+                Property.ofStatic(ProcessorProperties.CONFIG_LEGACY_PARSE_FALLBACK_ENABLED, false));
+
+        ConsumedRecord record = ConsumedRecord
+                .builder()
+                .recordTimestampMillis(1561709151628L)
+                .headers(new RecordHeaders())
+                .value(TASK.toByteArray())
+                .build();
+
+        DecatonTask<HelloTask> extracted = extractor.extract(record);
+
+        // check that reasonably default metadata is filled
+        assertEquals(TaskMetadata.builder()
+                                 .timestampMillis(1561709151628L)
+                                 .build(), extracted.metadata());
         assertEquals(TASK, extracted.taskData());
 
         assertArrayEquals(TASK.toByteArray(), extracted.taskDataBytes());

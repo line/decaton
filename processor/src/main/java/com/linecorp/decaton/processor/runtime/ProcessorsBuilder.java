@@ -22,12 +22,12 @@ import java.util.function.Supplier;
 
 import com.linecorp.decaton.common.Deserializer;
 import com.linecorp.decaton.processor.DecatonProcessor;
+import com.linecorp.decaton.processor.TaskMetadata;
 import com.linecorp.decaton.processor.runtime.internal.DecatonProcessorSupplierImpl;
 import com.linecorp.decaton.processor.runtime.internal.DefaultTaskExtractor;
 import com.linecorp.decaton.processor.runtime.internal.Processors;
 
 import lombok.Getter;
-import lombok.RequiredArgsConstructor;
 import lombok.experimental.Accessors;
 
 /**
@@ -39,29 +39,34 @@ import lombok.experimental.Accessors;
 public class ProcessorsBuilder<T> {
     @Getter
     private final String topic;
-    private final TaskExtractor<T> taskExtractor;
-    private final TaskExtractor<T> retryTaskExtractor;
+    private final Deserializer<T> userSuppliedDeserializer;
+    private final TaskExtractor<T> userSuppliedTaskExtractor;
 
     private final List<DecatonProcessorSupplier<T>> suppliers;
 
-    public ProcessorsBuilder(String topic, TaskExtractor<T> taskExtractor, TaskExtractor<T> retryTaskExtractor) {
+    ProcessorsBuilder(String topic, Deserializer<T> userSuppliedDeserializer, TaskExtractor<T> userSuppliedTaskExtractor) {
         this.topic = topic;
-        this.taskExtractor = taskExtractor;
-        this.retryTaskExtractor = retryTaskExtractor;
+        this.userSuppliedDeserializer = userSuppliedDeserializer;
+        this.userSuppliedTaskExtractor = userSuppliedTaskExtractor;
         suppliers = new ArrayList<>();
     }
 
     /**
      * Create new {@link ProcessorsBuilder} that consumes message from topic expecting tasks of type
-     * which can be parsed by valueParser.
+     * which can be parsed by deserializer.
+     * <p>
+     * From Decaton 9.0.0, you can use this overload to consume tasks from arbitrary topics not only
+     * topics that are produced by DecatonClient.
+     * <p>
+     * If you want to extract custom {@link TaskMetadata} (e.g. for delayed processing), you can use
+     * {@link #consuming(String, TaskExtractor)} instead.
      * @param topic the name of topic to consume.
      * @param deserializer the deserializer to instantiate task of type {@link T} from serialized bytes.
      * @param <T> the type of instantiated tasks.
      * @return an instance of {@link ProcessorsBuilder}.
      */
     public static <T> ProcessorsBuilder<T> consuming(String topic, Deserializer<T> deserializer) {
-        DefaultTaskExtractor<T> taskExtractor = new DefaultTaskExtractor<>(deserializer);
-        return new ProcessorsBuilder<>(topic, taskExtractor, taskExtractor);
+        return new ProcessorsBuilder<>(topic, deserializer, null);
     }
 
     /**
@@ -73,7 +78,7 @@ public class ProcessorsBuilder<T> {
      * @return an instance of {@link ProcessorsBuilder}.
      */
     public static <T> ProcessorsBuilder<T> consuming(String topic, TaskExtractor<T> taskExtractor) {
-        return new ProcessorsBuilder<>(topic, taskExtractor, new RetryTaskExtractor<>(taskExtractor));
+        return new ProcessorsBuilder<>(topic, null, taskExtractor);
     }
 
     /**
@@ -116,14 +121,35 @@ public class ProcessorsBuilder<T> {
         return thenProcess(new DecatonProcessorSupplierImpl<>(() -> processor, ProcessorScope.PROVIDED));
     }
 
-    Processors<T> build(DecatonProcessorSupplier<byte[]> retryProcessorSupplier) {
+    Processors<T> build(DecatonProcessorSupplier<byte[]> retryProcessorSupplier, ProcessorProperties properties) {
+        Property<Boolean> legacyFallbackEnabledProperty = properties.get(ProcessorProperties.CONFIG_LEGACY_PARSE_FALLBACK_ENABLED);
+
+        final TaskExtractor<T> taskExtractor;
+        final TaskExtractor<T> retryTaskExtractor;
+
+        // consuming(String, Deserializer) is used
+        if (userSuppliedDeserializer != null) {
+            DefaultTaskExtractor<T> extractor = new DefaultTaskExtractor<>(userSuppliedDeserializer, legacyFallbackEnabledProperty);
+            taskExtractor = extractor;
+            retryTaskExtractor = extractor;
+        } else {
+            // consuming(String, TaskExtractor) is used
+            taskExtractor = userSuppliedTaskExtractor;
+            retryTaskExtractor = new RetryTaskExtractor<>(legacyFallbackEnabledProperty, userSuppliedTaskExtractor);
+        }
+
         return new Processors<>(suppliers, retryProcessorSupplier, taskExtractor, retryTaskExtractor);
     }
 
-    @RequiredArgsConstructor
     private static class RetryTaskExtractor<T> implements TaskExtractor<T> {
-        private final DefaultTaskExtractor<byte[]> outerExtractor = new DefaultTaskExtractor<>(bytes -> bytes);
+        private final DefaultTaskExtractor<byte[]> outerExtractor;
         private final TaskExtractor<T> innerExtractor;
+
+        RetryTaskExtractor(Property<Boolean> legacyFallbackEnabledProperty,
+                           TaskExtractor<T> innerExtractor) {
+            this.innerExtractor = innerExtractor;
+            this.outerExtractor = new DefaultTaskExtractor<>(bytes -> bytes, legacyFallbackEnabledProperty);
+        }
 
         @Override
         public DecatonTask<T> extract(ConsumedRecord record) {
@@ -134,6 +160,7 @@ public class ProcessorsBuilder<T> {
             DecatonTask<byte[]> outerTask = outerExtractor.extract(record);
             ConsumedRecord inner = ConsumedRecord
                     .builder()
+                    .recordTimestampMillis(record.recordTimestampMillis())
                     .headers(record.headers())
                     .key(record.key())
                     .value(outerTask.taskDataBytes())

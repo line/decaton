@@ -30,6 +30,11 @@ import lombok.experimental.Accessors;
 @Accessors(fluent = true)
 public class ConsumedRecord {
     /**
+     * The timestamp of the record
+     */
+    long recordTimestampMillis;
+
+    /**
      * Headers of the record
      */
     Headers headers;

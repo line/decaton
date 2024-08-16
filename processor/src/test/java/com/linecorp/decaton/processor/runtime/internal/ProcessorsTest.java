@@ -37,6 +37,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import com.linecorp.decaton.processor.runtime.DecatonProcessorSupplier;
 import com.linecorp.decaton.processor.runtime.DefaultSubPartitioner;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
+import com.linecorp.decaton.processor.runtime.Property;
 import com.linecorp.decaton.processor.runtime.SubPartitionRuntime;
 import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider;
 import com.linecorp.decaton.protocol.Sample.HelloTask;
@@ -69,7 +70,8 @@ public class ProcessorsTest {
 
         Processors<HelloTask> processors = new Processors<>(
                 suppliers, null,
-                new DefaultTaskExtractor<>(bytes -> HelloTask.getDefaultInstance()),
+                new DefaultTaskExtractor<>(bytes -> HelloTask.getDefaultInstance(),
+                                           Property.ofStatic(ProcessorProperties.CONFIG_LEGACY_PARSE_FALLBACK_ENABLED)),
                 null);
 
         doThrow(new RuntimeException("exception")).when(suppliers.get(2)).getProcessor(any(), any(), anyInt());

@@ -174,7 +174,7 @@ public class PartitionContext implements AutoCloseable {
                           QuotaApplier quotaApplier) {
         if (!quotaApplier.apply(record, offsetState, maybeRecordQuotaUsage(record.key()))) {
             TaskRequest request = new TaskRequest(
-                    scope.topicPartition(), record.offset(), offsetState, record.key(),
+                    record.timestamp(), scope.topicPartition(), record.offset(), offsetState, record.key(),
                     record.headers(), traceHandle, record.value(), maybeRecordQuotaUsage(record.key()));
             subPartitions.addTask(request);
         }

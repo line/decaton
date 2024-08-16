@@ -22,6 +22,7 @@ import com.linecorp.decaton.common.Deserializer;
 import com.linecorp.decaton.client.internal.TaskMetadataUtil;
 import com.linecorp.decaton.processor.runtime.ConsumedRecord;
 import com.linecorp.decaton.processor.runtime.DecatonTask;
+import com.linecorp.decaton.processor.runtime.Property;
 import com.linecorp.decaton.processor.runtime.TaskExtractor;
 import com.linecorp.decaton.processor.TaskMetadata;
 import com.linecorp.decaton.protocol.internal.DecatonInternal.DecatonTaskRequest;
@@ -32,6 +33,7 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class DefaultTaskExtractor<T> implements TaskExtractor<T> {
     private final Deserializer<T> taskDeserializer;
+    private final Property<Boolean> legacyFallbackEnabledProperty;
 
     @Override
     public DecatonTask<T> extract(ConsumedRecord record) {
@@ -43,17 +45,33 @@ public class DefaultTaskExtractor<T> implements TaskExtractor<T> {
                     taskDeserializer.deserialize(taskDataBytes),
                     taskDataBytes);
         } else {
-            try {
-                DecatonTaskRequest taskRequest = DecatonTaskRequest.parseFrom(record.value());
-                TaskMetadata metadata = TaskMetadata.fromProto(taskRequest.getMetadata());
-                byte[] taskDataBytes = taskRequest.getSerializedTask().toByteArray();
+            // There are two cases where task metadata header is missing:
+            // 1. The task is produced by an old producer which wraps tasks in DecatonTaskRequest proto.
+            // 2. The task is produced by non-DecatonClient producer.
+            //
+            // From Decaton perspective, there is no way to distinguish between these two cases,
+            // so we need to rely on a configuration to determine how to deserialize the task.
+            if (legacyFallbackEnabledProperty.value()) {
+                try {
+                    DecatonTaskRequest taskRequest = DecatonTaskRequest.parseFrom(record.value());
+                    TaskMetadata metadata = TaskMetadata.fromProto(taskRequest.getMetadata());
+                    byte[] taskDataBytes = taskRequest.getSerializedTask().toByteArray();
 
+                    return new DecatonTask<>(
+                            metadata,
+                            taskDeserializer.deserialize(taskDataBytes),
+                            taskDataBytes);
+                } catch (InvalidProtocolBufferException e) {
+                    throw new IllegalArgumentException(e);
+                }
+            } else {
+                T task = taskDeserializer.deserialize(record.value());
                 return new DecatonTask<>(
-                        metadata,
-                        taskDeserializer.deserialize(taskDataBytes),
-                        taskDataBytes);
-            } catch (InvalidProtocolBufferException e) {
-                throw new IllegalArgumentException(e);
+                        TaskMetadata.builder()
+                                    .timestampMillis(record.recordTimestampMillis())
+                                    .build(),
+                        task,
+                        record.value());
             }
         }
     }

@@ -45,14 +45,14 @@ public class DecatonTaskRetryQueueingProcessor implements DecatonProcessor<byte[
     private final Duration backoff;
     private final RetryMetrics metrics;
     private final String retryTopic;
-    private final Property<Boolean> metadataAsHeaderProperty;
+    private final Property<Boolean> retryTaskInLegacyFormatProperty;
 
     public DecatonTaskRetryQueueingProcessor(SubscriptionScope scope, DecatonTaskProducer producer) {
         RetryConfig retryConfig = scope.retryConfig().get(); // This won't be instantiated unless it present
         this.producer = producer;
         backoff = retryConfig.backoff();
         retryTopic = scope.retryTopic().get(); // This won't be instantiated unless it present
-        metadataAsHeaderProperty = scope.props().get(ProcessorProperties.CONFIG_TASK_METADATA_AS_HEADER);
+        retryTaskInLegacyFormatProperty = scope.props().get(ProcessorProperties.CONFIG_RETRY_TASK_IN_LEGACY_FORMAT);
 
         metrics = Metrics.withTags("subscription", scope.subscriptionId()).new RetryMetrics();
     }
@@ -70,15 +70,7 @@ public class DecatonTaskRetryQueueingProcessor implements DecatonProcessor<byte[
                                  .build();
 
         final ProducerRecord<byte[], byte[]> record;
-        if (metadataAsHeaderProperty.value()) {
-            record = new ProducerRecord<>(
-                    retryTopic,
-                    null,
-                    context.key(),
-                    serializedTask,
-                    context.headers());
-            TaskMetadataUtil.writeAsHeader(taskMetadata, record.headers());
-        } else {
+        if (retryTaskInLegacyFormatProperty.value()) {
             DecatonTaskRequest request =
                     DecatonTaskRequest.newBuilder()
                                       .setMetadata(taskMetadata)
@@ -90,6 +82,14 @@ public class DecatonTaskRetryQueueingProcessor implements DecatonProcessor<byte[
                     context.key(),
                     request.toByteArray(),
                     context.headers());
+        } else {
+            record = new ProducerRecord<>(
+                    retryTopic,
+                    null,
+                    context.key(),
+                    serializedTask,
+                    context.headers());
+            TaskMetadataUtil.writeAsHeader(taskMetadata, record.headers());
         }
         metrics.retryTaskRetries.record(nextRetryCount);
 

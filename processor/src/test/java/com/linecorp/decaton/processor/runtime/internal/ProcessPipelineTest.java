@@ -96,7 +96,7 @@ public class ProcessPipelineTest {
 
     private static TaskRequest taskRequest() {
         return new TaskRequest(
-                new TopicPartition("topic", 1), 1, new OffsetState(1234), "TEST".getBytes(StandardCharsets.UTF_8), null, NoopTrace.INSTANCE, TASK.toByteArray(), null);
+                1723687072569L, new TopicPartition("topic", 1), 1, new OffsetState(1234), "TEST".getBytes(StandardCharsets.UTF_8), null, NoopTrace.INSTANCE, TASK.toByteArray(), null);
     }
 
     @Mock

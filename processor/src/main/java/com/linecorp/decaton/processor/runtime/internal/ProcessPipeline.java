@@ -127,6 +127,7 @@ public class ProcessPipeline<T> implements AutoCloseable {
         final DecatonTask<T> extracted;
         extracted = taskExtractor.extract(
                 ConsumedRecord.builder()
+                              .recordTimestampMillis(request.recordTimestamp())
                               .headers(request.headers())
                               .key(request.key())
                               .value(request.rawRequestBytes())
