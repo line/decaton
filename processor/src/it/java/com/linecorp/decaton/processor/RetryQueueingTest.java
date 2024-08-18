@@ -270,15 +270,15 @@ public class RetryQueueingTest {
                 .propertySupplier(StaticPropertySupplier.of(
                         retryTaskInLegacyFormat,
                         Property.ofStatic(ProcessorProperties.CONFIG_LEGACY_PARSE_FALLBACK_ENABLED, true)))
-                .produceTasksWithHeaderMetadata(false)
+                .produceTasksInLegacyFormat(true)
                 .configureProcessorsBuilder(builder -> builder.thenProcess((ctx, task) -> {
                     if (ctx.metadata().retryCount() == 0) {
                         int cnt = processCount.incrementAndGet();
-                        // Enable header-mode after 50 tasks are processed
+                        // Disable header-mode after 50 tasks are processed
                         if (cnt < 50) {
                             ctx.retry();
                         } else if (cnt == 50) {
-                            retryTaskInLegacyFormat.set(true);
+                            retryTaskInLegacyFormat.set(false);
                             migrationLatch.countDown();
                             ctx.retry();
                         } else {

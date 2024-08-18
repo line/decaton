@@ -112,7 +112,7 @@ public class ProcessorTestSuite {
     private final TracingProvider tracingProvider;
     private final Function<String, Producer<byte[], byte[]>> producerSupplier;
     private final TaskExtractor<TestTask> customTaskExtractor;
-    private final boolean produceTasksWithHeaderMetadata;
+    private final boolean produceTasksInLegacyFormat;
 
     private static final int DEFAULT_NUM_TASKS = 10000;
     private static final int NUM_KEYS = 100;
@@ -187,9 +187,9 @@ public class ProcessorTestSuite {
          */
         private TaskExtractor<TestTask> customTaskExtractor;
         /**
-         * Specify whether to produce tasks with header metadata instead of DecatonTaskRequest format
+         * Specify whether to produce tasks in legacy DecatonTaskRequest format instead of header metadata
          */
-        private boolean produceTasksWithHeaderMetadata = true;
+        private boolean produceTasksInLegacyFormat = false;
 
         /**
          * Exclude semantics from assertion.
@@ -238,7 +238,7 @@ public class ProcessorTestSuite {
                                           tracingProvider,
                                           producerSupplier,
                                           customTaskExtractor,
-                                          produceTasksWithHeaderMetadata);
+                                          produceTasksInLegacyFormat);
         }
     }
 
@@ -436,16 +436,16 @@ public class ProcessorTestSuite {
                                      .setSourceInstanceId("test-instance")
                                      .build();
             final ProducerRecord<byte[], byte[]> record;
-            if (produceTasksWithHeaderMetadata) {
-                record = new ProducerRecord<>(topic, null, taskMetadata.getTimestampMillis(), key, serializer.serialize(task));
-                TaskMetadataUtil.writeAsHeader(taskMetadata, record.headers());
-            } else {
+            if (produceTasksInLegacyFormat) {
                 DecatonTaskRequest request =
                         DecatonTaskRequest.newBuilder()
                                           .setMetadata(taskMetadata)
                                           .setSerializedTask(ByteString.copyFrom(serializer.serialize(task)))
                                           .build();
                 record = new ProducerRecord<>(topic, null, taskMetadata.getTimestampMillis(), key, request.toByteArray());
+            } else {
+                record = new ProducerRecord<>(topic, null, taskMetadata.getTimestampMillis(), key, serializer.serialize(task));
+                TaskMetadataUtil.writeAsHeader(taskMetadata, record.headers());
             }
 
             CompletableFuture<RecordMetadata> future = new CompletableFuture<>();
