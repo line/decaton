@@ -6,18 +6,20 @@ Making a new release
 This step is required only at the first time you release an artifact on Maven Central.
 
 1. Create an account for OSS Sonatype following [guide](https://central.sonatype.org/pages/ossrh-guide.html).
+    * Then check your user token from [profile page](https://central.sonatype.org/publish/generate-token/#introduction).   
 2. Generate PGP key following this [guide](https://central.sonatype.org/pages/working-with-pgp-signatures.html#generating-a-key-pair).
-3. Export the generated key for use from Gradle.
+3. Distribute your public key to key servers following this [guide](https://central.sonatype.org/publish/requirements/gpg/#distributing-your-public-key).
+4. Export the generated key for use from Gradle.
 ```sh
 $ gpg --export-secret-keys KEY_ID > ~/.gradle/pgp-keyring.gpg 
 ```
-4. Edit (or create) `~/.gradle/gradle.properties` with following content:
+5. Edit (or create) `~/.gradle/gradle.properties` with following content:
 ```properties
 signing.keyId=// The last 8 symbols of the key ID that you can see with `gpg -K`
 signing.secretKeyRingFile=/path/to/HOME/.gradle/pgp-keyring.gpg
 signing.password=// Your PGP keyring password
-sonatypeUsername=// OSS Sonatype username that you created at step 1
-sonatypePassword=// OSS Sonatype password that you created at step 1
+sonatypeUsername=// OSS Sonatype token-user that you confirmed at step 1
+sonatypePassword=// OSS Sonatype token you confirmed at step 1
 ```
 
 ## Releasing a new version
