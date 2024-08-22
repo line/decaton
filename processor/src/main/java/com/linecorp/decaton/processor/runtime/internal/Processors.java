@@ -72,7 +72,7 @@ public class Processors<T> {
         TaskExtractor<T> taskExtractor = extractorFromTopic(scope);
         try {
             List<DecatonProcessor<T>> processors = createProcessors(scope);
-            logger.info("Creating partition processor core: {}", scope);
+            logger.debug("Creating partition processor core: {}", scope);
             return new ProcessPipeline<>(scope, processors, retryProcessor, taskExtractor, scheduler, metrics);
         } catch (Exception e) {
             // Catching Exception instead of RuntimeException, since
