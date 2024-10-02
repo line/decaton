@@ -23,7 +23,6 @@ import java.util.Collection;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionStage;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -108,12 +107,16 @@ public class ProcessorSubscription extends Thread implements AsyncClosable {
             OffsetState offsetState;
             try {
                 offsetState = context.registerOffset(record.offset());
-            } catch (OffsetRegressionException e) {
+            } catch (OffsetRegressionException ignored) {
                 log.warn("Offset regression at partition {}", tp);
                 assignManager.repair(tp);
                 context = contexts.get(tp);
                 // If it fails even at 2nd attempt... no idea let it die.
                 offsetState = context.registerOffset(record.offset());
+            }
+            if (offsetState == null) {
+                // Means this offset has already been processed
+                return;
             }
 
             TracingProvider provider = scope.tracingProvider();

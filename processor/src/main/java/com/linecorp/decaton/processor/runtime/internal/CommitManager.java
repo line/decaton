@@ -157,7 +157,7 @@ public class CommitManager {
                 // 2. When dynamic processor reload is triggered and the context is renewed by
                 // PartitionContexts.maybeHandlePropertyReload.
                 // The case 2 is safe (safe to keep updating committed offset in renewed PartitionContext) because
-                // it caries previously consuming offset without reset.
+                // it carries previously consuming offset without reset.
                 // The case 1 is somewhat suspicious but should still be safe, because whenever partition revoke
                 // happens it calls commitSync() through onPartitionsRevoked(). According to the document of
                 // commitAsync(), it is guaranteed that its callback is called before subsequent commitSync()

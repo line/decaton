@@ -16,33 +16,25 @@
 
 package com.linecorp.decaton.processor.runtime.internal;
 
-import java.util.ArrayDeque;
-import java.util.Deque;
-
 import org.apache.kafka.common.TopicPartition;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
+import lombok.Getter;
+import lombok.experimental.Accessors;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Represents consumption processing progress of records consumed from a single partition.
  * This class manages sequence of offsets and a flag which represents if each of them was completed or not.
  */
+@Slf4j
+@Accessors(fluent = true)
 public class OutOfOrderCommitControl implements AutoCloseable {
-    private static final Logger logger = LoggerFactory.getLogger(OutOfOrderCommitControl.class);
-
+    @Getter
     private final TopicPartition topicPartition;
     private final int capacity;
-    private final Deque<OffsetState> states;
+    private final OffsetStorageComplex complex;
     private final OffsetStateReaper offsetStateReaper;
 
-    /**
-     * The current smallest offset that has been reported but not completed.
-     */
-    private volatile long earliest;
-    /**
-     * The current largest offset that has been reported.
-     */
-    private volatile long latest;
     /**
      * The current maximum offset which it and all it's previous offsets were committed.
      */
@@ -51,82 +43,86 @@ public class OutOfOrderCommitControl implements AutoCloseable {
     public OutOfOrderCommitControl(TopicPartition topicPartition, int capacity,
                                    OffsetStateReaper offsetStateReaper) {
         this.topicPartition = topicPartition;
-        states = new ArrayDeque<>(capacity);
+        complex = new OffsetStorageComplex(capacity);
         this.capacity = capacity;
         this.offsetStateReaper = offsetStateReaper;
-        earliest = latest = 0;
         highWatermark = -1;
-    }
-
-    public TopicPartition topicPartition() {
-        return topicPartition;
     }
 
     public synchronized OffsetState reportFetchedOffset(long offset) {
         if (isRegressing(offset)) {
             throw new OffsetRegressionException(String.format(
-                    "offset regression %s: %d > %d", topicPartition, offset, latest));
+                    "offset regression %s: %d < %d", topicPartition, offset, highWatermark));
         }
 
-        if (states.size() == capacity) {
+        if (complex.size() == capacity) {
             throw new IllegalArgumentException(
                     String.format("offsets count overflow: cap=%d, offset=%d", capacity, offset));
         }
 
-        OffsetState state = new OffsetState(offset);
-        states.addLast(state);
-        latest = state.offset();
+        if (complex.isComplete(offset)) {
+            // There are two cases for this.
+            // 1. Offset bigger than that complex's managing bounds. Reasonable to consider as not completed
+            // because it is the offset to coming in future (and will be added to complex in line below).
+            // 2. Offset has been processed in the past, marked as completed and now the consumer's consuming
+            // it again from the point of watermark.
+            return null;
+        }
 
-        state.completion().asFuture().whenComplete((unused, throwable) -> onComplete(offset)); // TODO okay in this order?
+        OffsetState state = new OffsetState(offset);
+        int ringIndex = complex.addOffset(offset, false, state);
+
+        state.completion().asFuture().whenComplete((unused, throwable) -> onComplete(offset, ringIndex)); // TODO okay in this order?
         return state;
     }
 
-    static void onComplete(long offset) {
-        if (logger.isDebugEnabled()) {
-            logger.debug("Offset complete: {}", offset);
+    void onComplete(long offset, int ringIndex) {
+        if (log.isDebugEnabled()) {
+            log.debug("Offset complete: {}", offset);
         }
+        complex.complete(ringIndex);
     }
 
     public synchronized void updateHighWatermark() {
-        if (logger.isTraceEnabled()) {
-            StringBuilder sb = new StringBuilder("[");
-
-            boolean first = true;
-            for (OffsetState st : states) {
-                if (first) {
-                    first = false;
-                } else {
-                    sb.append(", ");
-                }
-                sb.append(String.valueOf(st.offset()) + ':' + (st.completion().isComplete() ? 'c' : 'n'));
-            }
-            sb.append(']');
-            logger.trace("Begin updateHighWatermark earliest={} latest={} hw={} states={}",
-                         earliest, latest, highWatermark, sb);
+        if (log.isTraceEnabled()) {
+//            StringBuilder sb = new StringBuilder("[");
+//
+//            boolean first = true;
+//            for (OffsetState st : states) {
+//                if (first) {
+//                    first = false;
+//                } else {
+//                    sb.append(", ");
+//                }
+//                sb.append(String.valueOf(st.offset()) + ':' + (st.completion().isComplete() ? 'c' : 'n'));
+//            }
+//            sb.append(']');
+//            log.trace("Begin updateHighWatermark earliest={} latest={} hw={} states={}",
+//                      earliest, latest, highWatermark, sb);
         }
 
         long lastHighWatermark = highWatermark;
 
-        OffsetState state;
-        while ((state = states.peekFirst()) != null) {
-            earliest = state.offset();
-            if (state.completion().isComplete()) {
-                highWatermark = state.offset();
-                states.pollFirst();
+        while (complex.size() > 0) {
+            long offset = complex.firstOffset();
+            if (complex.isComplete(offset)) {
+                highWatermark = offset;
+                complex.pollFirst();
             } else {
+                OffsetState state = complex.firstState();
                 offsetStateReaper.maybeReapOffset(state);
                 break;
             }
         }
 
         if (highWatermark != lastHighWatermark) {
-            logger.debug("High watermark updated for {}: {} => {}",
-                         topicPartition, lastHighWatermark, highWatermark);
+            log.debug("High watermark updated for {}: {} => {}",
+                      topicPartition, lastHighWatermark, highWatermark);
         }
     }
 
     public synchronized int pendingOffsetsCount() {
-        return states.size();
+        return complex.size();
     }
 
     public long commitReadyOffset() {
@@ -134,15 +130,18 @@ public class OutOfOrderCommitControl implements AutoCloseable {
     }
 
     public boolean isRegressing(long offset) {
-        return offset < latest;
+        long firstOffset = complex.firstOffset();
+        if (firstOffset < 0) {
+            return offset <= highWatermark;
+        } else {
+            return offset < firstOffset;
+        }
     }
 
     @Override
     public String toString() {
         return "OutOfOrderCommitControl{" +
                "topicPartition=" + topicPartition +
-               ", earliest=" + earliest +
-               ", latest=" + latest +
                ", highWatermark=" + highWatermark +
                '}';
     }
