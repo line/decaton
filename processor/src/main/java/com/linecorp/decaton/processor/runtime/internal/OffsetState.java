@@ -28,7 +28,7 @@ public class OffsetState {
     @Getter
     private final CompletionImpl completion;
 
-    OffsetState(long offset) {
+    public OffsetState(long offset) {
         this.offset = offset;
         timeoutAt = -1;
         completion = new CompletionImpl();
