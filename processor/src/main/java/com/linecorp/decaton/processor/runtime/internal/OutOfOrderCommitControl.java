@@ -16,8 +16,15 @@
 
 package com.linecorp.decaton.processor.runtime.internal;
 
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 
+import com.google.protobuf.InvalidProtocolBufferException;
+import com.google.protobuf.util.JsonFormat;
+
+import com.linecorp.decaton.protocol.Decaton.OffsetStorageComplexProto;
+
+import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
@@ -28,12 +35,13 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 @Accessors(fluent = true)
+@AllArgsConstructor
 public class OutOfOrderCommitControl implements AutoCloseable {
     @Getter
     private final TopicPartition topicPartition;
     private final int capacity;
-    private final OffsetStorageComplex complex;
     private final OffsetStateReaper offsetStateReaper;
+    final OffsetStorageComplex complex;
 
     /**
      * The current maximum offset which it and all it's previous offsets were committed.
@@ -49,6 +57,14 @@ public class OutOfOrderCommitControl implements AutoCloseable {
         highWatermark = -1;
     }
 
+    public static OutOfOrderCommitControl fromOffsetMeta(TopicPartition tp,
+                                                         int capacity,
+                                                         OffsetStateReaper offsetStateReaper,
+                                                         OffsetAndMetadata offsetMeta) {
+        OffsetStorageComplex complex = complexFromMeta(offsetMeta.metadata());
+        return new OutOfOrderCommitControl(tp, capacity, offsetStateReaper, complex, offsetMeta.offset());
+    }
+
     public synchronized OffsetState reportFetchedOffset(long offset) {
         if (isRegressing(offset)) {
             throw new OffsetRegressionException(String.format(
@@ -57,7 +73,7 @@ public class OutOfOrderCommitControl implements AutoCloseable {
 
         if (complex.size() == capacity) {
             throw new IllegalArgumentException(
-                    String.format("offsets count overflow: cap=%d, offset=%d", capacity, offset));
+                    String.format("offsets count overflow: size=%d, cap=%d", complex.size(), capacity));
         }
 
         if (complex.isComplete(offset)) {
@@ -105,12 +121,15 @@ public class OutOfOrderCommitControl implements AutoCloseable {
 
         while (complex.size() > 0) {
             long offset = complex.firstOffset();
-            if (complex.isComplete(offset)) {
+            boolean complete = complex.isComplete(offset);
+            if (complete) {
                 highWatermark = offset;
                 complex.pollFirst();
             } else {
                 OffsetState state = complex.firstState();
-                offsetStateReaper.maybeReapOffset(state);
+                if (state != null) {
+                    offsetStateReaper.maybeReapOffset(state);
+                }
                 break;
             }
         }
@@ -125,8 +144,32 @@ public class OutOfOrderCommitControl implements AutoCloseable {
         return complex.size();
     }
 
-    public long commitReadyOffset() {
-        return highWatermark;
+    public OffsetAndMetadata commitReadyOffset() {
+        if (highWatermark < 0) {
+            return null;
+        }
+        OffsetStorageComplexProto complexProto = complex.toProto();
+        try {
+            String meta = JsonFormat.printer().print(complexProto); // TODO: 64-bit ints are dumped as strings
+            return new OffsetAndMetadata(highWatermark + 1, meta);
+        } catch (InvalidProtocolBufferException e) {
+            throw new RuntimeException("failed to serialize offset metadata into proto", e);
+        }
+    }
+
+    static OffsetStorageComplex complexFromMeta(String metadata) {
+        OffsetStorageComplexProto proto = parseOffsetMeta(metadata);
+        return OffsetStorageComplex.fromProto(proto);
+    }
+
+    static OffsetStorageComplexProto parseOffsetMeta(String metadata) {
+        OffsetStorageComplexProto.Builder builder = OffsetStorageComplexProto.newBuilder();
+        try {
+            JsonFormat.parser().merge(metadata, builder);
+        } catch (InvalidProtocolBufferException e) {
+            throw new IllegalArgumentException(e);
+        }
+        return builder.build();
     }
 
     public boolean isRegressing(long offset) {

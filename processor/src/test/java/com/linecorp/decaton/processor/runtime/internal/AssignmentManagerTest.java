@@ -26,10 +26,13 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -64,8 +67,10 @@ public class AssignmentManagerTest {
     @Test
     public void testAssign() {
         doReturn(emptySet()).when(store).assignedPartitions();
+        Map<TopicPartition, OffsetAndMetadata> partitionCommits =
+                Stream.of(tp(1), tp(2), tp(3)).collect(HashMap::new, (m, v) -> m.put(v, null), HashMap::putAll);
         List<TopicPartition> partitions = asList(tp(1), tp(2), tp(3));
-        assignManager.assign(partitions);
+        assignManager.assign(partitionCommits);
 
         verify(store, times(1)).addPartitions(captor.capture());
         HashSet<TopicPartition> newAssign = new HashSet<>(partitions);
@@ -74,8 +79,9 @@ public class AssignmentManagerTest {
         verify(store, times(1)).unmarkRevoking(newAssign);
 
         doReturn(newAssign).when(store).assignedPartitions();
-        partitions = asList(tp(2), tp(3), tp(4), tp(5));
-        assignManager.assign(partitions);
+        partitionCommits = Stream.of(tp(2), tp(3), tp(4), tp(5)).collect(
+                HashMap::new, (m, v) -> m.put(v, null), HashMap::putAll);
+        assignManager.assign(partitionCommits);
 
         verify(store, times(2)).addPartitions(captor.capture());
         assertEquals(new HashSet<>(asList(tp(4), tp(5))), captor.getValue().keySet());

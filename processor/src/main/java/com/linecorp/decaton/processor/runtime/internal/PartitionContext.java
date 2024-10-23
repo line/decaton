@@ -17,11 +17,12 @@
 package com.linecorp.decaton.processor.runtime.internal;
 
 import java.util.Collection;
-import java.util.OptionalLong;
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 
 import com.linecorp.decaton.processor.metrics.Metrics;
@@ -70,8 +71,8 @@ public class PartitionContext implements AutoCloseable {
     @Setter
     private volatile boolean reloadRequested;
 
-    public PartitionContext(PartitionScope scope, Processors<?> processors) {
-        this(scope, processors, createSubPartitions(scope, processors));
+    public PartitionContext(PartitionScope scope, OffsetAndMetadata offsetMeta, Processors<?> processors) {
+        this(scope, offsetMeta, processors, createSubPartitions(scope, processors));
     }
 
     private static SubPartitions createSubPartitions(PartitionScope scope, Processors<?> processors) {
@@ -87,6 +88,7 @@ public class PartitionContext implements AutoCloseable {
 
     // visible for testing
     PartitionContext(PartitionScope scope,
+                     OffsetAndMetadata offsetMeta,
                      Processors<?> processors,
                      SubPartitions subPartitions) {
         this.scope = scope;
@@ -102,7 +104,13 @@ public class PartitionContext implements AutoCloseable {
         OffsetStateReaper offsetStateReaper = new OffsetStateReaper(
                 scope.props().get(ProcessorProperties.CONFIG_DEFERRED_COMPLETE_TIMEOUT_MS),
                 metricsCtor.new CommitControlMetrics());
-        commitControl = new OutOfOrderCommitControl(scope.topicPartition(), capacity, offsetStateReaper);
+        if (offsetMeta == null) {
+            commitControl = new OutOfOrderCommitControl(scope.topicPartition(), capacity, offsetStateReaper);
+        } else {
+            System.err.println("Creating OOOCC from offsetMeta: " + offsetMeta);
+            commitControl = OutOfOrderCommitControl.fromOffsetMeta(
+                    scope.topicPartition(), capacity, offsetStateReaper, offsetMeta);
+        }
         if (scope.perKeyQuotaConfig().isPresent() && scope.originTopic().equals(scope.topicPartition().topic())) {
             perKeyQuotaManager = PerKeyQuotaManager.create(scope);
         } else {
@@ -125,12 +133,12 @@ public class PartitionContext implements AutoCloseable {
      *
      * @return optional long value representing an offset waiting for commit.
      */
-    public OptionalLong offsetWaitingCommit() {
-        long readyOffset = commitControl.commitReadyOffset();
-        if (readyOffset > lastCommittedOffset) {
-            return OptionalLong.of(readyOffset);
+    public Optional<OffsetAndMetadata> offsetWaitingCommit() {
+        OffsetAndMetadata offsetMeta = commitControl.commitReadyOffset();
+        if (offsetMeta != null && offsetMeta.offset() > lastCommittedOffset) {
+            return Optional.of(offsetMeta);
         }
-        return OptionalLong.empty();
+        return Optional.empty();
     }
 
     /**

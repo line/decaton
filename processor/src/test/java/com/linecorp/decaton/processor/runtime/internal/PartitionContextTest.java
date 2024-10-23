@@ -31,6 +31,7 @@ import java.util.Optional;
 import java.util.OptionalLong;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -72,7 +73,7 @@ public class PartitionContextTest {
 
     @Test
     public void testOffsetWaitingCommit() {
-        PartitionContext context = new PartitionContext(scope("topic", Optional.empty()), processors);
+        PartitionContext context = new PartitionContext(scope("topic", Optional.empty()), null, processors);
         assertFalse(context.offsetWaitingCommit().isPresent());
 
         OffsetState state = context.registerOffset(100);
@@ -80,15 +81,15 @@ public class PartitionContextTest {
 
         state.completion().complete();
         context.updateHighWatermark();
-        assertEquals(OptionalLong.of(100), context.offsetWaitingCommit());
+        assertEquals(101, context.offsetWaitingCommit().map(OffsetAndMetadata::offset).get());
 
-        context.updateCommittedOffset(100);
+        context.updateCommittedOffset(101);
         assertFalse(context.offsetWaitingCommit().isPresent());
     }
 
     @Test
     public void testShouldPausePartition() {
-        PartitionContext context = new PartitionContext(scope("topic", Optional.empty()), processors);
+        PartitionContext context = new PartitionContext(scope("topic", Optional.empty()), null, processors);
         assertFalse(context.shouldPausePartition());
 
         // Register MAX-1 records, which should not pause the partition.
@@ -121,25 +122,25 @@ public class PartitionContextTest {
     @Test
     public void testQuotaUsage() {
         PartitionContext context = new PartitionContext(
-                scope("topic", Optional.of(PerKeyQuotaConfig.shape())), processors);
+                scope("topic", Optional.of(PerKeyQuotaConfig.shape())), null, processors);
         assertEquals(UsageType.COMPLY, context.maybeRecordQuotaUsage(new byte[0]).type());
     }
 
     @Test
     public void testQuotaUsageWhenDisabled() {
         PartitionContext context = new PartitionContext(
-                scope("topic", Optional.empty()), processors);
+                scope("topic", Optional.empty()), null, processors);
         assertNull(context.maybeRecordQuotaUsage(new byte[0]));
     }
 
     @Test
     public void testQuotaUsageNonTargetTopic() {
         PartitionContext context = new PartitionContext(
-                scope("topic-shaping", Optional.of(PerKeyQuotaConfig.shape())), processors);
+                scope("topic-shaping", Optional.of(PerKeyQuotaConfig.shape())), null, processors);
         assertNull(context.maybeRecordQuotaUsage(new byte[0]));
 
         context = new PartitionContext(
-                scope("topic-retry", Optional.of(PerKeyQuotaConfig.shape())), processors);
+                scope("topic-retry", Optional.of(PerKeyQuotaConfig.shape())), null, processors);
         assertNull(context.maybeRecordQuotaUsage(new byte[0]));
     }
 
@@ -147,6 +148,7 @@ public class PartitionContextTest {
     public void testQuotaApplied() {
         PartitionContext context = new PartitionContext(
                 scope("topic-shaping", Optional.of(PerKeyQuotaConfig.shape())),
+                null,
                 processors,
                 subPartitions);
 
@@ -158,6 +160,7 @@ public class PartitionContextTest {
     public void testQuotaNotApplied() {
         PartitionContext context = new PartitionContext(
                 scope("topic-shaping", Optional.of(PerKeyQuotaConfig.shape())),
+                null,
                 processors,
                 subPartitions);
 

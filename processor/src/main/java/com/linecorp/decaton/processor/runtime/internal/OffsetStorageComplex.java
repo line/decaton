@@ -19,14 +19,26 @@ package com.linecorp.decaton.processor.runtime.internal;
 import java.util.Map.Entry;
 import java.util.TreeMap;
 
+import com.linecorp.decaton.protocol.Decaton.BitMapProto;
+import com.linecorp.decaton.protocol.Decaton.OffsetIndexEntryProto;
+import com.linecorp.decaton.protocol.Decaton.OffsetIndexProto;
+import com.linecorp.decaton.protocol.Decaton.OffsetStorageComplexProto;
+
+import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
+import lombok.ToString;
 import lombok.experimental.Accessors;
 
 @Accessors(fluent = true)
+@AllArgsConstructor(access = AccessLevel.PRIVATE)
+@ToString
 public class OffsetStorageComplex {
+    @AllArgsConstructor(access = AccessLevel.PACKAGE)
+    @ToString
     static class OffsetIndex {
         @AllArgsConstructor
+        @ToString
         static class BlockInfo {
             long index;
             int length;
@@ -39,7 +51,7 @@ public class OffsetStorageComplex {
         private long nextIndex;
 
         OffsetIndex() {
-            blockIndex = new TreeMap<>();
+            this(new TreeMap<>(), 0, 0);
         }
 
         public int indexSize() {
@@ -80,10 +92,11 @@ public class OffsetStorageComplex {
             long offsetIndex = nextIndex++;
             if (e != null) {
                 BlockInfo blockInfo = e.getValue();
-                if (offset < e.getKey()) {
-                    throw new IllegalArgumentException("can't regress");
-                }
                 long nextOffset = e.getKey() + blockInfo.length;
+                if (offset < nextOffset) {
+                    // throw new IllegalArgumentException("can't regress");
+                    throw new OffsetRegressionException("offset regression at " + offset);
+                }
                 if (offset == nextOffset) {
                     // No offset gap, can extend the last block
                     blockInfo.length++;
@@ -94,6 +107,31 @@ public class OffsetStorageComplex {
             blockIndex.put(offset, new BlockInfo(offsetIndex, 1));
             return offsetIndex;
         }
+
+        public OffsetIndexProto toProto() {
+            OffsetIndexProto.Builder builder = OffsetIndexProto.newBuilder()
+                    .setFirstIndex(firstIndex)
+                    .setNextIndex(nextIndex);
+            for (Entry<Long, BlockInfo> entry : blockIndex.entrySet()) {
+                long offset = entry.getKey();
+                BlockInfo blockInfo = entry.getValue();
+                OffsetIndexEntryProto entryProto = OffsetIndexEntryProto.newBuilder()
+                                                                        .setStartOffset(offset)
+                                                                        .setStartIndex(blockInfo.index)
+                                                                        .setLength(blockInfo.length).build();
+                builder.addEntries(entryProto);
+            }
+            return builder.build();
+        }
+
+        public static OffsetIndex fromProto(OffsetIndexProto proto) {
+            TreeMap<Long, BlockInfo> blockIndex = new TreeMap<>();
+            for (int i = 0; i < proto.getEntriesCount(); i++) {
+                OffsetIndexEntryProto entry = proto.getEntries(i);
+                blockIndex.put(entry.getStartOffset(), new BlockInfo(entry.getStartIndex(), entry.getLength()));
+            }
+            return new OffsetIndex(blockIndex, proto.getFirstIndex(), proto.getNextIndex());
+        }
     }
 
     private final OffsetIndex index;
@@ -101,9 +139,7 @@ public class OffsetStorageComplex {
     private final OffsetState[] states;
 
     public OffsetStorageComplex(int capacity) {
-        index = new OffsetIndex();
-        compFlags = new ConcurrentBitMap(capacity);
-        states = new OffsetState[capacity];
+        this(new OffsetIndex(), new ConcurrentBitMap(capacity), new OffsetState[capacity]);
     }
 
     public int size() {
@@ -151,5 +187,21 @@ public class OffsetStorageComplex {
             return false;
         }
         return compFlags.get(ringIndex);
+    }
+
+    public OffsetStorageComplexProto toProto() {
+        OffsetIndexProto indexProto = index.toProto();
+        BitMapProto compFlagsProto = compFlags.toProto();
+
+        return OffsetStorageComplexProto.newBuilder()
+                                        .setIndex(indexProto)
+                                        .setCompFlags(compFlagsProto)
+                                        .build();
+    }
+
+    public static OffsetStorageComplex fromProto(OffsetStorageComplexProto proto) {
+        OffsetIndex index = OffsetIndex.fromProto(proto.getIndex());
+        ConcurrentBitMap compFlags = ConcurrentBitMap.fromProto(proto.getCompFlags());
+        return new OffsetStorageComplex(index, compFlags, new OffsetState[compFlags.size()]);
     }
 }

@@ -18,22 +18,31 @@ package com.linecorp.decaton.processor.runtime.internal;
 
 import java.util.concurrent.atomic.AtomicLongArray;
 
+import com.linecorp.decaton.protocol.Decaton.BitMapProto;
+
+import lombok.AllArgsConstructor;
 import lombok.Getter;
+import lombok.ToString;
 import lombok.experimental.Accessors;
 
 @Accessors(fluent = true)
+@AllArgsConstructor
+@ToString
 class ConcurrentBitMap {
     @Getter
     private final int size;
     private final AtomicLongArray buckets;
 
     ConcurrentBitMap(int size) {
-        this.size = size;
+        this(size, new AtomicLongArray(bucketSize(size)));
+    }
+
+    static int bucketSize(int size) {
         int nbuckets = size / Long.SIZE;
         if (size % Long.SIZE != 0) {
             nbuckets++;
         }
-        buckets = new AtomicLongArray(nbuckets);
+        return nbuckets;
     }
 
     private static int bucketOf(int index) {
@@ -66,6 +75,26 @@ class ConcurrentBitMap {
     public boolean get(int index) {
         ensureBound(index);
         int bucket = bucketOf(index);
-        return (buckets.get(bucket) >> localIndex(index) & 1) == 1;
+        long bits = buckets.get(bucket);
+        boolean x = (bits >> localIndex(index) & 1) == 1;
+        System.err.println("BITMAP GET of " + index + " is " + x + ", bits = " + bits);
+        return x;
+    }
+
+    public BitMapProto toProto() {
+        BitMapProto.Builder builder = BitMapProto.newBuilder()
+                                                 .setSize(size);
+        for (int i = 0; i < buckets.length(); i++) {
+            builder.addBuckets(buckets.get(i));
+        }
+        return builder.build();
+    }
+
+    public static ConcurrentBitMap fromProto(BitMapProto proto) {
+        AtomicLongArray buckets = new AtomicLongArray(proto.getBucketsCount());
+        for (int i = 0; i < proto.getBucketsCount(); i++) {
+            buckets.set(i, proto.getBuckets(i));
+        }
+        return new ConcurrentBitMap(proto.getSize(), buckets);
     }
 }

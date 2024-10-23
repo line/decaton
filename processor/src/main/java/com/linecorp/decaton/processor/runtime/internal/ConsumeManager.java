@@ -20,6 +20,7 @@ import java.time.Duration;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -27,6 +28,7 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 
 import com.linecorp.decaton.processor.metrics.Metrics.SubscriptionMetrics;
@@ -88,7 +90,7 @@ public class ConsumeManager implements AutoCloseable {
          * Update assignment with given partitions list.
          * @param newAssignment list of partitions that are now actively assigned.
          */
-        void updateAssignment(Collection<TopicPartition> newAssignment);
+        void updateAssignment(Map<TopicPartition, OffsetAndMetadata> newAssignment);
 
         /**
          * Process a {@link ConsumerRecord} that has been consumed from the topic.
@@ -136,7 +138,9 @@ public class ConsumeManager implements AutoCloseable {
 
             @Override
             public void onPartitionsAssigned(Collection<TopicPartition> ignored) {
-                handler.updateAssignment(consumer.assignment());
+                Map<TopicPartition, OffsetAndMetadata> partitionCommits
+                        = consumer.committed(consumer.assignment());
+                handler.updateAssignment(partitionCommits);
 
                 // Consumer rebalance resets all pause states of assigned partitions even though they
                 // haven't moved over from/to different consumer instance.
