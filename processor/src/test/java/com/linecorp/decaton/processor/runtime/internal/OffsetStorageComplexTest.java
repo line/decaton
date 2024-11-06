@@ -71,8 +71,8 @@ class OffsetStorageComplexTest {
         assertEquals(-1, index.indexOf(19));
     }
 
-    private static void addOffset(OffsetStorageComplex complex, long offset) {
-        complex.addOffset(offset, false, new OffsetState(offset));
+    private static int addOffset(OffsetStorageComplex complex, long offset) {
+        return complex.addOffset(offset, false, new OffsetState(offset));
     }
 
     @Test
@@ -81,8 +81,8 @@ class OffsetStorageComplexTest {
 
         addOffset(complex, 10);
         addOffset(complex, 11);
-        addOffset(complex, 12);
-        addOffset(complex, 15);
+        int ri12 = addOffset(complex, 12);
+        int ri15 = addOffset(complex, 15);
         addOffset(complex, 16);
         addOffset(complex, 17);
 
@@ -90,6 +90,13 @@ class OffsetStorageComplexTest {
         assertFalse(complex.isComplete(10));
         assertFalse(complex.isComplete(17));
 
-        complex.pollFirst();
+        complex.complete(ri12);
+        complex.complete(ri15);
+        assertTrue(complex.isComplete(12));
+        assertTrue(complex.isComplete(15));
+        assertFalse(complex.isComplete(10));
+        assertFalse(complex.isComplete(17));
+//
+//        addOffset(complex, 10);
     }
 }

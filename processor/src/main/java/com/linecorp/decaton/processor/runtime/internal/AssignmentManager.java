@@ -104,7 +104,8 @@ public class AssignmentManager {
         Map<TopicPartition, OffsetAndMetadata> added = computeAddedPartitions(oldSet, newSet)
                 .stream()
                 .collect(HashMap::new, (m, v) -> m.put(v, newAssignment.get(v)), HashMap::putAll);
-        log.debug("Assignment update: removed:{}, added:{}, assignment:{}", removed, added, newSet);
+        log.debug("Assignment update: consumer assignment: {}, removed:{}, added:{}, assignment:{}",
+                  newAssignment, removed, added, newSet);
 
         partitionsRevoked(removed);
         partitionsAssigned(added);

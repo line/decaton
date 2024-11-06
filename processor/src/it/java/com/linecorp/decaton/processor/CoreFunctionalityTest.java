@@ -16,10 +16,12 @@
 
 package com.linecorp.decaton.processor;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map.Entry;
 import java.util.Properties;
 import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
@@ -165,10 +167,12 @@ public class CoreFunctionalityTest {
         ProcessingGuarantee noDuplicates = new ProcessingGuarantee() {
             private final ConcurrentMap<HashableByteArray, List<TestTask>> produced = new ConcurrentHashMap<>();
             private final ConcurrentMap<HashableByteArray, List<TestTask>> processed = new ConcurrentHashMap<>();
+            private final ConcurrentMap<TestTask, Long> taskToOffset = new ConcurrentHashMap<>();
 
             @Override
             public void onProduce(ProducedRecord record) {
                 produced.computeIfAbsent(new HashableByteArray(record.key()), key -> new ArrayList<>()).add(record.task());
+                taskToOffset.put(record.task(), record.offset());
             }
 
             @Override
@@ -180,7 +184,12 @@ public class CoreFunctionalityTest {
             public void doAssert() {
                 // use assertTrue instead of assertEquals not to cause error message explosion
                 //noinspection SimplifiableJUnitAssertion
-                assertTrue(produced.equals(processed));
+                for (Entry<HashableByteArray, List<TestTask>> e : produced.entrySet()) {
+                    List<Long> producedTasks = e.getValue().stream().map(taskToOffset::get).toList();
+                    List<Long> processedTasks = processed.get(e.getKey()).stream().map(taskToOffset::get).toList();
+                    assertEquals(producedTasks, processedTasks);
+                }
+//                assertTrue(produced.equals(processed));
             }
         };
 
@@ -192,7 +201,8 @@ public class CoreFunctionalityTest {
                                 (ctx, task) -> Thread.sleep(rand.nextInt(10))))
                 .propertySupplier(StaticPropertySupplier.of(
                         Property.ofStatic(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY, 1),
-                        Property.ofStatic(ProcessorProperties.CONFIG_MAX_PENDING_RECORDS, 100)
+                        Property.ofStatic(ProcessorProperties.CONFIG_MAX_PENDING_RECORDS, 100),
+                        Property.ofStatic(ProcessorProperties.CONFIG_SHUTDOWN_TIMEOUT_MS, 1000L)
                 ))
                 .customSemantics(noDuplicates)
                 .build()

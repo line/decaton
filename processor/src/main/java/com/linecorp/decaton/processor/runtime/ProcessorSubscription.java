@@ -110,7 +110,7 @@ public class ProcessorSubscription extends Thread implements AsyncClosable {
             try {
                 offsetState = context.registerOffset(record.offset());
             } catch (OffsetRegressionException ignored) {
-                log.warn("Offset regression at partition {}", tp);
+                log.warn("Offset regression at partition {}, by offset {}", tp, record.offset());
                 assignManager.repair(tp);
                 context = contexts.get(tp);
                 // If it fails even at 2nd attempt... no idea let it die.

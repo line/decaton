@@ -110,8 +110,7 @@ public class OffsetStorageComplex {
 
         public OffsetIndexProto toProto() {
             OffsetIndexProto.Builder builder = OffsetIndexProto.newBuilder()
-                    .setFirstIndex(firstIndex)
-                    .setNextIndex(nextIndex);
+                    .setFirstIndex(firstIndex);
             for (Entry<Long, BlockInfo> entry : blockIndex.entrySet()) {
                 long offset = entry.getKey();
                 BlockInfo blockInfo = entry.getValue();
@@ -130,7 +129,7 @@ public class OffsetStorageComplex {
                 OffsetIndexEntryProto entry = proto.getEntries(i);
                 blockIndex.put(entry.getStartOffset(), new BlockInfo(entry.getStartIndex(), entry.getLength()));
             }
-            return new OffsetIndex(blockIndex, proto.getFirstIndex(), proto.getNextIndex());
+            return new OffsetIndex(blockIndex, proto.getFirstIndex(), proto.getFirstIndex());
         }
     }
 

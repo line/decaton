@@ -62,7 +62,7 @@ public class OutOfOrderCommitControl implements AutoCloseable {
                                                          OffsetStateReaper offsetStateReaper,
                                                          OffsetAndMetadata offsetMeta) {
         OffsetStorageComplex complex = complexFromMeta(offsetMeta.metadata());
-        return new OutOfOrderCommitControl(tp, capacity, offsetStateReaper, complex, offsetMeta.offset());
+        return new OutOfOrderCommitControl(tp, capacity, offsetStateReaper, complex, offsetMeta.offset() - 1);
     }
 
     public synchronized OffsetState reportFetchedOffset(long offset) {
@@ -94,7 +94,7 @@ public class OutOfOrderCommitControl implements AutoCloseable {
 
     void onComplete(long offset, int ringIndex) {
         if (log.isDebugEnabled()) {
-            log.debug("Offset complete: {}", offset);
+            log.debug("Offset complete on {}: {}", topicPartition, offset);
         }
         complex.complete(ringIndex);
     }
@@ -134,9 +134,10 @@ public class OutOfOrderCommitControl implements AutoCloseable {
             }
         }
 
-        if (highWatermark != lastHighWatermark) {
-            log.debug("High watermark updated for {}: {} => {}",
-                      topicPartition, lastHighWatermark, highWatermark);
+        if (highWatermark != lastHighWatermark && log.isDebugEnabled()) {
+            int pending = pendingOffsetsCount();
+            log.debug("High watermark updated {}: {} => {}, pending={}, first={}",
+                      topicPartition, lastHighWatermark, highWatermark, pending, pending > 0 ? complex.firstOffset() : -1);
         }
     }
 

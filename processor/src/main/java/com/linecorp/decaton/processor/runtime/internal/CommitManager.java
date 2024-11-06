@@ -124,6 +124,7 @@ public class CommitManager {
             log.debug("Skipping commit due to another async commit is currently in-flight");
             return;
         }
+        log.debug("Committing offsets ASYNC: {}", offsets);
         Thread callingThread = Thread.currentThread();
         consumer.commitAsync(offsets, (ignored, exception) -> {
             asyncCommitInFlight = false;
@@ -131,6 +132,7 @@ public class CommitManager {
                 log.warn("Offset commit failed asynchronously", exception);
                 return;
             }
+            log.debug("Successful async offset commit: {}", offsets);
             if (Thread.currentThread() != callingThread) {
                 // This isn't expected to happen (see below comment) but we check it with cheap cost
                 // just in case to avoid silent corruption.

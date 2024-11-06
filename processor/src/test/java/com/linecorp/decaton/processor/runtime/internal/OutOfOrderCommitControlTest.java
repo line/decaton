@@ -108,7 +108,7 @@ public class OutOfOrderCommitControlTest {
     public void testReportingTooLargeOffset() {
         commitControl.reportFetchedOffset(1); // now earliest=1
         for (int i = 0; i < STATES_CAPACITY - 1; i++) {
-            commitControl.reportFetchedOffset(1 + i);
+            commitControl.reportFetchedOffset(2 + i);
         }
         assertThrows(IllegalArgumentException.class, () -> commitControl.reportFetchedOffset(STATES_CAPACITY));
     }
@@ -159,7 +159,7 @@ public class OutOfOrderCommitControlTest {
 
     @Test
     @Timeout(5)
-    public void testTimeoutOffsetReaping() {
+    public void testTimeoutOffsetReaping() throws InterruptedException {
         Clock clock = mock(Clock.class);
         doReturn(10L).when(clock).millis();
         OffsetStateReaper reaper = new OffsetStateReaper(
