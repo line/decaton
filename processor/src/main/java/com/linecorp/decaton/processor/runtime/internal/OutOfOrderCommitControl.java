@@ -51,9 +51,9 @@ public class OutOfOrderCommitControl implements AutoCloseable {
     public OutOfOrderCommitControl(TopicPartition topicPartition, int capacity,
                                    OffsetStateReaper offsetStateReaper) {
         this.topicPartition = topicPartition;
-        complex = new OffsetStorageComplex(capacity);
         this.capacity = capacity;
         this.offsetStateReaper = offsetStateReaper;
+        complex = new OffsetStorageComplex(capacity);
         highWatermark = -1;
     }
 
@@ -76,6 +76,7 @@ public class OutOfOrderCommitControl implements AutoCloseable {
                     String.format("offsets count overflow: size=%d, cap=%d", complex.size(), capacity));
         }
 
+        int ringIndex = complex.allocNextIndex(offset);
         if (complex.isComplete(offset)) {
             // There are two cases for this.
             // 1. Offset bigger than that complex's managing bounds. Reasonable to consider as not completed
@@ -85,10 +86,8 @@ public class OutOfOrderCommitControl implements AutoCloseable {
             return null;
         }
 
-        OffsetState state = new OffsetState(offset);
-        int ringIndex = complex.addOffset(offset, false, state);
-
-        state.completion().asFuture().whenComplete((unused, throwable) -> onComplete(offset, ringIndex)); // TODO okay in this order?
+        OffsetState state = new OffsetState(offset, () -> onComplete(offset, ringIndex));
+        complex.setIndex(ringIndex, false, state);
         return state;
     }
 
@@ -101,20 +100,8 @@ public class OutOfOrderCommitControl implements AutoCloseable {
 
     public synchronized void updateHighWatermark() {
         if (log.isTraceEnabled()) {
-//            StringBuilder sb = new StringBuilder("[");
-//
-//            boolean first = true;
-//            for (OffsetState st : states) {
-//                if (first) {
-//                    first = false;
-//                } else {
-//                    sb.append(", ");
-//                }
-//                sb.append(String.valueOf(st.offset()) + ':' + (st.completion().isComplete() ? 'c' : 'n'));
-//            }
-//            sb.append(']');
-//            log.trace("Begin updateHighWatermark earliest={} latest={} hw={} states={}",
-//                      earliest, latest, highWatermark, sb);
+            log.trace("Begin updateHighWatermark tp={} pending={} hw={} states={}",
+                      topicPartition, pendingOffsetsCount(), highWatermark, complex.compDebugDump());
         }
 
         long lastHighWatermark = highWatermark;
@@ -151,8 +138,9 @@ public class OutOfOrderCommitControl implements AutoCloseable {
         }
         OffsetStorageComplexProto complexProto = complex.toProto();
         try {
-            String meta = JsonFormat.printer().print(complexProto); // TODO: 64-bit ints are dumped as strings
-            return new OffsetAndMetadata(highWatermark + 1, meta);
+            String meta = JsonFormat.printer().omittingInsignificantWhitespace().print(complexProto);
+            long commitOffset = highWatermark + 1;
+            return new OffsetAndMetadata(commitOffset, meta);
         } catch (InvalidProtocolBufferException e) {
             throw new RuntimeException("failed to serialize offset metadata into proto", e);
         }

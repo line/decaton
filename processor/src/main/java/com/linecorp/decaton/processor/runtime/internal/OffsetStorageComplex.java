@@ -16,6 +16,7 @@
 
 package com.linecorp.decaton.processor.runtime.internal;
 
+import java.util.Iterator;
 import java.util.Map.Entry;
 import java.util.TreeMap;
 
@@ -27,6 +28,7 @@ import com.linecorp.decaton.protocol.Decaton.OffsetStorageComplexProto;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
+import lombok.RequiredArgsConstructor;
 import lombok.ToString;
 import lombok.experimental.Accessors;
 
@@ -88,24 +90,28 @@ public class OffsetStorageComplex {
         }
 
         public long addOffset(long offset) {
-            Entry<Long, BlockInfo> e = blockIndex.lastEntry();
-            long offsetIndex = nextIndex++;
-            if (e != null) {
-                BlockInfo blockInfo = e.getValue();
-                long nextOffset = e.getKey() + blockInfo.length;
-                if (offset < nextOffset) {
-                    // throw new IllegalArgumentException("can't regress");
-                    throw new OffsetRegressionException("offset regression at " + offset);
-                }
-                if (offset == nextOffset) {
-                    // No offset gap, can extend the last block
-                    blockInfo.length++;
-                    return offsetIndex;
-                }
+            if (blockIndex.isEmpty()) {
+                blockIndex.put(offset, new BlockInfo(nextIndex, 1));
+                return nextIndex++;
             }
-            // Offset gap or first entry after cleanup, needs to create a new block
-            blockIndex.put(offset, new BlockInfo(offsetIndex, 1));
-            return offsetIndex;
+            Entry<Long, BlockInfo> floorEntry = blockIndex.floorEntry(offset);
+            if (floorEntry == null) {
+                throw new OffsetRegressionException("offset regression at " + offset);
+            }
+            BlockInfo blockInfo = floorEntry.getValue();
+            long indexOffset = nextIndex - blockInfo.index;
+            long expectedOffset = floorEntry.getKey() + indexOffset;
+            if (offset < expectedOffset) {
+                throw new OffsetRegressionException("offset regression at " + offset);
+            }
+            if (offset == expectedOffset) {
+                if (indexOffset == blockInfo.length) {
+                    blockInfo.length++;
+                }
+                return nextIndex++;
+            }
+            blockIndex.put(offset, new BlockInfo(nextIndex, 1));
+            return nextIndex++;
         }
 
         public OffsetIndexProto toProto() {
@@ -131,6 +137,31 @@ public class OffsetStorageComplex {
             }
             return new OffsetIndex(blockIndex, proto.getFirstIndex(), proto.getFirstIndex());
         }
+
+        public Iterator<Long> offsetsIterator() {
+            return new OffsetsIterator(blockIndex.entrySet().iterator());
+        }
+
+        @RequiredArgsConstructor
+        static class OffsetsIterator implements Iterator<Long> {
+            private final Iterator<Entry<Long, BlockInfo>> entries;
+            private Entry<Long, BlockInfo> curEntry;
+            private long localIndex;
+
+            @Override
+            public boolean hasNext() {
+                return curEntry != null && localIndex < curEntry.getValue().length || entries.hasNext();
+            }
+
+            @Override
+            public Long next() {
+                while (curEntry == null || localIndex == curEntry.getValue().length) {
+                    curEntry = entries.next();
+                    localIndex = 0;
+                }
+                return curEntry.getKey() + localIndex++;
+            }
+        }
     }
 
     private final OffsetIndex index;
@@ -155,11 +186,13 @@ public class OffsetStorageComplex {
         states[firstIndex] = null;
     }
 
-    public int addOffset(long offset, boolean complete, OffsetState state) {
-        int nextIndex = (int) (index.addOffset(offset) % states.length);
-        compFlags.set(nextIndex, complete);
-        states[nextIndex] = state;
-        return nextIndex;
+    public int allocNextIndex(long offset) {
+        return (int) (index.addOffset(offset) % states.length);
+    }
+
+    public void setIndex(int index, boolean complete, OffsetState state) {
+        compFlags.set(index, complete);
+        states[index] = state;
     }
 
     public void complete(int ringIndex) {
@@ -202,5 +235,22 @@ public class OffsetStorageComplex {
         OffsetIndex index = OffsetIndex.fromProto(proto.getIndex());
         ConcurrentBitMap compFlags = ConcurrentBitMap.fromProto(proto.getCompFlags());
         return new OffsetStorageComplex(index, compFlags, new OffsetState[compFlags.size()]);
+    }
+
+    public String compDebugDump() {
+        Iterator<Long> offsets = index.offsetsIterator();
+        StringBuilder sb = new StringBuilder("[");
+        boolean first = true;
+        while (offsets.hasNext()) {
+            long offset = offsets.next();
+            if (first) {
+                first = false;
+            } else {
+                sb.append(", ");
+            }
+            sb.append(String.valueOf(offset) + ':' + (isComplete(offset) ? 'c' : 'n'));
+        }
+        sb.append(']');
+        return sb.toString();
     }
 }

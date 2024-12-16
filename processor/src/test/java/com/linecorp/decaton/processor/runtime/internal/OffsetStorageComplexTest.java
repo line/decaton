@@ -21,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import org.junit.jupiter.api.Test;
 
 import com.linecorp.decaton.processor.runtime.internal.OffsetStorageComplex.OffsetIndex;
+import com.linecorp.decaton.protocol.Decaton.OffsetStorageComplexProto;
 
 class OffsetStorageComplexTest {
 
@@ -72,7 +73,9 @@ class OffsetStorageComplexTest {
     }
 
     private static int addOffset(OffsetStorageComplex complex, long offset) {
-        return complex.addOffset(offset, false, new OffsetState(offset));
+        int index = complex.allocNextIndex(offset);
+        complex.setIndex(index, false, new OffsetState(offset));
+        return index;
     }
 
     @Test
@@ -98,5 +101,46 @@ class OffsetStorageComplexTest {
         assertFalse(complex.isComplete(17));
 //
 //        addOffset(complex, 10);
+    }
+
+    @Test
+    void testRecoveryState() {
+        OffsetStorageComplex origComplex = new OffsetStorageComplex(10);
+
+        addOffset(origComplex, 10);
+        addOffset(origComplex, 11);
+        int ri12 = addOffset(origComplex, 12);
+        int ri15 = addOffset(origComplex, 15);
+        addOffset(origComplex, 16);
+        addOffset(origComplex, 17);
+        origComplex.complete(ri12);
+        origComplex.complete(ri15);
+
+        OffsetStorageComplexProto proto = origComplex.toProto();
+        OffsetStorageComplex complex = OffsetStorageComplex.fromProto(proto);
+
+        assertEquals(0, complex.size());
+        assertFalse(complex.isComplete(10));
+        assertFalse(complex.isComplete(11));
+        assertTrue(complex.isComplete(12));
+        assertTrue(complex.isComplete(15));
+        assertFalse(complex.isComplete(16));
+        assertFalse(complex.isComplete(17));
+
+        assertThrows(OffsetRegressionException.class, () -> complex.allocNextIndex(9));
+        complex.complete(addOffset(complex, 10));
+        complex.complete(addOffset(complex, 11));
+        complex.allocNextIndex(12);
+        complex.allocNextIndex(15);
+        complex.complete(addOffset(complex, 16));
+        complex.complete(addOffset(complex, 17));
+
+        assertEquals(10, complex.firstOffset());
+        assertTrue(complex.isComplete(10));
+        assertTrue(complex.isComplete(11));
+        assertTrue(complex.isComplete(12));
+        assertTrue(complex.isComplete(15));
+        assertTrue(complex.isComplete(16));
+        assertTrue(complex.isComplete(17));
     }
 }

@@ -29,9 +29,13 @@ public class OffsetState {
     private final CompletionImpl completion;
 
     public OffsetState(long offset) {
+        this(offset, null);
+    }
+
+    public OffsetState(long offset, Runnable firstAction) {
         this.offset = offset;
         timeoutAt = -1;
-        completion = new CompletionImpl();
+        completion = new CompletionImpl(firstAction);
     }
 
     public void setTimeout(long timeoutAt) {

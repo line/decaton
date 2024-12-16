@@ -238,6 +238,8 @@ public class ProcessorSubscription extends Thread implements AsyncClosable {
                 consumeManager.init(subscribeTopics());
                 consumeLoop();
             }
+        } catch (RuntimeException e) {
+            log.error("Unexpected exception in subscription thread, terminating", e);
         } finally {
             loopTerminateFuture.complete(null);
         }
