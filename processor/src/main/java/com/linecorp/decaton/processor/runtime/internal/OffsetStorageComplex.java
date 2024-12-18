@@ -18,6 +18,7 @@ package com.linecorp.decaton.processor.runtime.internal;
 
 import java.util.Iterator;
 import java.util.Map.Entry;
+import java.util.NoSuchElementException;
 import java.util.TreeMap;
 
 import com.linecorp.decaton.protocol.Decaton.BitMapProto;
@@ -61,11 +62,14 @@ public class OffsetStorageComplex {
         }
 
         public long firstOffset() {
-            return blockIndex.isEmpty() ? -1 : blockIndex.firstKey();
+            return indexSize() == 0 ? -1 : blockIndex.firstKey();
         }
 
         public long pollFirst() {
             Entry<Long, BlockInfo> first = blockIndex.pollFirstEntry();
+            if (first == null) {
+                throw new NoSuchElementException();
+            }
             final BlockInfo firstBlock = first.getValue();
             long removedIndex = firstBlock.index++;
             firstIndex = firstBlock.index;
@@ -101,7 +105,7 @@ public class OffsetStorageComplex {
             BlockInfo blockInfo = floorEntry.getValue();
             long indexOffset = nextIndex - blockInfo.index;
             long expectedOffset = floorEntry.getKey() + indexOffset;
-            if (offset < expectedOffset) {
+            if (indexOffset < 0 || offset < expectedOffset) {
                 throw new OffsetRegressionException("offset regression at " + offset);
             }
             if (offset == expectedOffset) {
@@ -187,6 +191,9 @@ public class OffsetStorageComplex {
     }
 
     public int allocNextIndex(long offset) {
+        if (size() == states.length) {
+            throw new IllegalStateException("complex reached its capacity: " + states.length);
+        }
         return (int) (index.addOffset(offset) % states.length);
     }
 
@@ -214,7 +221,7 @@ public class OffsetStorageComplex {
     public boolean isComplete(long offset) {
         int ringIndex = (int) (index.indexOf(offset) % states.length);
         if (ringIndex == -1) {
-            // By contract we expect the offset-out-of-range case to be just the offset being too large against
+            // By contract, we expect the offset-out-of-range case to be just the offset being too large against
             // managed range, not lower.
             return false;
         }
