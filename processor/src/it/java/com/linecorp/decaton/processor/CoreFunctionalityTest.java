@@ -17,17 +17,15 @@
 package com.linecorp.decaton.processor;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.Properties;
 import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.CooperativeStickyAssignor;
@@ -42,6 +40,7 @@ import com.linecorp.decaton.processor.runtime.Property;
 import com.linecorp.decaton.processor.runtime.StaticPropertySupplier;
 import com.linecorp.decaton.testing.KafkaClusterExtension;
 import com.linecorp.decaton.testing.RandomExtension;
+import com.linecorp.decaton.testing.processor.KeyedExecutorService;
 import com.linecorp.decaton.testing.processor.ProcessedRecord;
 import com.linecorp.decaton.testing.processor.ProcessingGuarantee;
 import com.linecorp.decaton.testing.processor.ProcessingGuarantee.GuaranteeType;
@@ -49,6 +48,9 @@ import com.linecorp.decaton.testing.processor.ProcessorTestSuite;
 import com.linecorp.decaton.testing.processor.ProducedRecord;
 import com.linecorp.decaton.testing.processor.TestTask;
 
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
 public class CoreFunctionalityTest {
     @RegisterExtension
     public static KafkaClusterExtension rule = new KafkaClusterExtension();
@@ -107,25 +109,26 @@ public class CoreFunctionalityTest {
     @Test
     @Timeout(30)
     public void testAsyncTaskCompletion() throws Exception {
-        ExecutorService executorService = Executors.newFixedThreadPool(16);
-        Random rand = randomExtension.random();
-        ProcessorTestSuite
-                .builder(rule)
-                .configureProcessorsBuilder(builder -> builder.thenProcess((ctx, task) -> {
-                    DeferredCompletion completion = ctx.deferCompletion();
-                    executorService.execute(() -> {
-                        try {
-                            Thread.sleep(rand.nextInt(10));
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                            throw new RuntimeException(e);
-                        } finally {
-                            completion.complete();
-                        }
-                    });
-                }))
-                .build()
-                .run();
+        try (KeyedExecutorService executor = new KeyedExecutorService(16)) {
+            Random rand = randomExtension.random();
+            ProcessorTestSuite
+                    .builder(rule)
+                    .configureProcessorsBuilder(builder -> builder.thenProcess((ctx, task) -> {
+                        DeferredCompletion completion = ctx.deferCompletion();
+                        executor.execute(Arrays.hashCode(task.getKey()), () -> {
+                            try {
+                                Thread.sleep(rand.nextInt(10));
+                            } catch (InterruptedException e) {
+                                Thread.currentThread().interrupt();
+                                throw new RuntimeException(e);
+                            } finally {
+                                completion.complete();
+                            }
+                        });
+                    }))
+                    .build()
+                    .run();
+        }
     }
 
     /*
@@ -139,25 +142,26 @@ public class CoreFunctionalityTest {
     @Test
     @Timeout(30)
     public void testGetCompletionInstanceLater() throws Exception {
-        ExecutorService executorService = Executors.newFixedThreadPool(16);
-        Random rand = randomExtension.random();
-        ProcessorTestSuite
-                .builder(rule)
-                .configureProcessorsBuilder(builder -> builder.thenProcess((ctx, task) -> {
-                    ctx.deferCompletion();
-                    executorService.execute(() -> {
-                        try {
-                            Thread.sleep(rand.nextInt(10));
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                            throw new RuntimeException(e);
-                        } finally {
-                            ctx.deferCompletion().complete();
-                        }
-                    });
-                }))
-                .build()
-                .run();
+        try (KeyedExecutorService executor = new KeyedExecutorService(16)) {
+            Random rand = randomExtension.random();
+            ProcessorTestSuite
+                    .builder(rule)
+                    .configureProcessorsBuilder(builder -> builder.thenProcess((ctx, task) -> {
+                        ctx.deferCompletion();
+                        executor.execute(Arrays.hashCode(task.getKey()), () -> {
+                            try {
+                                Thread.sleep(rand.nextInt(10));
+                            } catch (InterruptedException e) {
+                                Thread.currentThread().interrupt();
+                                throw new RuntimeException(e);
+                            } finally {
+                                ctx.deferCompletion().complete();
+                            }
+                        });
+                    }))
+                    .build()
+                    .run();
+        }
     }
 
     @Test

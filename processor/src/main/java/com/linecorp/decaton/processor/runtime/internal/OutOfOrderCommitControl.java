@@ -62,13 +62,18 @@ public class OutOfOrderCommitControl implements AutoCloseable {
                                                          OffsetStateReaper offsetStateReaper,
                                                          OffsetAndMetadata offsetMeta) {
         OffsetStorageComplex complex = complexFromMeta(offsetMeta.metadata());
-        return new OutOfOrderCommitControl(tp, capacity, offsetStateReaper, complex, offsetMeta.offset() - 1);
+        OutOfOrderCommitControl cc = new OutOfOrderCommitControl(
+                tp, capacity, offsetStateReaper, complex, offsetMeta.offset() - 1);
+        log.debug("Restoring OOOCC from offsetMeta for {}: pending={} hw={} states={}",
+                  cc.topicPartition, cc.pendingOffsetsCount(), cc.highWatermark, cc.complex.compDebugDump());
+        return cc;
     }
 
     public synchronized OffsetState reportFetchedOffset(long offset) {
         if (isRegressing(offset)) {
-            throw new OffsetRegressionException(String.format(
-                    "offset regression %s: %d < %d", topicPartition, offset, highWatermark));
+            log.debug("Not newly adding offset state on {} for offset={} because its lower than HW",
+                      topicPartition, offset);
+            return null;
         }
 
         if (complex.size() == capacity) {
@@ -79,10 +84,12 @@ public class OutOfOrderCommitControl implements AutoCloseable {
         int ringIndex = complex.allocNextIndex(offset);
         if (complex.isComplete(offset)) {
             // There are two cases for this.
-            // 1. Offset bigger than that complex's managing bounds. Reasonable to consider as not completed
+            // 1. Offset is bigger than the complex's managing bounds. Reasonable to consider as not completed
             // because it is the offset to coming in future (and will be added to complex in line below).
             // 2. Offset has been processed in the past, marked as completed and now the consumer's consuming
             // it again from the point of watermark.
+            log.debug("Not newly adding offset state on {} for offset={}, ringIndex={} because it's complete",
+                      topicPartition, offset, ringIndex);
             return null;
         }
 
@@ -162,12 +169,17 @@ public class OutOfOrderCommitControl implements AutoCloseable {
     }
 
     public boolean isRegressing(long offset) {
-        long firstOffset = complex.firstOffset();
-        if (firstOffset < 0) {
-            return offset <= highWatermark;
-        } else {
-            return offset < firstOffset;
-        }
+        // There's a case that regressing offset gets reported into.
+        // A most typical case may happen in the following process sequence.
+        // 1. Consumer commits offset X
+        // 2. Consumer starts rebalancing
+        // 3. The remaining tasks in queue, having offset X+1 and later kept processing
+        // 4. updateHighWatermark() => HW becomes X+1 or later.
+        // 5. Consumer rebalance complements, the consuming offset resets to X.
+        // 6. reportFetchedOffset(X) => regression.
+        // As long as the reported offset is lower than the highWatermark, we should be able to
+        // respond as the offset has already been processed.
+        return offset <= highWatermark;
     }
 
     @Override

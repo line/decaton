@@ -93,6 +93,13 @@ public class OffsetStorageComplex {
             return blockInfo.index + offset - e.getKey();
         }
 
+        public long activeIndexOf(long offset) {
+            long index = indexOf(offset);
+            // The index is active (has been registered after initialization) only if the nextIndex
+            // already went beyond that.
+            return index < nextIndex ? index : -1;
+        }
+
         public long addOffset(long offset) {
             if (blockIndex.isEmpty()) {
                 blockIndex.put(offset, new BlockInfo(nextIndex, 1));
@@ -191,6 +198,16 @@ public class OffsetStorageComplex {
     }
 
     public int allocNextIndex(long offset) {
+        long activeIndex = index.activeIndexOf(offset);
+        if (activeIndex >= 0) {
+            // TODO: I'm not sure if this addressing is right approach...
+            // maybe instead of trying to avoid dups w/ eager rebalance, we should completely
+            // based on cooperative rebalance so that w/o taking care of possibility of
+            // offset regression caused by timing difference between onPartitionsRevoked()
+            // and onPartitionsAssigned(), we can simply assume HW won't progress beyond the
+            // committed offset during rebalance.
+            return (int) (activeIndex % states.length);
+        }
         if (size() == states.length) {
             throw new IllegalStateException("complex reached its capacity: " + states.length);
         }

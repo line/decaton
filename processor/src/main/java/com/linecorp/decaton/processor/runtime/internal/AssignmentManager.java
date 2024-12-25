@@ -120,7 +120,7 @@ public class AssignmentManager {
     public void repair(TopicPartition tp) {
         log.info("Repairing partition: {}", tp);
         partitionsRevoked(Collections.singletonList(tp));
-        partitionsAssigned(Collections.singletonMap(tp, null));
+        partitionsAssigned(Collections.singletonMap(tp, null)); // TODO: ok to not regard offset metadata?
     }
 
     private static List<TopicPartition> computeRemovedPartitions(
