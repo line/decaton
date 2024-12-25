@@ -107,7 +107,6 @@ public class PartitionContext implements AutoCloseable {
         if (offsetMeta == null) {
             commitControl = new OutOfOrderCommitControl(scope.topicPartition(), capacity, offsetStateReaper);
         } else {
-            System.err.println("Creating OOOCC from offsetMeta: " + offsetMeta);
             commitControl = OutOfOrderCommitControl.fromOffsetMeta(
                     scope.topicPartition(), capacity, offsetStateReaper, offsetMeta);
         }

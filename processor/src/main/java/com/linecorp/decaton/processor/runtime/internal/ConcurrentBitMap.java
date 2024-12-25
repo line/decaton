@@ -77,7 +77,6 @@ class ConcurrentBitMap {
         int bucket = bucketOf(index);
         long bits = buckets.get(bucket);
         boolean x = (bits >> localIndex(index) & 1) == 1;
-        System.err.println("BITMAP GET of " + index + " is " + x + ", bits = " + bits);
         return x;
     }
 

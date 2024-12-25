@@ -201,11 +201,9 @@ public class OutOfOrderCommitControlTest {
 
         commitControl.updateHighWatermark();
         OffsetAndMetadata om = commitControl.commitReadyOffset();
-        System.err.println("ooocc.complex = " + commitControl.complex);
 
         assertEquals(om.offset(), 102L);
         OffsetStorageComplex complex = OutOfOrderCommitControl.complexFromMeta(om.metadata());
-        System.err.println("meta = " + om.metadata());
         assertEquals(0, complex.size());
         assertFalse(complex.isComplete(102));
         assertTrue(complex.isComplete(103));
