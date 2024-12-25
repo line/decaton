@@ -51,17 +51,17 @@ public class OutOfOrderCommitControlTest {
         state1.completion().complete();
         commitControl.updateHighWatermark();
         assertEquals(2, commitControl.pendingOffsetsCount());
-        assertEquals(2, commitControl.commitReadyOffset().offset());
+        assertEquals(2, commitControl.commitReadyOffset(0).offset());
 
         state2.completion().complete();
         commitControl.updateHighWatermark();
         assertEquals(1, commitControl.pendingOffsetsCount());
-        assertEquals(3, commitControl.commitReadyOffset().offset());
+        assertEquals(3, commitControl.commitReadyOffset(0).offset());
 
         state3.completion().complete();
         commitControl.updateHighWatermark();
         assertEquals(0, commitControl.pendingOffsetsCount());
-        assertEquals(4, commitControl.commitReadyOffset().offset());
+        assertEquals(4, commitControl.commitReadyOffset(0).offset());
     }
 
     @Test
@@ -74,22 +74,22 @@ public class OutOfOrderCommitControlTest {
         state3.completion().complete();
         commitControl.updateHighWatermark();
         assertEquals(4, commitControl.pendingOffsetsCount());
-        assertNull(commitControl.commitReadyOffset());
+        assertEquals(0, commitControl.commitReadyOffset(0).offset());
 
         state2.completion().complete();
         commitControl.updateHighWatermark();
         assertEquals(4, commitControl.pendingOffsetsCount());
-        assertNull(commitControl.commitReadyOffset());
+        assertEquals(0, commitControl.commitReadyOffset(0).offset());
 
         state1.completion().complete();
         commitControl.updateHighWatermark();
         assertEquals(1, commitControl.pendingOffsetsCount());
-        assertEquals(4, commitControl.commitReadyOffset().offset());
+        assertEquals(4, commitControl.commitReadyOffset(0).offset());
 
         state4.completion().complete();
         commitControl.updateHighWatermark();
         assertEquals(0, commitControl.pendingOffsetsCount());
-        assertEquals(5, commitControl.commitReadyOffset().offset());
+        assertEquals(5, commitControl.commitReadyOffset(0).offset());
     }
 
     @Test
@@ -97,10 +97,10 @@ public class OutOfOrderCommitControlTest {
         OffsetState state1 = commitControl.reportFetchedOffset(1);
 
         state1.completion().complete();
-        assertNull(commitControl.commitReadyOffset());
+        assertEquals(0, commitControl.commitReadyOffset(0).offset());
         state1.completion().complete(); // nothing happens
         commitControl.updateHighWatermark();
-        assertEquals(2, commitControl.commitReadyOffset().offset());
+        assertEquals(2, commitControl.commitReadyOffset(0).offset());
         state1.completion().complete(); // nothing happens
     }
 
@@ -120,10 +120,10 @@ public class OutOfOrderCommitControlTest {
 
         state2.completion().complete(); // now committedOffsets contains 2
         commitControl.updateHighWatermark();
-        assertNull(commitControl.commitReadyOffset());
+        assertEquals(0, commitControl.commitReadyOffset(0).offset());
         state2.completion().complete(); // commit again
         commitControl.updateHighWatermark();
-        assertNull(commitControl.commitReadyOffset());
+        assertNull(commitControl.commitReadyOffset(0));
     }
 
     @Test
@@ -137,7 +137,7 @@ public class OutOfOrderCommitControlTest {
         state1.completion().complete();
         state3.completion().complete();
         commitControl.updateHighWatermark();
-        assertEquals(4, commitControl.commitReadyOffset().offset());
+        assertEquals(4, commitControl.commitReadyOffset(0).offset());
         assertEquals(0, commitControl.pendingOffsetsCount());
     }
 
@@ -153,7 +153,7 @@ public class OutOfOrderCommitControlTest {
         state1.completion().complete();
         stateLarge.completion().complete();
         commitControl.updateHighWatermark();
-        assertEquals(largeGapOffset + 1, commitControl.commitReadyOffset().offset());
+        assertEquals(largeGapOffset + 1, commitControl.commitReadyOffset(0).offset());
         assertEquals(0, commitControl.pendingOffsetsCount());
     }
 
@@ -178,16 +178,16 @@ public class OutOfOrderCommitControlTest {
         // 1 is blocking watermark to progress
         state2.completion().complete();
         ooocc.updateHighWatermark();
-        assertNull(ooocc.commitReadyOffset());
+        assertEquals(0, ooocc.commitReadyOffset(0).offset());
 
         doReturn(20L).when(clock).millis();
         // offset reaping performed but does not proceed watermark yet
         ooocc.updateHighWatermark();
         state1.completion().asFuture().toCompletableFuture().join();
-        assertNull(ooocc.commitReadyOffset());
+        assertEquals(0, ooocc.commitReadyOffset(0).offset());
         // offset should progress as offset 1 has reaped in previous call
         ooocc.updateHighWatermark();
-        assertEquals(3, ooocc.commitReadyOffset().offset());
+        assertEquals(3, ooocc.commitReadyOffset(0).offset());
     }
 
     @Test
@@ -200,7 +200,7 @@ public class OutOfOrderCommitControlTest {
         state3.completion().complete();
 
         commitControl.updateHighWatermark();
-        OffsetAndMetadata om = commitControl.commitReadyOffset();
+        OffsetAndMetadata om = commitControl.commitReadyOffset(0);
 
         assertEquals(om.offset(), 102L);
         OffsetStorageComplex complex = OutOfOrderCommitControl.complexFromMeta(om.metadata());
@@ -210,7 +210,7 @@ public class OutOfOrderCommitControlTest {
 
         state2.completion().complete();
         commitControl.updateHighWatermark();
-        om = commitControl.commitReadyOffset();
+        om = commitControl.commitReadyOffset(0);
 
         assertEquals(om.offset(), 104L);
         complex = OutOfOrderCommitControl.complexFromMeta(om.metadata());

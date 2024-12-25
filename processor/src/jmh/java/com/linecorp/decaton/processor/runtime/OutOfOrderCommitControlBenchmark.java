@@ -57,8 +57,8 @@ import com.linecorp.decaton.processor.runtime.internal.OutOfOrderCommitControl;
  *   it.
  * - They are passed into threads pool consists of {@link #NUM_WORKER_THREADS}, and then completed immediately.
  * - Consumer loop thread calls {@link OutOfOrderCommitControl#updateHighWatermark()} after feeding
- *   {@link #BATCH_SIZE} and calls {@link OutOfOrderCommitControl#commitReadyOffset()}.
- * - Loop the above steps until {@link OutOfOrderCommitControl#commitReadyOffset()} returns the value equals to
+ *   {@link #BATCH_SIZE} and calls {@link OutOfOrderCommitControl#commitReadyOffset(long)}.
+ * - Loop the above steps until {@link OutOfOrderCommitControl#commitReadyOffset(long)} returns the value equals to
  *   {@link #NUM_OFFSETS}.
  * - Measure entire execution duration as a performance indicator.
  */
@@ -244,7 +244,7 @@ public class OutOfOrderCommitControlBenchmark {
         }
 
         control.updateHighWatermark();
-        while (control.commitReadyOffset() < NUM_OFFSETS) {
+        while (control.commitReadyOffset(0).offset() < NUM_OFFSETS + 1) {
             Thread.yield();
             control.updateHighWatermark();
         }

@@ -119,7 +119,7 @@ public class PartitionContext implements AutoCloseable {
         metrics = metricsCtor.new PartitionStateMetrics(
                 commitControl::pendingOffsetsCount, () -> paused() ? 1 : 0,
                 () -> lastCommittedOffset, () -> latestConsumedOffset);
-        lastCommittedOffset = -1;
+        lastCommittedOffset = 0;
         pausedTimeNanos = -1;
         lastQueueStarvedTime = -1;
     }
@@ -133,11 +133,7 @@ public class PartitionContext implements AutoCloseable {
      * @return optional long value representing an offset waiting for commit.
      */
     public Optional<OffsetAndMetadata> offsetWaitingCommit() {
-        OffsetAndMetadata offsetMeta = commitControl.commitReadyOffset();
-        if (offsetMeta != null && offsetMeta.offset() > lastCommittedOffset) {
-            return Optional.of(offsetMeta);
-        }
-        return Optional.empty();
+        return Optional.ofNullable(commitControl.commitReadyOffset(lastCommittedOffset));
     }
 
     /**

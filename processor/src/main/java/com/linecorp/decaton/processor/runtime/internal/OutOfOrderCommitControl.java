@@ -24,7 +24,6 @@ import com.google.protobuf.util.JsonFormat;
 
 import com.linecorp.decaton.protocol.Decaton.OffsetStorageComplexProto;
 
-import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
@@ -35,7 +34,6 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 @Accessors(fluent = true)
-@AllArgsConstructor
 public class OutOfOrderCommitControl implements AutoCloseable {
     @Getter
     private final TopicPartition topicPartition;
@@ -47,14 +45,21 @@ public class OutOfOrderCommitControl implements AutoCloseable {
      * The current maximum offset which it and all it's previous offsets were committed.
      */
     private volatile long highWatermark;
+    private volatile boolean anyOffsetsUpdated;
 
     public OutOfOrderCommitControl(TopicPartition topicPartition, int capacity,
-                                   OffsetStateReaper offsetStateReaper) {
+                                   OffsetStateReaper offsetStateReaper,
+                                   OffsetStorageComplex complex, long highWatermark) {
         this.topicPartition = topicPartition;
         this.capacity = capacity;
         this.offsetStateReaper = offsetStateReaper;
-        complex = new OffsetStorageComplex(capacity);
-        highWatermark = -1;
+        this.complex = complex;
+        this.highWatermark = highWatermark;
+    }
+
+    public OutOfOrderCommitControl(TopicPartition topicPartition, int capacity,
+                                   OffsetStateReaper offsetStateReaper) {
+        this(topicPartition, capacity, offsetStateReaper, new OffsetStorageComplex(capacity), -1);
     }
 
     public static OutOfOrderCommitControl fromOffsetMeta(TopicPartition tp,
@@ -103,6 +108,7 @@ public class OutOfOrderCommitControl implements AutoCloseable {
             log.debug("Offset complete on {}: {}", topicPartition, offset);
         }
         complex.complete(ringIndex);
+        anyOffsetsUpdated = true;
     }
 
     public synchronized void updateHighWatermark() {
@@ -139,18 +145,21 @@ public class OutOfOrderCommitControl implements AutoCloseable {
         return complex.size();
     }
 
-    public OffsetAndMetadata commitReadyOffset() {
-        if (highWatermark < 0) {
+    public OffsetAndMetadata commitReadyOffset(long lastCommittedOffset) {
+        if (highWatermark < lastCommittedOffset && !anyOffsetsUpdated) {
             return null;
         }
         OffsetStorageComplexProto complexProto = complex.toProto();
+        final OffsetAndMetadata offsetMeta;
         try {
             String meta = JsonFormat.printer().omittingInsignificantWhitespace().print(complexProto);
             long commitOffset = highWatermark + 1;
-            return new OffsetAndMetadata(commitOffset, meta);
+            offsetMeta = new OffsetAndMetadata(commitOffset, meta);
         } catch (InvalidProtocolBufferException e) {
             throw new RuntimeException("failed to serialize offset metadata into proto", e);
         }
+        anyOffsetsUpdated = false;
+        return offsetMeta;
     }
 
     static OffsetStorageComplex complexFromMeta(String metadata) {
