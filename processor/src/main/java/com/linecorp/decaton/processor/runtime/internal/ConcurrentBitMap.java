@@ -55,7 +55,7 @@ class ConcurrentBitMap {
 
     private void ensureBound(int index) {
         if (index < 0 || index >= size) {
-            throw new IndexOutOfBoundsException(index);
+            throw new IndexOutOfBoundsException("Index out of range: " + index);
         }
     }
 
