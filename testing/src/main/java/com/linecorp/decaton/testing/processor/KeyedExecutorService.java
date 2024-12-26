@@ -36,7 +36,7 @@ public class KeyedExecutorService implements AutoCloseable {
     @Override
     public void close() throws Exception {
         for (ExecutorService executor : executors) {
-            executor.close();
+            executor.shutdown();
         }
     }
 }
