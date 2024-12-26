@@ -26,6 +26,7 @@ import java.util.Properties;
 import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.stream.Collectors;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.CooperativeStickyAssignor;
@@ -190,8 +191,8 @@ public class CoreFunctionalityTest {
                 // use assertTrue instead of assertEquals not to cause error message explosion
                 //noinspection SimplifiableJUnitAssertion
                 for (Entry<HashableByteArray, List<TestTask>> e : produced.entrySet()) {
-                    List<Long> producedTasks = e.getValue().stream().map(taskToOffset::get).toList();
-                    List<Long> processedTasks = processed.get(e.getKey()).stream().map(taskToOffset::get).toList();
+                    List<Long> producedTasks = e.getValue().stream().map(taskToOffset::get).collect(Collectors.toList());
+                    List<Long> processedTasks = processed.get(e.getKey()).stream().map(taskToOffset::get).collect(Collectors.toList());
                     assertEquals(producedTasks, processedTasks);
                 }
 //                assertTrue(produced.equals(processed));
