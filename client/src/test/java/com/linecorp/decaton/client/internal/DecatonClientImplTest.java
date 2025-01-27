@@ -41,10 +41,13 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
+import com.google.protobuf.InvalidProtocolBufferException;
+
 import com.linecorp.decaton.client.DecatonClient.TaskMetadata;
 import com.linecorp.decaton.protobuf.ProtocolBuffersSerializer;
 import com.linecorp.decaton.protocol.Decaton.TaskMetadataProto;
 import com.linecorp.decaton.protocol.Sample.HelloTask;
+import com.linecorp.decaton.protocol.internal.DecatonInternal.DecatonTaskRequest;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -68,7 +71,7 @@ public class DecatonClientImplTest {
     public void setUp() {
         client = new DecatonClientImpl<>(TOPIC, new ProtocolBuffersSerializer<>(),
                                          APPLICATION_ID, INSTANCE_ID, new Properties(),
-                                         config -> producer, timestampSupplier);
+                                         config -> producer, timestampSupplier, false);
     }
 
     @Test
@@ -130,6 +133,32 @@ public class DecatonClientImplTest {
                                                                       .build());
 
         verifyAndAssertTaskMetadata(5678L, 6912L);
+    }
+
+    @Test
+    public void testProduceInOldTaskRequest() {
+        doReturn(1234L).when(timestampSupplier).get();
+        DecatonClientImpl client = new DecatonClientImpl<>(TOPIC, new ProtocolBuffersSerializer<>(),
+                                         APPLICATION_ID, INSTANCE_ID, new Properties(),
+                                         config -> producer, timestampSupplier, true);
+        client.put("key", HelloTask.getDefaultInstance(), TaskMetadata.builder()
+                                                                      .timestamp(5678L)
+                                                                      .scheduledTime(6912L)
+                                                                      .build());
+
+        verify(producer, times(1)).send(captor.capture(), any(Callback.class));
+        ProducerRecord<byte[], byte[]> record = captor.getValue();
+        assertNull(record.timestamp());
+        assertNull(TaskMetadataUtil.readFromHeader(record.headers()));
+        final DecatonTaskRequest request;
+        try {
+            request = DecatonTaskRequest.parseFrom(record.value());
+        } catch (InvalidProtocolBufferException e) {
+            throw new RuntimeException(e);
+        }
+        TaskMetadataProto metadata = request.getMetadata();
+        assertEquals(5678L, metadata.getTimestampMillis());
+        assertNotNull(metadata.getSourceApplicationId());
     }
 
     @Test
