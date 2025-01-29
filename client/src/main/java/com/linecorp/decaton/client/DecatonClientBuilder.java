@@ -49,6 +49,8 @@ public class DecatonClientBuilder<T> {
     private String applicationId;
     private String instanceId;
     private KafkaProducerSupplier producerSupplier;
+    @Deprecated
+    private boolean produceInOldTaskRequest;
 
     public static class DefaultKafkaProducerSupplier implements KafkaProducerSupplier {
         @Override
@@ -90,6 +92,7 @@ public class DecatonClientBuilder<T> {
                 Objects.requireNonNull(applicationId, "applicationId"),
                 instanceId,
                 Objects.requireNonNull(producerConfig, "producerConfig"),
-                producerSupplier);
+                producerSupplier,
+                produceInOldTaskRequest);
     }
 }

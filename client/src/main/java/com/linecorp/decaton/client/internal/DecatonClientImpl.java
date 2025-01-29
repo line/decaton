@@ -23,12 +23,15 @@ import java.util.function.Supplier;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
 
+import com.google.protobuf.ByteString;
+
 import com.linecorp.decaton.client.DecatonClient;
 import com.linecorp.decaton.client.KafkaProducerSupplier;
 import com.linecorp.decaton.client.PutTaskResult;
 import com.linecorp.decaton.client.kafka.PrintableAsciiStringSerializer;
 import com.linecorp.decaton.common.Serializer;
 import com.linecorp.decaton.protocol.Decaton.TaskMetadataProto;
+import com.linecorp.decaton.protocol.internal.DecatonInternal.DecatonTaskRequest;
 
 public class DecatonClientImpl<T> implements DecatonClient<T> {
     private static final org.apache.kafka.common.serialization.Serializer<String> keySerializer =
@@ -39,6 +42,7 @@ public class DecatonClientImpl<T> implements DecatonClient<T> {
     private final String applicationId;
     private final String instanceId;
     private final Supplier<Long> timestampSupplier;
+    private final boolean produceInOldFormat;
 
     DecatonClientImpl(String topic,
                       Serializer<T> serializer,
@@ -46,13 +50,26 @@ public class DecatonClientImpl<T> implements DecatonClient<T> {
                       String instanceId,
                       Properties producerConfig,
                       KafkaProducerSupplier producerSupplier,
-                      Supplier<Long> timestampSupplier) {
+                      Supplier<Long> timestampSupplier,
+                      boolean produceInOldFormat) {
         this.topic = topic;
         this.serializer = serializer;
         this.applicationId = applicationId;
         this.instanceId = instanceId;
         producer = new DecatonTaskProducer(producerConfig, producerSupplier);
         this.timestampSupplier = timestampSupplier;
+        this.produceInOldFormat = produceInOldFormat;
+    }
+
+    public DecatonClientImpl(String topic,
+                             Serializer<T> serializer,
+                             String applicationId,
+                             String instanceId,
+                             Properties producerConfig,
+                             KafkaProducerSupplier producerSupplier,
+                             boolean produceInOldFormat) {
+        this(topic, serializer, applicationId, instanceId, producerConfig, producerSupplier,
+             System::currentTimeMillis, produceInOldFormat);
     }
 
     public DecatonClientImpl(String topic,
@@ -62,7 +79,7 @@ public class DecatonClientImpl<T> implements DecatonClient<T> {
                              Properties producerConfig,
                              KafkaProducerSupplier producerSupplier) {
         this(topic, serializer, applicationId, instanceId, producerConfig, producerSupplier,
-             System::currentTimeMillis);
+             System::currentTimeMillis, false);
     }
 
     @Override
@@ -107,10 +124,20 @@ public class DecatonClientImpl<T> implements DecatonClient<T> {
                                                  Integer partition) {
         byte[] serializedKey = keySerializer.serialize(topic, key);
         byte[] serializedTask = serializer.serialize(task);
-
-        ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(
-                topic, partition, serializedKey, serializedTask);
-        TaskMetadataUtil.writeAsHeader(taskMetadataProto, record.headers());
+        final ProducerRecord<byte[], byte[]> record;
+        if (produceInOldFormat) {
+            DecatonTaskRequest request =
+                    DecatonTaskRequest.newBuilder()
+                                      .setMetadata(taskMetadataProto)
+                                      .setSerializedTask(ByteString.copyFrom(serializedTask))
+                                      .build();
+            record = new ProducerRecord<>(
+                    topic, partition, serializedKey, request.toByteArray());
+        } else {
+            record = new ProducerRecord<>(
+                    topic, partition, serializedKey, serializedTask);
+            TaskMetadataUtil.writeAsHeader(taskMetadataProto, record.headers());
+        }
 
         return producer.sendRequest(record);
     }
