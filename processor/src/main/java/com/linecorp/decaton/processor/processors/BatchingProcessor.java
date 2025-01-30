@@ -57,9 +57,9 @@ public abstract class BatchingProcessor<T> implements DecatonProcessor<T> {
     /**
      * Instantiate {@link BatchingProcessor}.
      * @param lingerMillis time limit for this processor. On every lingerMillis milliseconds,
-     * tasks in past lingerMillis milliseconds are pushed to {@link BatchingTask#processBatchingTasks(List)}.
+     * tasks in past lingerMillis milliseconds are pushed to {@link BatchingProcessor#processBatchingTasks(List)}.
      * @param capacity size limit for this processor. Every time tasks’size reaches capacity,
-     * tasks in past before reaching capacity are pushed to {@link BatchingTask#processBatchingTasks(List)}.
+     * tasks in past before reaching capacity are pushed to {@link BatchingProcessor#processBatchingTasks(List)}.
      */
     protected BatchingProcessor(long lingerMillis, int capacity) {
         this.lingerMillis = lingerMillis;

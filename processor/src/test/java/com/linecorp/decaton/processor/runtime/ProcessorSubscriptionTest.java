@@ -18,7 +18,9 @@ package com.linecorp.decaton.processor.runtime;
 
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonMap;
+import static java.util.stream.Collectors.toMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
@@ -37,6 +39,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
@@ -47,6 +50,8 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
@@ -99,6 +104,17 @@ public class ProcessorSubscriptionTest {
         public synchronized void subscribe(Collection<String> topics, ConsumerRebalanceListener listener) {
             rebalanceListener = listener;
             super.subscribe(topics, listener);
+        }
+
+        // Override this method to mimic actual behavier produced by KafkaConsumer.
+        // The real producer returns a map with null value associated to partitions w/ no committed record
+        // while MockConsumer omits entry itself from response.
+        @Override
+        public synchronized Map<TopicPartition, OffsetAndMetadata> committed(Set<TopicPartition> partitions) {
+            Map<TopicPartition, OffsetAndMetadata> allValues =
+                    partitions.stream().collect(HashMap::new, (m, v) -> m.put(v, null), HashMap::putAll);
+            allValues.putAll(super.committed(partitions));
+            return allValues;
         }
 
         @Override
@@ -191,6 +207,10 @@ public class ProcessorSubscriptionTest {
             listener.set(invocation.getArgument(1));
             return null;
         }).when(consumer).subscribe(anyCollection(), any(ConsumerRebalanceListener.class));
+        doAnswer(invocation -> {
+            Set<TopicPartition> partitions = invocation.getArgument(0);
+            return partitions.stream().collect(HashMap::new, (m, v) -> m.put(v, null), HashMap::putAll);
+        }).when(consumer).committed(any(Set.class));
 
         BlockingQueue<Long> feedOffsets = new ArrayBlockingQueue<>(4);
         feedOffsets.add(100L);
@@ -298,7 +318,7 @@ public class ProcessorSubscriptionTest {
         consumer.addRecord(new ConsumerRecord<>(tp.topic(), tp.partition(), 12, new byte[0], NO_DATA));
         asyncProcessingStarted.await();
         CompletableFuture<Void> shutdownFut = subscription.asyncClose();
-        assertTrue(consumer.committed(singleton(tp)).isEmpty());
+        assertNull(consumer.committed(singleton(tp)).get(tp));
         assertEquals(3, subscription.contexts.totalPendingTasks());
         letTasksComplete.countDown();
         letTaskFinishBlocking.release(2);

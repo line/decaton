@@ -38,6 +38,10 @@ public class TestTask {
      * Unique id of the task
      */
     String id;
+    /**
+     * The key to use for partitioning.
+     */
+    byte[] key;
 
     private static final ObjectMapper mapper = new ObjectMapper();
 
