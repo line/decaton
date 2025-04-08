@@ -1,7 +1,7 @@
 Decaton
 =======
 
-[![Build Status](https://github.com/line/decaton/workflows/CI/badge.svg?branch=master)](https://github.com/line/decaton/actions?query=workflow%3ACI+branch%3Amaster+event%3Apush)
+[![Build Status](https://github.com/line/decaton/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/line/decaton/actions?query=workflow%3ACI+branch%3Amaster+event%3Apush)
 
 Decaton is a streaming task processing framework built on top of [Apache Kafka](https://kafka.apache.org/).
 It is designed to enable "concurrent processing of records consumed from one partition" which isn't possible in many Kafka consumer frameworks.
