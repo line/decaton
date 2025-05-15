@@ -82,6 +82,13 @@ public class DecatonTaskRetryQueueingProcessor implements DecatonProcessor<byte[
                     context.key(),
                     request.toByteArray(),
                     context.headers());
+            // When decaton.legacy.parse.fallback.enabled is true during v9 upgrade process,
+            // it determines whether to parse tasks in legacy format or not based on the existence of metadata header.
+            // If header existence and the format is inconsistent, it will throw an exception on task parsing.
+            //
+            // At this point, DecatonClient may be already upgraded to v9 (i.e. produce tasks in new format with added metadata header).
+            // Hence, to ensure this retry tasks can be parsed correctly, we have to remove it when producing a task in legacy format.
+            record.headers().remove(TaskMetadataUtil.METADATA_HEADER_KEY);
         } else {
             record = new ProducerRecord<>(
                     retryTopic,

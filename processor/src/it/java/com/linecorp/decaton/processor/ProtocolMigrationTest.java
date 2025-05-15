@@ -158,6 +158,101 @@ public class ProtocolMigrationTest {
     }
 
     /*
+     * Check if the migration procedure doesn't cause disruption when we upgrade decaton client before disabling legacy retry.
+     * As of v9.1.0, we found that it causes message parse failure if we process upgrade like that. (https://github.com/line/decaton/issues/250)
+     */
+    @Test
+    @Timeout(30)
+    public void testMigration_upgradeClientBeforeDisableLegacyRetry() throws Exception {
+        DynamicProperty<Boolean> retryTaskInLegacyFormat =
+                new DynamicProperty<>(ProcessorProperties.CONFIG_RETRY_TASK_IN_LEGACY_FORMAT);
+        retryTaskInLegacyFormat.set(true);
+        DynamicProperty<Boolean> legacyParseFallbackEnabled =
+                new DynamicProperty<>(ProcessorProperties.CONFIG_LEGACY_PARSE_FALLBACK_ENABLED);
+        legacyParseFallbackEnabled.set(true);
+
+        Set<HelloTask> produced = ConcurrentHashMap.newKeySet();
+        Set<HelloTask> processed = ConcurrentHashMap.newKeySet();
+        try (ProcessorSubscription ignored = TestUtils.subscription(
+                rule.bootstrapServers(),
+                builder -> {
+                    builder.processorsBuilder(
+                                   ProcessorsBuilder.consuming(topic, new ProtocolBuffersDeserializer<>(HelloTask.parser()))
+                                                    .thenProcess((context, task) -> {
+                                                        // always retry once, to check that retry-feature works at every step
+                                                        if (context.metadata().retryCount() == 0) {
+                                                            context.retry();
+                                                        } else {
+                                                            processed.add(task);
+                                                        }
+                                                    }))
+                           .addProperties(StaticPropertySupplier.of(retryTaskInLegacyFormat, legacyParseFallbackEnabled))
+                           .enableRetry(RetryConfig.builder().backoff(Duration.ZERO).build());
+                });
+             Producer<String, HelloTask> legacyClient = TestUtils.producer(
+                     rule.bootstrapServers(),
+                     new PrintableAsciiStringSerializer(),
+                     (topic, task) -> DecatonTaskRequest
+                             .newBuilder()
+                             .setMetadata(TaskMetadataProto.newBuilder()
+                                                           .setTimestampMillis(System.currentTimeMillis())
+                                                           .setSourceApplicationId("test-application")
+                                                           .setSourceInstanceId("test-instance")
+                                                           .build())
+                             .setSerializedTask(ByteString.copyFrom(task.toByteArray()))
+                             .build()
+                             .toByteArray());
+             DecatonClient<HelloTask> client = TestUtils.client(topic, rule.bootstrapServers())) {
+
+            // step1: initial
+            for (int i = 0; i < 10; i++) {
+                HelloTask task = HelloTask.newBuilder().setName("hello1-" + i).build();
+                legacyClient.send(new ProducerRecord<>(topic, task));
+                produced.add(task);
+            }
+            TestUtils.awaitCondition("at least one step1-task is processed",
+                                     () -> processed.stream().anyMatch(task -> task.getName().startsWith("hello1-")));
+
+            // step2: migrate decaton client to new format
+            for (int i = 0; i < 10; i++) {
+                HelloTask task = HelloTask.newBuilder().setName("hello2-" + i).build();
+                client.put(null, task);
+                produced.add(task);
+            }
+            TestUtils.awaitCondition("at least one step2-task is processed",
+                                     () -> processed.stream().anyMatch(task -> task.getName().startsWith("hello2-")));
+
+            // step3: migrate retry tasks to new format
+            retryTaskInLegacyFormat.set(false);
+            for (int i = 0; i < 10; i++) {
+                HelloTask task = HelloTask.newBuilder().setName("hello3-" + i).build();
+                legacyClient.send(new ProducerRecord<>(topic, task));
+                produced.add(task);
+            }
+            TestUtils.awaitCondition("at least one step3-task is processed",
+                                     () -> processed.stream().anyMatch(task -> task.getName().startsWith("hello3-")));
+
+            // Before go to last step, we have to ensure that there are no legacy format task at all.
+            TestUtils.awaitCondition(
+                    "all produced tasks should be processed",
+                    () -> produced.equals(processed));
+
+            // step4: disable legacy parse fallback
+            legacyParseFallbackEnabled.set(false);
+            for (int i = 0; i < 10; i++) {
+                HelloTask task = HelloTask.newBuilder().setName("hello4-" + i).build();
+                client.put(null, task);
+                produced.add(task);
+            }
+
+            // Check if it works after legacy parse fallback is disabled
+            TestUtils.awaitCondition(
+                    "all produced tasks should be processed",
+                    () -> produced.equals(processed));
+        }
+    }
+
+    /*
      * Check if the migration works when pure producer is used.
      */
     @Test

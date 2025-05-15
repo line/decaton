@@ -26,7 +26,7 @@ import com.google.protobuf.InvalidProtocolBufferException;
 import com.linecorp.decaton.protocol.Decaton.TaskMetadataProto;
 
 public class TaskMetadataUtil {
-    private static final String METADATA_HEADER_KEY = "dt_meta";
+    public static final String METADATA_HEADER_KEY = "dt_meta";
 
     /**
      * Write metadata to {@link Headers}
