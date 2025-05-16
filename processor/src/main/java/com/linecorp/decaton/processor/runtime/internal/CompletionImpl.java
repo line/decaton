@@ -31,6 +31,7 @@ import lombok.extern.slf4j.Slf4j;
 @Accessors(fluent = true)
 public class CompletionImpl implements Completion {
     private final CompletableFuture<Void> future;
+    private final CompletionStage<Void> stage;
     @Setter
     private volatile Function<Completion, TimeoutChoice> expireCallback;
     private volatile Completion dependency;
@@ -48,7 +49,16 @@ public class CompletionImpl implements Completion {
     }
 
     public CompletionImpl() {
+        this(null);
+    }
+
+    public CompletionImpl(Runnable firstAction) {
         future = new CompletableFuture<>();
+        if (firstAction == null) {
+            stage = future;
+        } else {
+            stage = future.whenComplete((ignored, ignored2) -> firstAction.run());
+        }
     }
 
     @Override
@@ -58,7 +68,7 @@ public class CompletionImpl implements Completion {
 
     @Override
     public CompletionStage<Void> asFuture() {
-        return future;
+        return stage;
     }
 
     @Override

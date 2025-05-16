@@ -21,12 +21,14 @@ import static java.util.stream.Collectors.toMap;
 
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 import java.util.function.Function;
 
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 
 import com.linecorp.decaton.processor.runtime.internal.Utils.Timer;
@@ -44,6 +46,7 @@ public class AssignmentManager {
     @Accessors(fluent = true)
     static class AssignmentConfig {
         boolean paused;
+        OffsetAndMetadata offsetMeta;
     }
 
     /**
@@ -94,12 +97,15 @@ public class AssignmentManager {
      * from/to the store.
      * @param newAssignment new set of topic-partitions to assign.
      */
-    public void assign(Collection<TopicPartition> newAssignment) {
-        Set<TopicPartition> newSet = new HashSet<>(newAssignment);
+    public void assign(Map<TopicPartition, OffsetAndMetadata> newAssignment) {
+        Set<TopicPartition> newSet = newAssignment.keySet();
         Set<TopicPartition> oldSet = store.assignedPartitions();
         List<TopicPartition> removed = computeRemovedPartitions(oldSet, newSet);
-        List<TopicPartition> added = computeAddedPartitions(oldSet, newSet);
-        log.debug("Assignment update: removed:{}, added:{}, assignment:{}", removed, added, newSet);
+        Map<TopicPartition, OffsetAndMetadata> added = computeAddedPartitions(oldSet, newSet)
+                .stream()
+                .collect(HashMap::new, (m, v) -> m.put(v, newAssignment.get(v)), HashMap::putAll);
+        log.debug("Assignment update: consumer assignment: {}, removed:{}, added:{}, assignment:{}",
+                  newAssignment, removed, added, newSet);
 
         partitionsRevoked(removed);
         partitionsAssigned(added);
@@ -113,9 +119,8 @@ public class AssignmentManager {
      */
     public void repair(TopicPartition tp) {
         log.info("Repairing partition: {}", tp);
-        List<TopicPartition> target = Collections.singletonList(tp);
-        partitionsRevoked(target);
-        partitionsAssigned(target);
+        partitionsRevoked(Collections.singletonList(tp));
+        partitionsAssigned(Collections.singletonMap(tp, null)); // TODO: ok to not regard offset metadata?
     }
 
     private static List<TopicPartition> computeRemovedPartitions(
@@ -140,18 +145,19 @@ public class AssignmentManager {
         }
     }
 
-    private void partitionsAssigned(Collection<TopicPartition> partitions) {
-        if (partitions.isEmpty()) {
+    private void partitionsAssigned(Map<TopicPartition, OffsetAndMetadata> partitionCommits) {
+        if (partitionCommits.isEmpty()) {
             return;
         }
         Timer timer = Utils.timer();
 
         Map<TopicPartition, AssignmentConfig> configs =
-                partitions.stream().collect(toMap(Function.identity(), ignored -> new AssignmentConfig(false)));
+                partitionCommits.entrySet().stream()
+                                .collect(toMap(Entry::getKey, e -> new AssignmentConfig(false, e.getValue())));
         store.addPartitions(configs);
         if (log.isInfoEnabled()) {
             log.info("Added {} partitions in {} ms",
-                     partitions.size(), Utils.formatNum(timer.elapsedMillis()));
+                     partitionCommits.size(), Utils.formatNum(timer.elapsedMillis()));
         }
     }
 }

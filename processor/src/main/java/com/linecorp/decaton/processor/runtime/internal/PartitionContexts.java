@@ -81,7 +81,7 @@ public class PartitionContexts implements OffsetsStore, AssignmentStore, Partiti
             for (Entry<TopicPartition, AssignmentConfig> entry : partitions.entrySet()) {
                 TopicPartition tp = entry.getKey();
                 AssignmentConfig conf = entry.getValue();
-                initContext(tp, conf.paused());
+                initContext(tp, conf.offsetMeta(), conf.paused());
             }
         } finally {
           propertyReloadLock.unlock();
@@ -122,10 +122,10 @@ public class PartitionContexts implements OffsetsStore, AssignmentStore, Partiti
      * @return instantiated context
      */
     // visible for testing
-    PartitionContext initContext(TopicPartition tp, boolean paused) {
+    PartitionContext initContext(TopicPartition tp, OffsetAndMetadata offsetMeta, boolean paused) {
         propertyReloadLock.lock();
         try {
-            PartitionContext context = instantiateContext(tp);
+            PartitionContext context = instantiateContext(tp, offsetMeta);
             if (paused) {
                 context.pause();
             }
@@ -150,8 +150,7 @@ public class PartitionContexts implements OffsetsStore, AssignmentStore, Partiti
         for (PartitionContext context : contexts.values()) {
             if (!context.revoking()) {
                 context.offsetWaitingCommit().ifPresent(
-                        offset -> offsets.put(context.topicPartition(),
-                                              new OffsetAndMetadata(offset + 1, null)));
+                        offsetMeta -> offsets.put(context.topicPartition(), offsetMeta));
             }
         }
         return offsets;
@@ -162,9 +161,7 @@ public class PartitionContexts implements OffsetsStore, AssignmentStore, Partiti
         for (Entry<TopicPartition, OffsetAndMetadata> entry : offsets.entrySet()) {
             TopicPartition tp = entry.getKey();
             long offset = entry.getValue().offset();
-            // PartitionContext manages their "completed" offset so its minus 1 from committed offset
-            // which indicates the offset to "fetch next".
-            contexts.get(tp).updateCommittedOffset(offset - 1);
+            contexts.get(tp).updateCommittedOffset(offset);
         }
     }
 
@@ -197,9 +194,9 @@ public class PartitionContexts implements OffsetsStore, AssignmentStore, Partiti
     }
 
     // visible for testing
-    PartitionContext instantiateContext(TopicPartition tp) {
+    PartitionContext instantiateContext(TopicPartition tp, OffsetAndMetadata offsetMeta) {
         PartitionScope partitionScope = new PartitionScope(scope, tp);
-        return new PartitionContext(partitionScope, processors);
+        return new PartitionContext(partitionScope, offsetMeta, processors);
     }
 
     // visible for testing
@@ -306,8 +303,12 @@ public class PartitionContexts implements OffsetsStore, AssignmentStore, Partiti
         logger.info("Start dropping partition contexts({})", topicPartitions);
         removePartition(topicPartitions);
         logger.info("Finished dropping partition contexts. Start recreating partition contexts");
+        // It is OK to skip passing correct offsetMeta at this point, because when flow reaches this point
+        // partition has all the record processed and committed already, hence the watermark should already
+        // be up-to-date and committed.
+        AssignmentConfig config = new AssignmentConfig(true, null);
         Map<TopicPartition, AssignmentConfig> configs = topicPartitions.stream().collect(
-                toMap(Function.identity(), tp -> new AssignmentConfig(true)));
+                toMap(Function.identity(), tp -> config));
         addPartitions(configs);
         logger.info("Completed reloading partition contexts({})", topicPartitions);
     }

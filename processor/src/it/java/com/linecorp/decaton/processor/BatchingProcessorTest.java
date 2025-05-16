@@ -18,6 +18,7 @@ package com.linecorp.decaton.processor;
 
 import java.util.List;
 import java.util.Random;
+import java.util.concurrent.locks.ReentrantLock;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -42,20 +43,27 @@ public class BatchingProcessorTest {
     @Timeout(30)
     public void testBatchingProcessor() throws Exception {
         Random rand = randomExtension.random();
+        ReentrantLock serializer = new ReentrantLock(true);
         ProcessorTestSuite
             .builder(rule)
             .configureProcessorsBuilder(builder -> builder.thenProcess(
                 new BatchingProcessor<TestTask>(1000, 100) {
                     @Override
                     protected void processBatchingTasks(List<BatchingTask<TestTask>> batchingTasks) {
-                        // adding some random delay to simulate realistic usage
+                        // Since multiple calls to this method might be executed concurrently,
+                        // it is implementation-side responsibility to ensure completion of each batch
+                        // to happen in-order.
+                        serializer.lock();
                         try {
+                            // adding some random delay to simulate realistic usage
                             Thread.sleep(rand.nextInt(10));
+                            batchingTasks.forEach(batchingTask -> batchingTask.completion().complete());
                         } catch (InterruptedException e) {
                             Thread.currentThread().interrupt();
                             throw new RuntimeException(e);
+                        } finally {
+                            serializer.unlock();
                         }
-                        batchingTasks.forEach(batchingTask -> batchingTask.completion().complete());
                     }
                 }
             ))

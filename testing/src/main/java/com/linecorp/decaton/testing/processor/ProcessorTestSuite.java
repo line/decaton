@@ -427,8 +427,8 @@ public class ProcessorTestSuite {
 
         TestTaskSerializer serializer = new TestTaskSerializer();
         for (int i = 0; i < produceFutures.length; i++) {
-            TestTask task = new TestTask(String.valueOf(i));
             byte[] key = String.valueOf(i % NUM_KEYS).getBytes(StandardCharsets.UTF_8);
+            TestTask task = new TestTask(String.valueOf(i), key);
             TaskMetadataProto taskMetadata =
                     TaskMetadataProto.newBuilder()
                                      .setTimestampMillis(System.currentTimeMillis())
