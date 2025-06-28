@@ -89,12 +89,14 @@ public class ThreadPoolSubPartitions extends AbstractSubPartitions {
                                       Utils.namedThreadFactory("PartitionProcessorThread-" + scope)) {
             @Override
             public void execute(Runnable command) {
-                Timer timer = Utils.timer();
-                try {
-                    super.execute(command);
-                } finally {
-                    metrics.processorProcessedTime.record(timer.duration());
-                }
+                super.execute(() -> {
+                    Timer timer = Utils.timer();
+                    try {
+                        command.run();
+                    } finally {
+                        metrics.processorProcessedTime.record(timer.duration());
+                    }
+                });
             }
         };
     }
