@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+<meta charset='utf-8'>
+<style>
+	body {margin: 0; padding: 10px; background-color: #ffffff}
+	h1 {margin: 5px 0 0 0; font-size: 18px; font-weight: normal; text-align: center}
+	header {margin: -24px 0 5px 0; line-height: 24px}
+	button {font: 12px sans-serif; cursor: pointer}
+	p {margin: 5px 0 5px 0}
+	a {color: #0366d6}
+	#hl {position: absolute; display: none; overflow: hidden; white-space: nowrap; pointer-events: none; background-color: #ffffe0; outline: 1px solid #ffc000; height: 15px}
+	#hl span {padding: 0 3px 0 3px}
+	#status {overflow: hidden; white-space: nowrap}
+	#match {overflow: hidden; white-space: nowrap; display: none; float: right; text-align: right}
+	#reset {cursor: pointer}
+	#canvas {width: 100%; height: 800px}
+</style>
+</head>
+<body style='font: 12px Verdana, sans-serif'>
+<h1>CPU profile</h1>
+<header style='text-align: left'><button id='reverse' title='Reverse'>&#x1f53b;</button>&nbsp;&nbsp;<button id='search' title='Search'>&#x1f50d;</button></header>
+<header style='text-align: right'>Produced by <a href='https://github.com/jvm-profiling-tools/async-profiler'>async-profiler</a></header>
+<canvas id='canvas'></canvas>
+<div id='hl'><span></span></div>
+<p id='match'>Matched: <span id='matchval'></span> <span id='reset' title='Clear'>&#x274c;</span></p>
+<p id='status'>&nbsp;</p>
+<script>
+	// Copyright 2020 Andrei Pangin
+	// Licensed under the Apache License, Version 2.0.
+	'use strict';
+	var root, rootLevel, px, pattern;
+	var reverse = false;
+	const levels = Array(50);
+	for (let h = 0; h < levels.length; h++) {
+		levels[h] = [];
+	}
+
+	const canvas = document.getElementById('canvas');
+	const c = canvas.getContext('2d');
+	const hl = document.getElementById('hl');
+	const status = document.getElementById('status');
+
+	const canvasWidth = canvas.offsetWidth;
+	const canvasHeight = canvas.offsetHeight;
+	canvas.style.width = canvasWidth + 'px';
+	canvas.width = canvasWidth * (devicePixelRatio || 1);
+	canvas.height = canvasHeight * (devicePixelRatio || 1);
+	if (devicePixelRatio) c.scale(devicePixelRatio, devicePixelRatio);
+	c.font = document.body.style.font;
+
+	const palette = [
+		[0xb2e1b2, 20, 20, 20],
+		[0x50e150, 30, 30, 30],
+		[0x50cccc, 30, 30, 30],
+		[0xe15a5a, 30, 40, 40],
+		[0xc8c83c, 30, 30, 10],
+		[0xe17d00, 30, 30,  0],
+		[0xcce880, 20, 20, 20],
+	];
+
+	function getColor(p) {
+		const v = Math.random();
+		return '#' + (p[0] + ((p[1] * v) << 16 | (p[2] * v) << 8 | (p[3] * v))).toString(16);
+	}
+
+	function f(level, left, width, type, title, inln, c1, int) {
+		levels[level].push({left: left, width: width, color: getColor(palette[type]), title: title,
+			details: (int ? ', int=' + int : '') + (c1 ? ', c1=' + c1 : '') + (inln ? ', inln=' + inln : '')
+		});
+	}
+
+	function samples(n) {
+		return n === 1 ? '1 sample' : n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',') + ' samples';
+	}
+
+	function pct(a, b) {
+		return a >= b ? '100' : (100 * a / b).toFixed(2);
+	}
+
+	function findFrame(frames, x) {
+		let left = 0;
+		let right = frames.length - 1;
+
+		while (left <= right) {
+			const mid = (left + right) >>> 1;
+			const f = frames[mid];
+
+			if (f.left > x) {
+				right = mid - 1;
+			} else if (f.left + f.width <= x) {
+				left = mid + 1;
+			} else {
+				return f;
+			}
+		}
+
+		if (frames[left] && (frames[left].left - x) * px < 0.5) return frames[left];
+		if (frames[right] && (x - (frames[right].left + frames[right].width)) * px < 0.5) return frames[right];
+
+		return null;
+	}
+
+	function search(r) {
+		if (r === true && (r = prompt('Enter regexp to search:', '')) === null) {
+			return;
+		}
+
+		pattern = r ? RegExp(r) : undefined;
+		const matched = render(root, rootLevel);
+		document.getElementById('matchval').textContent = pct(matched, root.width) + '%';
+		document.getElementById('match').style.display = r ? 'inherit' : 'none';
+	}
+
+	function render(newRoot, newLevel) {
+		if (root) {
+			c.fillStyle = '#ffffff';
+			c.fillRect(0, 0, canvasWidth, canvasHeight);
+		}
+
+		root = newRoot || levels[0][0];
+		rootLevel = newLevel || 0;
+		px = canvasWidth / root.width;
+
+		const x0 = root.left;
+		const x1 = x0 + root.width;
+		const marked = [];
+
+		function mark(f) {
+			return marked[f.left] >= f.width || (marked[f.left] = f.width);
+		}
+
+		function totalMarked() {
+			let total = 0;
+			let left = 0;
+			Object.keys(marked).sort(function(a, b) { return a - b; }).forEach(function(x) {
+				if (+x >= left) {
+					total += marked[x];
+					left = +x + marked[x];
+				}
+			});
+			return total;
+		}
+
+		function drawFrame(f, y, alpha) {
+			if (f.left < x1 && f.left + f.width > x0) {
+				c.fillStyle = pattern && f.title.match(pattern) && mark(f) ? '#ee00ee' : f.color;
+				c.fillRect((f.left - x0) * px, y, f.width * px, 15);
+
+				if (f.width * px >= 21) {
+					const chars = Math.floor(f.width * px / 7);
+					const title = f.title.length <= chars ? f.title : f.title.substring(0, chars - 2) + '..';
+					c.fillStyle = '#000000';
+					c.fillText(title, Math.max(f.left - x0, 0) * px + 3, y + 12, f.width * px - 6);
+				}
+
+				if (alpha) {
+					c.fillStyle = 'rgba(255, 255, 255, 0.5)';
+					c.fillRect((f.left - x0) * px, y, f.width * px, 15);
+				}
+			}
+		}
+
+		for (let h = 0; h < levels.length; h++) {
+			const y = reverse ? h * 16 : canvasHeight - (h + 1) * 16;
+			const frames = levels[h];
+			for (let i = 0; i < frames.length; i++) {
+				drawFrame(frames[i], y, h < rootLevel);
+			}
+		}
+
+		return totalMarked();
+	}
+
+	canvas.onmousemove = function() {
+		const h = Math.floor((reverse ? event.offsetY : (canvasHeight - event.offsetY)) / 16);
+		if (h >= 0 && h < levels.length) {
+			const f = findFrame(levels[h], event.offsetX / px + root.left);
+			if (f) {
+				if (f != root) getSelection().removeAllRanges();
+				hl.style.left = (Math.max(f.left - root.left, 0) * px + canvas.offsetLeft) + 'px';
+				hl.style.width = (Math.min(f.width, root.width) * px) + 'px';
+				hl.style.top = ((reverse ? h * 16 : canvasHeight - (h + 1) * 16) + canvas.offsetTop) + 'px';
+				hl.firstChild.textContent = f.title;
+				hl.style.display = 'block';
+				canvas.title = f.title + '\n(' + samples(f.width) + f.details + ', ' + pct(f.width, levels[0][0].width) + '%)';
+				canvas.style.cursor = 'pointer';
+				canvas.onclick = function() {
+					if (f != root) {
+						render(f, h);
+						canvas.onmousemove();
+					}
+				};
+				status.textContent = 'Function: ' + canvas.title;
+				return;
+			}
+		}
+		canvas.onmouseout();
+	}
+
+	canvas.onmouseout = function() {
+		hl.style.display = 'none';
+		status.textContent = '\xa0';
+		canvas.title = '';
+		canvas.style.cursor = '';
+		canvas.onclick = '';
+	}
+
+	canvas.ondblclick = function() {
+		getSelection().selectAllChildren(hl);
+	}
+
+	document.getElementById('reverse').onclick = function() {
+		reverse = !reverse;
+		render();
+	}
+
+	document.getElementById('search').onclick = function() {
+		search(true);
+	}
+
+	document.getElementById('reset').onclick = function() {
+		search(false);
+	}
+
+	window.onkeydown = function() {
+		if (event.ctrlKey && event.keyCode === 70) {
+			event.preventDefault();
+			search(true);
+		} else if (event.keyCode === 27) {
+			search(false);
+		}
+	}
+
+f(0,0,255,3,'all')
+f(1,0,18,1,'com/linecorp/decaton/processor/runtime/ProcessorSubscription.run')
+f(2,0,18,1,'com/linecorp/decaton/processor/runtime/ProcessorSubscription.consumeLoop')
+f(3,0,17,1,'com/linecorp/decaton/processor/runtime/internal/ConsumeManager.poll')
+f(4,0,1,1,'io/micrometer/core/instrument/composite/CompositeTimer.record')
+f(5,0,1,1,'io/micrometer/core/instrument/Timer.record')
+f(6,0,1,1,'io/micrometer/core/instrument/AbstractTimer.record')
+f(7,0,1,1,'io/micrometer/core/instrument/distribution/TimeWindowPercentileHistogram.recordLong')
+f(8,0,1,1,'io/micrometer/core/instrument/distribution/AbstractTimeWindowHistogram.recordLong')
+f(9,0,1,1,'io/micrometer/core/instrument/distribution/TimeWindowPercentileHistogram.recordLong')
+f(10,0,1,2,'io/micrometer/core/instrument/distribution/TimeWindowPercentileHistogram.recordLong',1,0,0)
+f(11,0,1,2,'org/HdrHistogram/DoubleRecorder.recordValue',1,0,0)
+f(12,0,1,2,'org/HdrHistogram/DoubleHistogram.recordValue',1,0,0)
+f(13,0,1,2,'org/HdrHistogram/DoubleHistogram.recordSingleValue',1,0,0)
+f(14,0,1,2,'org/HdrHistogram/ConcurrentHistogram.recordConvertedDoubleValue',1,0,0)
+f(4,1,7,1,'java/lang/Iterable.forEach')
+f(5,1,7,1,'com/linecorp/decaton/processor/runtime/internal/ConsumeManager$$Lambda.0x00007fc8d0277438.accept')
+f(6,1,7,2,'com/linecorp/decaton/processor/runtime/ProcessorSubscription$Handler.receive',5,0,0)
+f(7,1,3,2,'com/linecorp/decaton/processor/runtime/internal/PartitionContext.addRecord',1,0,0)
+f(8,1,3,2,'com/linecorp/decaton/processor/runtime/internal/ThreadPoolSubPartitions.addTask',1,0,0)
+f(9,2,2,1,'com/linecorp/decaton/processor/runtime/internal/ProcessorUnit.putTask')
+f(10,2,2,1,'com/linecorp/decaton/processor/runtime/internal/ThreadPoolSubPartitions$1.execute')
+f(11,2,2,1,'java/util/concurrent/ThreadPoolExecutor.execute')
+f(12,3,1,2,'java/util/concurrent/LinkedBlockingQueue.offer',1,0,0)
+f(13,3,1,2,'java/util/concurrent/locks/ReentrantLock.lock',1,0,0)
+f(14,3,1,2,'java/util/concurrent/locks/ReentrantLock$Sync.lock',1,0,0)
+f(15,3,1,2,'java/util/concurrent/locks/ReentrantLock$NonfairSync.initialTryLock',1,0,0)
+f(16,3,1,2,'java/util/concurrent/locks/AbstractQueuedSynchronizer.compareAndSetState',1,0,0)
+f(7,4,3,2,'com/linecorp/decaton/processor/runtime/internal/PartitionContext.registerOffset',3,0,0)
+f(8,4,3,2,'com/linecorp/decaton/processor/runtime/internal/OutOfOrderCommitControl.reportFetchedOffset',3,0,0)
+f(9,4,1,2,'com/linecorp/decaton/processor/runtime/internal/OffsetState.completion',1,0,0)
+f(9,5,1,2,'java/util/ArrayDeque.addLast',1,0,0)
+f(9,6,1,2,'java/util/concurrent/CompletableFuture.whenComplete',1,0,0)
+f(10,6,1,2,'java/util/concurrent/CompletableFuture.whenComplete',1,0,0)
+f(11,6,1,2,'java/util/concurrent/CompletableFuture.uniWhenCompleteStage',1,0,0)
+f(12,6,1,2,'java/util/concurrent/CompletableFuture.unipush',1,0,0)
+f(13,6,1,2,'java/util/concurrent/CompletableFuture.tryPushStack',1,0,0)
+f(14,6,1,2,'java/lang/invoke/VarHandleGuards.guard_LLL_Z',1,0,0)
+f(15,6,1,2,'java/lang/invoke/VarHandleReferences$FieldInstanceReadWrite.compareAndSet',1,0,0)
+f(7,7,1,2,'com/linecorp/decaton/processor/runtime/internal/PartitionContexts.get',1,0,0)
+f(8,7,1,2,'java/util/HashMap.get',1,0,0)
+f(9,7,1,2,'java/util/HashMap.getNode',1,0,0)
+f(4,8,9,1,'org/apache/kafka/clients/consumer/KafkaConsumer.poll')
+f(5,8,9,1,'org/apache/kafka/clients/consumer/KafkaConsumer.poll')
+f(6,8,8,1,'org/apache/kafka/clients/consumer/KafkaConsumer.pollForFetches')
+f(7,8,6,1,'org/apache/kafka/clients/consumer/internals/ConsumerNetworkClient.poll')
+f(8,8,6,1,'org/apache/kafka/clients/consumer/internals/ConsumerNetworkClient.poll')
+f(9,8,3,1,'org/apache/kafka/clients/NetworkClient.poll')
+f(10,8,2,1,'org/apache/kafka/clients/NetworkClient.handleTimedOutConnections')
+f(11,8,2,1,'org/apache/kafka/clients/ClusterConnectionStates.nodesWithConnectionSetupTimeout')
+f(12,8,2,1,'java/util/stream/ReferencePipeline.collect')
+f(13,8,2,1,'java/util/stream/AbstractPipeline.evaluate')
+f(14,8,2,1,'java/util/stream/ReduceOps$ReduceOp.evaluateSequential')
+f(15,8,2,1,'java/util/stream/AbstractPipeline.wrapAndCopyInto')
+f(16,8,2,1,'java/util/stream/AbstractPipeline.copyInto')
+f(17,8,2,1,'java/util/Spliterator.getExactSizeIfKnown')
+f(18,8,1,3,'itable stub')
+f(18,9,1,1,'java/util/HashMap$KeySpliterator.characteristics')
+f(10,10,1,1,'org/apache/kafka/common/network/Selector.poll')
+f(11,10,1,1,'org/apache/kafka/common/metrics/Sensor.record')
+f(12,10,1,1,'org/apache/kafka/common/metrics/Sensor.recordInternal')
+f(13,10,1,3,'itable stub')
+f(9,11,3,1,'org/apache/kafka/clients/consumer/KafkaConsumer$$Lambda.0x00007fc8d02764d8.shouldBlock')
+f(10,11,3,1,'org/apache/kafka/clients/consumer/KafkaConsumer.lambda$pollForFetches$1')
+f(11,11,3,1,'org/apache/kafka/clients/consumer/internals/Fetcher.hasAvailableFetches')
+f(12,11,3,1,'java/util/stream/ReferencePipeline.anyMatch')
+f(13,11,3,1,'java/util/stream/AbstractPipeline.evaluate')
+f(14,11,3,1,'java/util/stream/MatchOps$MatchOp.evaluateSequential')
+f(15,12,2,1,'java/util/stream/MatchOps$MatchOp.evaluateSequential')
+f(16,12,2,1,'java/util/stream/AbstractPipeline.wrapAndCopyInto')
+f(17,12,2,1,'java/util/stream/AbstractPipeline.copyInto')
+f(18,12,2,1,'java/util/stream/AbstractPipeline.copyIntoWithCancel')
+f(19,12,2,1,'java/util/stream/ReferencePipeline.forEachWithCancel')
+f(20,12,1,3,'itable stub')
+f(20,13,1,1,'java/util/concurrent/ConcurrentLinkedQueue$CLQSpliterator.tryAdvance')
+f(21,13,1,1,'java/util/stream/MatchOps$1MatchSink.accept')
+f(22,13,1,1,'org/apache/kafka/clients/consumer/internals/Fetcher$$Lambda.0x00007fc8d0276900.test')
+f(7,14,2,1,'org/apache/kafka/clients/consumer/internals/Fetcher.collectFetch')
+f(8,14,2,1,'org/apache/kafka/clients/consumer/internals/Fetcher.fetchRecords')
+f(9,14,1,1,'org/apache/kafka/clients/consumer/internals/Fetch.forPartition')
+f(10,14,1,1,'org/apache/kafka/common/utils/Utils.mkMap')
+f(11,14,1,2,'java/util/HashMap.put',1,0,0)
+f(12,14,1,2,'java/util/HashMap.putVal',1,0,0)
+f(9,15,1,1,'org/apache/kafka/clients/consumer/internals/Fetcher$FetchManagerMetrics.access$2100')
+f(10,15,1,1,'org/apache/kafka/clients/consumer/internals/Fetcher$FetchManagerMetrics.recordPartitionLag')
+f(11,15,1,2,'org/apache/kafka/clients/consumer/internals/Fetcher$FetchManagerMetrics.partitionLagMetricName',1,0,0)
+f(12,15,1,2,'java/lang/StringBuilder.append',1,0,0)
+f(13,15,1,2,'java/lang/StringBuilder.append',1,0,0)
+f(14,15,1,2,'java/lang/AbstractStringBuilder.append',1,0,0)
+f(15,15,1,2,'java/lang/AbstractStringBuilder.ensureCapacityInternal',1,0,0)
+f(16,15,1,3,'jbyte_disjoint_arraycopy')
+f(6,16,1,1,'org/apache/kafka/clients/consumer/internals/ConsumerNetworkClient.transmitSends')
+f(7,16,1,2,'java/util/concurrent/locks/ReentrantLock.lock',1,0,0)
+f(8,16,1,2,'java/util/concurrent/locks/ReentrantLock$Sync.lock',1,0,0)
+f(3,17,1,1,'io/micrometer/core/instrument/composite/CompositeTimer.record')
+f(4,17,1,1,'io/micrometer/core/instrument/Timer.record')
+f(5,17,1,1,'io/micrometer/core/instrument/AbstractTimer.record')
+f(6,17,1,2,'io/micrometer/core/instrument/distribution/TimeWindowPercentileHistogram.recordLong',1,0,0)
+f(7,17,1,2,'io/micrometer/core/instrument/distribution/AbstractTimeWindowHistogram.recordLong',1,0,0)
+f(1,18,195,1,'java/lang/Thread.run')
+f(2,18,195,1,'java/lang/Thread.runWith')
+f(3,18,195,1,'java/util/concurrent/ThreadPoolExecutor$Worker.run')
+f(4,18,195,1,'java/util/concurrent/ThreadPoolExecutor.runWorker')
+f(5,18,187,1,'com/linecorp/decaton/processor/runtime/internal/ThreadPoolSubPartitions$1$$Lambda.0x00007fc8d02cf8c0.run')
+f(6,18,187,1,'com/linecorp/decaton/processor/runtime/internal/ThreadPoolSubPartitions$1.lambda$execute$0',3,0,0)
+f(7,19,177,1,'com/linecorp/decaton/processor/runtime/internal/ProcessorUnit$$Lambda.0x00007fc8d02cf6a0.run')
+f(8,19,177,1,'com/linecorp/decaton/processor/runtime/internal/ProcessorUnit.lambda$putTask$0')
+f(9,19,177,1,'com/linecorp/decaton/processor/runtime/internal/ProcessorUnit.processTask')
+f(10,19,176,1,'com/linecorp/decaton/processor/runtime/internal/ProcessPipeline.scheduleThenProcess')
+f(11,22,12,1,'com/linecorp/decaton/processor/runtime/internal/CompletionImpl.completeWith')
+f(12,28,6,2,'java/util/concurrent/CompletableFuture.whenComplete',4,0,0)
+f(13,28,6,2,'java/util/concurrent/CompletableFuture.whenComplete',4,0,0)
+f(14,28,6,2,'java/util/concurrent/CompletableFuture.uniWhenCompleteStage',4,0,0)
+f(15,28,6,2,'java/util/concurrent/CompletableFuture.uniWhenComplete',4,0,0)
+f(16,28,6,2,'com/linecorp/decaton/processor/runtime/internal/CompletionImpl$$Lambda.0x00007fc8d02d7230.accept',4,0,0)
+f(17,28,6,2,'com/linecorp/decaton/processor/runtime/internal/CompletionImpl.lambda$completeWith$0',4,0,0)
+f(18,28,6,2,'java/util/concurrent/CompletableFuture.complete',4,0,0)
+f(19,28,6,2,'java/util/concurrent/CompletableFuture.postComplete',4,0,0)
+f(20,29,1,2,'java/lang/invoke/VarHandleGuards.guard_LLL_Z',1,0,0)
+f(21,29,1,2,'java/lang/invoke/VarHandleReferences$FieldInstanceReadWrite.compareAndSet',1,0,0)
+f(20,30,4,2,'java/util/concurrent/CompletableFuture$UniWhenComplete.tryFire',2,0,0)
+f(21,30,4,2,'java/util/concurrent/CompletableFuture.uniWhenComplete',2,0,0)
+f(22,31,1,1,'com/linecorp/decaton/processor/runtime/ProcessorSubscription$Handler$$Lambda.0x00007fc8d02cd1d0.accept')
+f(22,32,1,1,'com/linecorp/decaton/processor/runtime/internal/OutOfOrderCommitControl$$Lambda.0x00007fc8d02cc360.accept')
+f(22,33,1,3,'itable stub')
+f(11,34,2,2,'com/linecorp/decaton/processor/runtime/internal/DecatonProperties.get',2,0,0)
+f(12,34,2,2,'com/linecorp/decaton/processor/runtime/internal/AbstractDecatonProperties.tryGet',2,0,0)
+f(13,34,2,2,'java/util/Collections$UnmodifiableMap.get',2,0,0)
+f(14,34,2,2,'java/util/HashMap.get',2,0,0)
+f(15,34,2,2,'java/util/HashMap.getNode',2,0,0)
+f(11,36,22,1,'com/linecorp/decaton/processor/runtime/internal/ExecutionScheduler.schedule')
+f(12,38,3,2,'com/linecorp/decaton/processor/runtime/internal/ExecutionScheduler.waitOnScheduledTime',3,0,0)
+f(13,40,1,2,'com/linecorp/decaton/processor/runtime/internal/ExecutionScheduler$$Lambda.0x00007fc8d02ce558.get',1,0,0)
+f(14,40,1,3,'__GI___clock_gettime')
+f(15,40,1,3,'[vdso]')
+f(12,41,17,1,'io/micrometer/core/instrument/composite/CompositeTimer.record')
+f(13,41,15,1,'io/micrometer/core/instrument/AbstractTimer.record')
+f(14,42,8,2,'io/micrometer/core/instrument/distribution/TimeWindowPercentileHistogram.recordLong',3,0,0)
+f(15,42,8,2,'io/micrometer/core/instrument/distribution/AbstractTimeWindowHistogram.recordLong',3,0,0)
+f(16,42,3,2,'io/micrometer/core/instrument/distribution/AbstractTimeWindowHistogram.rotate',3,0,0)
+f(17,42,3,2,'io/micrometer/core/instrument/Clock$1.wallTime',3,0,0)
+f(18,42,3,3,'__GI___clock_gettime')
+f(19,42,3,3,'[vdso]')
+f(16,45,5,1,'io/micrometer/core/instrument/distribution/TimeWindowPercentileHistogram.recordLong')
+f(17,46,4,2,'io/micrometer/core/instrument/distribution/TimeWindowPercentileHistogram.recordLong',4,0,0)
+f(18,46,4,2,'org/HdrHistogram/DoubleRecorder.recordValue',4,0,0)
+f(19,46,4,2,'org/HdrHistogram/DoubleHistogram.recordValue',4,0,0)
+f(20,46,4,2,'org/HdrHistogram/DoubleHistogram.recordSingleValue',4,0,0)
+f(21,46,4,2,'org/HdrHistogram/ConcurrentHistogram.recordConvertedDoubleValue',4,0,0)
+f(22,49,1,2,'org/HdrHistogram/WriterReaderPhaser.writerCriticalSectionEnter',1,0,0)
+f(23,49,1,2,'java/util/concurrent/atomic/AtomicLongFieldUpdater$CASUpdater.getAndIncrement',1,0,0)
+f(24,49,1,2,'java/util/concurrent/atomic/AtomicLongFieldUpdater$CASUpdater.getAndAdd',1,0,0)
+f(14,50,6,2,'io/micrometer/core/instrument/step/StepTimer.recordNonNegative',6,0,0)
+f(15,51,1,2,'io/micrometer/core/instrument/distribution/TimeWindowMax.record',1,0,0)
+f(16,51,1,2,'io/micrometer/core/instrument/distribution/TimeWindowMax.record',1,0,0)
+f(17,51,1,2,'io/micrometer/core/instrument/distribution/TimeWindowMax.rotate',1,0,0)
+f(18,51,1,2,'io/micrometer/core/instrument/Clock$1.wallTime',1,0,0)
+f(19,51,1,3,'__GI___clock_gettime')
+f(20,51,1,3,'[vdso]')
+f(15,52,1,2,'io/micrometer/core/instrument/util/TimeUtils.convert',1,0,0)
+f(15,53,3,2,'java/util/concurrent/atomic/LongAdder.add',3,0,0)
+f(16,54,1,2,'java/util/concurrent/atomic/Striped64$Cell.cas',1,0,0)
+f(17,54,1,2,'java/lang/invoke/VarHandleGuards.guard_LJJ_Z',1,0,0)
+f(18,54,1,2,'java/lang/invoke/VarHandleLongs$FieldInstanceReadWrite.weakCompareAndSetRelease',1,0,0)
+f(16,55,1,2,'java/util/concurrent/atomic/Striped64.casBase',1,0,0)
+f(17,55,1,2,'java/lang/invoke/VarHandleGuards.guard_LJJ_Z',1,0,0)
+f(18,55,1,2,'java/lang/invoke/VarHandleLongs$FieldInstanceReadWrite.weakCompareAndSetRelease',1,0,0)
+f(13,56,1,2,'io/micrometer/core/instrument/composite/AbstractCompositeMeter.getChildren',1,0,0)
+f(13,57,1,2,'java/util/IdentityHashMap$IdentityHashMapIterator.hasNext',1,0,0)
+f(11,58,1,2,'com/linecorp/decaton/processor/runtime/internal/OffsetState.completion',1,0,0)
+f(11,59,19,1,'com/linecorp/decaton/processor/runtime/internal/ProcessPipeline.extract',5,0,0)
+f(12,59,19,1,'com/linecorp/decaton/benchmark/DecatonRunner$$Lambda.0x00007fc8d01a0e90.extract',5,0,0)
+f(13,59,19,1,'com/linecorp/decaton/benchmark/DecatonRunner.lambda$init$0',5,0,0)
+f(14,59,19,1,'com/linecorp/decaton/benchmark/Task$KafkaDeserializer.deserialize',5,0,0)
+f(15,59,19,1,'com/linecorp/decaton/benchmark/Task$KafkaDeserializer.deserialize',5,0,0)
+f(16,59,19,1,'com/fasterxml/jackson/databind/ObjectMapper.readValue',5,0,0)
+f(17,60,3,2,'com/fasterxml/jackson/core/JsonFactory.createParser',2,0,0)
+f(18,60,1,2,'com/fasterxml/jackson/core/JsonFactory._createContext',1,0,0)
+f(19,60,1,2,'com/fasterxml/jackson/core/JsonFactory._getBufferRecycler',1,0,0)
+f(20,60,1,2,'com/fasterxml/jackson/core/util/BufferRecyclers.getBufferRecycler',1,0,0)
+f(21,60,1,2,'java/lang/ThreadLocal.get',1,0,0)
+f(18,61,2,2,'com/fasterxml/jackson/core/JsonFactory._createParser',1,0,0)
+f(19,61,2,2,'com/fasterxml/jackson/core/json/ByteSourceJsonBootstrapper.constructParser',1,0,0)
+f(20,61,1,4,'OptoRuntime::new_instance_C(Klass*, JavaThread*)')
+f(21,61,1,4,'InstanceKlass::allocate_instance(JavaThread*)')
+f(22,61,1,3,'__tls_get_addr')
+f(20,62,1,2,'com/fasterxml/jackson/core/sym/ByteQuadsCanonicalizer.makeChild',1,0,0)
+f(21,62,1,2,'java/util/concurrent/atomic/AtomicReference.get',1,0,0)
+f(17,63,14,1,'com/fasterxml/jackson/databind/ObjectMapper._readMapAndClose',1,0,0)
+f(18,63,1,2,'com/fasterxml/jackson/databind/ObjectMapper._findRootDeserializer',1,0,0)
+f(19,63,1,2,'java/util/concurrent/ConcurrentHashMap.get',1,0,0)
+f(18,64,3,1,'com/fasterxml/jackson/databind/ObjectMapper._initForReading')
+f(19,64,3,1,'com/fasterxml/jackson/core/json/UTF8StreamJsonParser.nextToken')
+f(20,64,3,1,'com/fasterxml/jackson/core/json/UTF8StreamJsonParser._nextTokenNotInObject')
+f(21,64,3,2,'com/fasterxml/jackson/core/json/JsonReadContext.createChildObjectContext',2,0,0)
+f(22,65,1,4,'OptoRuntime::new_instance_C(Klass*, JavaThread*)')
+f(23,65,1,4,'InstanceKlass::allocate_instance(JavaThread*)')
+f(24,65,1,4,'MemAllocator::allocate() const')
+f(25,65,1,4,'ObjAllocator::initialize(HeapWordImpl**) const')
+f(22,66,1,2,'com/fasterxml/jackson/core/json/JsonReadContext.<init>',1,0,0)
+f(18,67,10,1,'com/fasterxml/jackson/databind/deser/DefaultDeserializationContext.readRootValue')
+f(19,67,10,1,'com/fasterxml/jackson/databind/deser/BeanDeserializer.deserialize')
+f(20,67,1,1,'com/fasterxml/jackson/core/json/UTF8StreamJsonParser.nextToken')
+f(21,67,1,2,'com/fasterxml/jackson/core/json/UTF8StreamJsonParser._parseName',1,0,0)
+f(22,67,1,2,'com/fasterxml/jackson/core/json/UTF8StreamJsonParser.parseMediumName',1,0,0)
+f(20,68,9,1,'com/fasterxml/jackson/databind/deser/BeanDeserializer.deserializeFromObject')
+f(21,68,9,1,'com/fasterxml/jackson/databind/deser/BeanDeserializerBase.deserializeFromObjectUsingNonDefault')
+f(22,68,9,1,'com/fasterxml/jackson/databind/deser/BeanDeserializer._deserializeUsingPropertyBased')
+f(23,68,1,1,'com/fasterxml/jackson/core/json/UTF8StreamJsonParser.nextToken')
+f(24,68,1,2,'com/fasterxml/jackson/core/json/UTF8StreamJsonParser._parsePosNumber',1,0,0)
+f(23,69,5,1,'com/fasterxml/jackson/databind/deser/BeanDeserializer._deserializeWithErrorWrapping')
+f(24,70,4,2,'com/fasterxml/jackson/databind/deser/SettableBeanProperty.deserialize',4,0,0)
+f(25,70,4,2,'com/fasterxml/jackson/databind/deser/std/NumberDeserializers$LongDeserializer.deserialize',4,0,0)
+f(26,70,4,2,'com/fasterxml/jackson/databind/deser/std/NumberDeserializers$LongDeserializer.deserialize',4,0,0)
+f(23,74,1,2,'com/fasterxml/jackson/databind/deser/BeanDeserializer.deserialize',1,0,0)
+f(24,74,1,2,'com/fasterxml/jackson/core/base/ParserMinimalBase.isExpectedStartObjectToken',1,0,0)
+f(23,75,2,2,'com/fasterxml/jackson/databind/deser/impl/PropertyBasedCreator.findCreatorProperty',2,0,0)
+f(24,75,2,2,'java/util/HashMap.get',2,0,0)
+f(25,75,2,2,'java/util/HashMap.getNode',2,0,0)
+f(26,76,1,2,'java/util/HashMap.hash',1,0,0)
+f(17,77,1,2,'com/fasterxml/jackson/databind/type/TypeFactory.constructType',1,0,0)
+f(18,77,1,2,'com/fasterxml/jackson/databind/type/TypeFactory._fromAny',1,0,0)
+f(19,77,1,2,'com/fasterxml/jackson/databind/type/TypeFactory._fromClass',1,0,0)
+f(20,77,1,2,'com/fasterxml/jackson/databind/type/TypeBindings.isEmpty',1,0,0)
+f(11,78,117,1,'com/linecorp/decaton/processor/runtime/internal/ProcessPipeline.process')
+f(12,79,1,4,'OptoRuntime::new_instance_C(Klass*, JavaThread*)')
+f(13,79,1,4,'AccessInternal::PostRuntimeDispatch<G1BarrierSet::AccessBarrier<598116ul, G1BarrierSet>, (AccessInternal::BarrierType)2, 598116ul>::oop_access_barrier(void*)')
+f(12,80,11,1,'com/linecorp/decaton/processor/LoggingContext.close')
+f(13,80,11,1,'org/slf4j/MDC.remove')
+f(14,85,6,1,'ch/qos/logback/classic/util/LogbackMDCAdapter.remove',1,0,0)
+f(15,86,5,1,'java/util/HashMap.remove')
+f(16,86,5,1,'java/util/HashMap.removeNode')
+f(12,91,7,1,'com/linecorp/decaton/processor/runtime/internal/ProcessingContextImpl.loggingContext',2,0,0)
+f(13,91,6,1,'com/linecorp/decaton/processor/LoggingContext.<init>',1,0,0)
+f(14,91,3,2,'com/linecorp/decaton/processor/TaskMetadata.toString',1,0,0)
+f(15,91,3,2,'java/lang/StringBuilder.append',1,0,0)
+f(16,91,3,2,'java/lang/AbstractStringBuilder.append',1,0,0)
+f(17,91,3,2,'java/lang/AbstractStringBuilder.ensureCapacityInternal',3,0,0)
+f(18,93,1,3,'jbyte_disjoint_arraycopy')
+f(14,94,1,1,'java/lang/String.valueOf')
+f(15,94,1,1,'java/lang/Long.toString')
+f(16,94,1,4,'OptoRuntime::new_instance_C(Klass*, JavaThread*)')
+f(17,94,1,4,'InstanceKlass::allocate_instance(JavaThread*)')
+f(18,94,1,4,'MemAllocator::allocate() const')
+f(19,94,1,4,'G1Allocator::unsafe_max_tlab_alloc()')
+f(14,95,2,1,'org/slf4j/MDC.put')
+f(15,95,2,2,'ch/qos/logback/classic/util/LogbackMDCAdapter.put',2,0,0)
+f(16,95,1,2,'java/lang/ThreadLocal.get',1,0,0)
+f(16,96,1,2,'java/util/HashMap.put',1,0,0)
+f(17,96,1,2,'java/util/HashMap.putVal',1,0,0)
+f(13,97,1,2,'com/linecorp/decaton/processor/runtime/internal/DecatonProperties.get',1,0,0)
+f(14,97,1,2,'com/linecorp/decaton/processor/runtime/internal/AbstractDecatonProperties.tryGet',1,0,0)
+f(15,97,1,2,'java/util/Collections$UnmodifiableMap.get',1,0,0)
+f(16,97,1,2,'java/util/LinkedHashMap.get',1,0,0)
+f(17,97,1,2,'java/util/HashMap.getNode',1,0,0)
+f(12,98,60,1,'com/linecorp/decaton/processor/runtime/internal/ProcessingContextImpl.push',3,0,0)
+f(13,98,57,1,'com/linecorp/decaton/processor/runtime/internal/ProcessingContextImpl.pushDownStream')
+f(14,99,52,1,'com/linecorp/decaton/benchmark/DecatonRunner$$Lambda.0x00007fc8d01a1700.process',10,0,0)
+f(15,99,52,1,'com/linecorp/decaton/benchmark/DecatonRunner.lambda$init$1',10,0,0)
+f(16,99,52,1,'com/linecorp/decaton/benchmark/Recording.process',10,0,0)
+f(17,106,1,3,'__GI___clock_gettime')
+f(18,106,1,3,'[vdso]')
+f(17,107,1,2,'ch/qos/logback/classic/Logger.isTraceEnabled',1,0,0)
+f(18,107,1,2,'ch/qos/logback/classic/Logger.isTraceEnabled',1,0,0)
+f(19,107,1,2,'ch/qos/logback/classic/Logger.callTurboFilters',1,0,0)
+f(20,107,1,2,'ch/qos/logback/classic/LoggerContext.getTurboFilterChainDecision_0_3OrMore',1,0,0)
+f(21,107,1,2,'java/util/concurrent/CopyOnWriteArrayList.size',1,0,0)
+f(22,107,1,2,'java/util/concurrent/CopyOnWriteArrayList.getArray',1,0,0)
+f(17,108,43,1,'com/linecorp/decaton/benchmark/Recording$ExecutionRecord.process',1,0,0)
+f(18,109,42,1,'java/lang/Thread.sleep')
+f(19,109,42,1,'java/lang/Thread.sleep0')
+f(20,112,39,3,'JVM_Sleep')
+f(21,115,1,4,'JavaFrameAnchor::make_walkable()')
+f(21,116,32,4,'JavaThread::sleep_nanos(long)')
+f(22,120,1,4,'AccessInternal::PostRuntimeDispatch<G1BarrierSet::AccessBarrier<544868ul, G1BarrierSet>, (AccessInternal::BarrierType)2, 544868ul>::oop_access_barrier(void*)')
+f(22,121,1,4,'JavaThread::is_interrupted(bool)')
+f(22,122,1,4,'PlatformEvent::park_nanos(long)')
+f(22,123,5,3,'__lll_unlock_wake')
+f(22,128,2,3,'__pthread_disable_asynccancel')
+f(22,130,1,4,'java_lang_Thread::interrupted(oopDesc*)')
+f(22,131,17,3,'pthread_cond_timedwait@@GLIBC_2.3.2')
+f(21,148,1,4,'ThreadInVMfromNative::ThreadInVMfromNative(JavaThread*)')
+f(21,149,2,4,'java_lang_Thread::set_thread_status(oopDesc*, JavaThreadStatus)')
+f(14,151,2,1,'com/linecorp/decaton/processor/runtime/internal/ProcessingContextImpl.<init>')
+f(14,153,1,2,'java/util/Collections$UnmodifiableRandomAccessList.subList',1,0,0)
+f(15,153,1,2,'java/util/Collections$UnmodifiableRandomAccessList.<init>',1,0,0)
+f(16,153,1,2,'java/util/Collections$UnmodifiableList.<init>',1,0,0)
+f(14,154,1,2,'java/util/concurrent/atomic/AtomicReference.get',1,0,0)
+f(13,155,3,2,'java/util/concurrent/locks/ReentrantLock.unlock',3,0,0)
+f(12,158,3,2,'io/micrometer/core/instrument/Counter.increment',3,0,0)
+f(13,158,3,2,'io/micrometer/core/instrument/composite/CompositeCounter.increment',3,0,0)
+f(14,158,3,2,'io/micrometer/core/instrument/step/StepCounter.increment',3,0,0)
+f(15,158,3,2,'java/util/concurrent/atomic/DoubleAdder.add',3,0,0)
+f(16,159,2,2,'java/util/concurrent/atomic/Striped64$Cell.cas',2,0,0)
+f(17,159,2,2,'java/lang/invoke/VarHandleGuards.guard_LJJ_Z',2,0,0)
+f(18,159,2,2,'java/lang/invoke/VarHandleLongs$FieldInstanceReadWrite.weakCompareAndSetRelease',2,0,0)
+f(12,161,12,1,'io/micrometer/core/instrument/composite/CompositeTimer.record')
+f(13,161,12,1,'io/micrometer/core/instrument/Timer.record')
+f(14,161,12,1,'io/micrometer/core/instrument/AbstractTimer.record')
+f(15,161,8,1,'io/micrometer/core/instrument/distribution/TimeWindowPercentileHistogram.recordLong',1,0,0)
+f(16,161,8,1,'io/micrometer/core/instrument/distribution/AbstractTimeWindowHistogram.recordLong',1,0,0)
+f(17,161,1,2,'io/micrometer/core/instrument/distribution/AbstractTimeWindowHistogram.rotate',1,0,0)
+f(17,162,7,1,'io/micrometer/core/instrument/distribution/TimeWindowPercentileHistogram.recordLong')
+f(18,163,6,2,'io/micrometer/core/instrument/distribution/TimeWindowPercentileHistogram.recordLong',6,0,0)
+f(19,163,6,2,'org/HdrHistogram/DoubleRecorder.recordValue',6,0,0)
+f(20,163,5,2,'org/HdrHistogram/DoubleHistogram.recordValue',5,0,0)
+f(21,163,5,2,'org/HdrHistogram/DoubleHistogram.recordSingleValue',5,0,0)
+f(22,165,3,2,'org/HdrHistogram/ConcurrentHistogram.recordConvertedDoubleValue',3,0,0)
+f(20,168,1,2,'org/HdrHistogram/WriterReaderPhaser.writerCriticalSectionEnter',1,0,0)
+f(21,168,1,2,'java/util/concurrent/atomic/AtomicLongFieldUpdater$CASUpdater.getAndIncrement',1,0,0)
+f(22,168,1,2,'java/util/concurrent/atomic/AtomicLongFieldUpdater$CASUpdater.getAndAdd',1,0,0)
+f(15,169,4,2,'io/micrometer/core/instrument/step/StepTimer.recordNonNegative',4,0,0)
+f(16,169,1,2,'io/micrometer/core/instrument/util/TimeUtils.convert',1,0,0)
+f(16,170,3,2,'java/util/concurrent/atomic/LongAdder.add',3,0,0)
+f(17,171,2,2,'java/util/concurrent/atomic/Striped64$Cell.cas',2,0,0)
+f(18,171,2,2,'java/lang/invoke/VarHandleGuards.guard_LJJ_Z',2,0,0)
+f(19,171,2,2,'java/lang/invoke/VarHandleLongs$FieldInstanceReadWrite.weakCompareAndSetRelease',2,0,0)
+f(12,173,1,1,'java/lang/invoke/Invokers$Holder.linkToTargetMethod')
+f(13,173,1,1,'java/lang/invoke/DirectMethodHandle$Holder.newInvokeSpecial')
+f(14,173,1,1,'java/lang/invoke/DirectMethodHandle.allocateInstance')
+f(15,173,1,4,'OptoRuntime::new_instance_C(Klass*, JavaThread*)')
+f(16,173,1,4,'CardTableBarrierSet::on_slowpath_allocation_exit(JavaThread*, oopDesc*)')
+f(12,174,21,1,'java/util/concurrent/CompletableFuture.whenComplete',1,0,0)
+f(13,174,21,1,'java/util/concurrent/CompletableFuture.whenComplete',1,0,0)
+f(14,174,21,1,'java/util/concurrent/CompletableFuture.uniWhenCompleteStage',1,0,0)
+f(15,175,20,1,'java/util/concurrent/CompletableFuture.uniWhenComplete')
+f(16,175,20,1,'com/linecorp/decaton/processor/runtime/internal/ProcessPipeline$$Lambda.0x00007fc8d02d6dd0.accept')
+f(17,175,20,1,'com/linecorp/decaton/processor/runtime/internal/ProcessPipeline.lambda$process$0')
+f(18,175,20,1,'io/micrometer/core/instrument/composite/CompositeTimer.record')
+f(19,176,17,1,'io/micrometer/core/instrument/Timer.record',1,0,0)
+f(20,177,16,1,'io/micrometer/core/instrument/AbstractTimer.record')
+f(21,177,9,1,'io/micrometer/core/instrument/distribution/TimeWindowPercentileHistogram.recordLong',1,0,0)
+f(22,177,9,1,'io/micrometer/core/instrument/distribution/AbstractTimeWindowHistogram.recordLong',1,0,0)
+f(23,177,1,2,'io/micrometer/core/instrument/distribution/AbstractTimeWindowHistogram.rotate',1,0,0)
+f(23,178,8,1,'io/micrometer/core/instrument/distribution/TimeWindowPercentileHistogram.recordLong')
+f(24,178,8,2,'io/micrometer/core/instrument/distribution/TimeWindowPercentileHistogram.recordLong',8,0,0)
+f(25,178,8,2,'org/HdrHistogram/DoubleRecorder.recordValue',8,0,0)
+f(26,178,5,2,'org/HdrHistogram/DoubleHistogram.recordValue',5,0,0)
+f(27,178,5,2,'org/HdrHistogram/DoubleHistogram.recordSingleValue',5,0,0)
+f(28,178,5,2,'org/HdrHistogram/ConcurrentHistogram.recordConvertedDoubleValue',5,0,0)
+f(29,180,1,2,'org/HdrHistogram/AbstractHistogram.updateMinAndMax',1,0,0)
+f(29,181,2,2,'org/HdrHistogram/WriterReaderPhaser.writerCriticalSectionExit',2,0,0)
+f(30,181,2,2,'java/util/concurrent/atomic/AtomicLongFieldUpdater$CASUpdater.getAndIncrement',2,0,0)
+f(31,181,2,2,'java/util/concurrent/atomic/AtomicLongFieldUpdater$CASUpdater.getAndAdd',2,0,0)
+f(32,181,2,2,'java/util/concurrent/atomic/AtomicLongFieldUpdater$CASUpdater.accessCheck',2,0,0)
+f(26,183,2,2,'org/HdrHistogram/WriterReaderPhaser.writerCriticalSectionEnter',2,0,0)
+f(27,183,2,2,'java/util/concurrent/atomic/AtomicLongFieldUpdater$CASUpdater.getAndIncrement',2,0,0)
+f(28,183,2,2,'java/util/concurrent/atomic/AtomicLongFieldUpdater$CASUpdater.getAndAdd',2,0,0)
+f(26,185,1,2,'org/HdrHistogram/WriterReaderPhaser.writerCriticalSectionExit',1,0,0)
+f(27,185,1,2,'java/util/concurrent/atomic/AtomicLongFieldUpdater$CASUpdater.getAndIncrement',1,0,0)
+f(28,185,1,2,'java/util/concurrent/atomic/AtomicLongFieldUpdater$CASUpdater.getAndAdd',1,0,0)
+f(21,186,7,2,'io/micrometer/core/instrument/step/StepTimer.recordNonNegative',7,0,0)
+f(22,186,7,2,'java/util/concurrent/atomic/LongAdder.add',7,0,0)
+f(23,187,5,2,'java/util/concurrent/atomic/Striped64$Cell.cas',5,0,0)
+f(24,187,5,2,'java/lang/invoke/VarHandleGuards.guard_LJJ_Z',5,0,0)
+f(25,187,5,2,'java/lang/invoke/VarHandleLongs$FieldInstanceReadWrite.weakCompareAndSetRelease',5,0,0)
+f(23,192,1,2,'java/util/concurrent/atomic/Striped64.getProbe',1,0,0)
+f(19,193,1,2,'io/micrometer/core/instrument/composite/AbstractCompositeMeter.getChildren',1,0,0)
+f(20,193,1,2,'java/util/IdentityHashMap.values',1,0,0)
+f(19,194,1,2,'java/util/IdentityHashMap$IdentityHashMapIterator.hasNext',1,0,0)
+f(10,195,1,1,'java/lang/invoke/Invokers$Holder.linkToTargetMethod')
+f(11,195,1,1,'java/lang/invoke/DirectMethodHandle$Holder.newInvokeSpecial')
+f(12,195,1,1,'java/lang/invoke/DirectMethodHandle.allocateInstance')
+f(13,195,1,4,'ClassLoaderData::holder() const')
+f(7,196,2,2,'com/linecorp/decaton/processor/runtime/internal/Utils$Timer.duration',2,0,0)
+f(8,196,1,2,'com/linecorp/decaton/processor/runtime/internal/Utils$Timer.elapsedNanos',1,0,0)
+f(9,196,1,3,'__GI___clock_gettime')
+f(10,196,1,3,'[vdso]')
+f(8,197,1,2,'java/time/Duration.ofNanos',1,0,0)
+f(7,198,7,1,'io/micrometer/core/instrument/composite/CompositeTimer.record')
+f(8,199,3,1,'io/micrometer/core/instrument/Timer.record')
+f(9,199,3,1,'io/micrometer/core/instrument/AbstractTimer.record')
+f(10,199,3,2,'io/micrometer/core/instrument/step/StepTimer.recordNonNegative',3,0,0)
+f(11,200,2,2,'io/micrometer/core/instrument/distribution/TimeWindowMax.record',2,0,0)
+f(12,201,1,2,'io/micrometer/core/instrument/distribution/TimeWindowMax.record',1,0,0)
+f(8,202,1,2,'io/micrometer/core/instrument/composite/AbstractCompositeMeter.getChildren',1,0,0)
+f(8,203,2,2,'java/util/IdentityHashMap$IdentityHashMapIterator.hasNext',2,0,0)
+f(5,205,8,1,'java/util/concurrent/ThreadPoolExecutor.getTask',1,0,0)
+f(6,206,7,1,'java/util/concurrent/LinkedBlockingQueue.take')
+f(7,207,1,2,'java/util/concurrent/LinkedBlockingQueue.dequeue',1,0,0)
+f(7,208,2,2,'java/util/concurrent/atomic/AtomicInteger.getAndDecrement',2,0,0)
+f(7,210,1,2,'java/util/concurrent/locks/ReentrantLock.lockInterruptibly',1,0,0)
+f(8,210,1,2,'java/util/concurrent/locks/ReentrantLock$Sync.lockInterruptibly',1,0,0)
+f(9,210,1,2,'java/util/concurrent/locks/ReentrantLock$NonfairSync.initialTryLock',1,0,0)
+f(10,210,1,2,'java/util/concurrent/locks/AbstractQueuedSynchronizer.compareAndSetState',1,0,0)
+f(7,211,2,2,'java/util/concurrent/locks/ReentrantLock.unlock',2,0,0)
+f(8,211,2,2,'java/util/concurrent/locks/AbstractQueuedSynchronizer.release',2,0,0)
+f(9,211,2,2,'java/util/concurrent/locks/AbstractQueuedSynchronizer.signalNext',2,0,0)
+f(1,213,2,1,'org/apache/kafka/clients/consumer/internals/AbstractCoordinator$HeartbeatThread.run')
+f(2,213,2,1,'org/apache/kafka/clients/consumer/internals/ConsumerNetworkClient.pollNoWakeup')
+f(3,213,2,1,'org/apache/kafka/clients/consumer/internals/ConsumerNetworkClient.poll')
+f(4,213,1,1,'java/util/concurrent/locks/ReentrantLock.lock')
+f(5,213,1,1,'java/util/concurrent/locks/ReentrantLock$Sync.lock')
+f(6,213,1,1,'java/util/concurrent/locks/AbstractQueuedSynchronizer.acquire')
+f(7,213,1,1,'java/util/concurrent/locks/AbstractQueuedSynchronizer.acquire')
+f(8,213,1,1,'java/util/concurrent/locks/ReentrantLock$FairSync.tryAcquire')
+f(9,213,1,1,'java/util/concurrent/locks/AbstractQueuedSynchronizer.hasQueuedPredecessors')
+f(4,214,1,1,'org/apache/kafka/clients/NetworkClient.poll')
+f(5,214,1,1,'org/apache/kafka/clients/NetworkClient.handleTimedOutConnections')
+f(6,214,1,1,'org/apache/kafka/clients/ClusterConnectionStates.nodesWithConnectionSetupTimeout')
+f(7,214,1,1,'java/util/stream/ReferencePipeline.collect')
+f(8,214,1,1,'java/util/stream/AbstractPipeline.evaluate')
+f(9,214,1,1,'java/util/stream/ReduceOps$ReduceOp.evaluateSequential')
+f(10,214,1,1,'java/util/stream/AbstractPipeline.wrapAndCopyInto')
+f(11,214,1,1,'java/util/stream/AbstractPipeline.wrapSink')
+f(12,214,1,1,'java/util/stream/ReferencePipeline$2.opWrapSink')
+f(1,215,40,3,'start_thread')
+f(2,215,40,3,'thread_native_entry(Thread*)')
+f(3,215,40,4,'Thread::call_run()')
+f(4,215,31,4,'JavaThread::thread_main_inner()')
+f(5,215,31,4,'CompileBroker::compiler_thread_loop()')
+f(6,215,31,4,'CompileBroker::invoke_compiler_on_method(CompileTask*)')
+f(7,215,28,4,'C2Compiler::compile_method(ciEnv*, ciMethod*, int, bool, DirectiveSet*)')
+f(8,215,28,4,'Compile::Compile(ciEnv*, ciMethod*, int, Options, DirectiveSet*)')
+f(9,215,13,4,'Compile::Code_Gen()')
+f(10,215,3,4,'Matcher::match()')
+f(11,215,1,4,'Arena::contains(void const*) const')
+f(11,216,1,4,'Matcher::specialize_generic_vector_operands()')
+f(12,216,1,4,'Compile::identify_useful_nodes(Unique_Node_List&)')
+f(11,217,1,4,'Matcher::xform(Node*, int)')
+f(12,217,1,4,'Matcher::match_tree(Node const*)')
+f(10,218,1,4,'PhaseCFG::do_global_code_motion()')
+f(11,218,1,4,'PhaseCFG::global_code_motion()')
+f(12,218,1,4,'PhaseCFG::schedule_local(Block*, GrowableArray<int>&, VectorSet&, long*)')
+f(13,218,1,4,'PhaseCFG::sched_call(Block*, unsigned int, Node_List&, GrowableArray<int>&, MachCallNode*, VectorSet&)')
+f(10,219,9,4,'PhaseChaitin::Register_Allocate()')
+f(11,219,1,4,'MachNode::oper_input_base() const')
+f(11,220,1,4,'PhaseChaitin::build_ifg_physical(ResourceArea*)')
+f(12,220,1,4,'PhaseChaitin::interfere_with_live(unsigned int, IndexSet*) [clone .part.0]')
+f(13,220,1,4,'IndexSetIterator::advance_and_next()')
+f(11,221,1,4,'PhaseChaitin::gather_lrg_masks(bool) [clone .constprop.0]')
+f(11,222,1,4,'PhaseChaitin::post_allocate_copy_removal()')
+f(11,223,2,4,'PhaseCoalesce::coalesce_driver()')
+f(12,223,1,4,'PhaseCFG::is_uncommon(Block const*)')
+f(12,224,1,4,'PhaseConservativeCoalesce::coalesce(Block*)')
+f(13,224,1,4,'PhaseConservativeCoalesce::copy_copy(Node*, Node*, Block*, unsigned int) [clone .part.0]')
+f(14,224,1,4,'IndexSet::lrg_union(unsigned int, unsigned int, unsigned int, PhaseIFG const*, RegMask const&)')
+f(11,225,1,4,'PhaseIFG::Compute_Effective_Degree()')
+f(12,225,1,4,'PhaseIFG::effective_degree(unsigned int) const')
+f(11,226,1,4,'PhaseLive::compute(unsigned int)')
+f(12,226,1,4,'PhaseLive::add_liveout(Block_List&, Block*, IndexSet*, VectorSet&)')
+f(13,226,1,4,'IndexSet::alloc_block_containing(unsigned int)')
+f(14,226,1,3,'_dl_update_slotinfo')
+f(11,227,1,4,'RegMask::is_misaligned_pair() const')
+f(9,228,9,4,'Compile::Optimize()')
+f(10,228,2,4,'PhaseCCP::analyze()')
+f(11,228,1,4,'PhaseCCP::fetch_next_node(Unique_Node_List&)')
+f(11,229,1,4,'PhaseCCP::push_more_uses(Unique_Node_List&, Node*, Node const*) const')
+f(10,230,2,4,'PhaseIdealLoop::build_and_optimize()')
+f(11,230,1,4,'PhaseIdealLoop::build_loop_early(VectorSet&, Node_List&, Node_Stack&)')
+f(12,230,1,4,'PhaseIdealLoop::get_early_ctrl(Node*)')
+f(13,230,1,4,'PhaseIdealLoop::get_ctrl(Node const*) [clone .isra.0]')
+f(11,231,1,4,'PhaseIdealLoop::build_loop_late(VectorSet&, Node_List&, Node_Stack&)')
+f(10,232,1,4,'PhaseIdealLoop::optimize(PhaseIterGVN&, LoopOptsMode)')
+f(11,232,1,4,'PhaseIdealLoop::build_and_optimize()')
+f(12,232,1,4,'PhaseIdealLoop::build_loop_late(VectorSet&, Node_List&, Node_Stack&)')
+f(13,232,1,4,'PhaseIdealLoop::build_loop_late_post_work(Node*, bool)')
+f(14,232,1,4,'PhaseIdealLoop::get_late_ctrl_with_anti_dep(LoadNode*, Node*, Node*)')
+f(10,233,3,4,'PhaseIterGVN::optimize()')
+f(11,233,3,4,'PhaseIterGVN::transform_old(Node*)')
+f(12,233,1,4,'IfNode::dominated_by(Node*, PhaseIterGVN*)')
+f(13,233,1,4,'PhaseIterGVN::remove_globally_dead_node(Node*)')
+f(14,233,1,4,'Unique_Node_List::remove(Node*)')
+f(12,234,1,4,'LoadNode::Ideal(PhaseGVN*, bool)')
+f(13,234,1,4,'MemNode::find_previous_store(PhaseValues*)')
+f(14,234,1,4,'MemNode::all_controls_dominate(Node*, Node*) [clone .part.0]')
+f(15,234,1,4,'Node::dominates(Node*, Node_List&)')
+f(12,235,1,4,'StoreNode::Ideal(PhaseGVN*, bool)')
+f(13,235,1,4,'InitializeNode::can_capture_store(StoreNode*, PhaseGVN*, bool) [clone .part.0]')
+f(14,235,1,4,'InitializeNode::detect_init_independence(Node*, PhaseGVN*)')
+f(15,235,1,4,'MemNode::all_controls_dominate(Node*, Node*) [clone .part.0]')
+f(16,235,1,4,'Node::dominates(Node*, Node_List&)')
+f(10,236,1,4,'TypeInstPtr::add_offset(long) const')
+f(9,237,5,4,'ParseGenerator::generate(JVMState*)')
+f(10,237,5,4,'Parse::Parse(JVMState*, ciMethod*, float)')
+f(11,237,5,4,'Parse::do_all_blocks()')
+f(12,237,4,4,'Parse::do_one_block()')
+f(13,237,4,4,'Parse::do_call()')
+f(14,237,4,4,'PredictedCallGenerator::generate(JVMState*)')
+f(15,237,4,4,'ParseGenerator::generate(JVMState*)')
+f(16,237,4,4,'Parse::Parse(JVMState*, ciMethod*, float)')
+f(17,237,4,4,'Parse::do_all_blocks()')
+f(18,237,4,4,'Parse::do_one_block()')
+f(19,237,4,4,'Parse::do_call()')
+f(20,237,1,4,'ParseGenerator::generate(JVMState*)')
+f(21,237,1,4,'Parse::Parse(JVMState*, ciMethod*, float)')
+f(22,237,1,4,'Parse::build_exits()')
+f(23,237,1,4,'GraphKit::set_all_memory(Node*)')
+f(24,237,1,4,'MergeMemNode::make(Node*)')
+f(25,237,1,4,'MergeMemNode::MergeMemNode(Node*)')
+f(26,237,1,4,'Node::Node(unsigned int)')
+f(20,238,3,4,'PredictedCallGenerator::generate(JVMState*)')
+f(21,238,3,4,'ParseGenerator::generate(JVMState*)')
+f(22,238,3,4,'Parse::Parse(JVMState*, ciMethod*, float)')
+f(23,238,3,4,'Parse::do_all_blocks()')
+f(24,238,3,4,'Parse::do_one_block()')
+f(25,238,3,4,'Parse::do_call()')
+f(26,238,1,4,'Compile::call_generator(ciMethod*, int, bool, JVMState*, bool, float, ciKlass*, bool)')
+f(27,238,1,4,'InlineTree::ok_to_inline(ciMethod*, JVMState*, ciCallProfile&, bool&)')
+f(28,238,1,4,'InlineTree::try_to_inline(ciMethod*, ciMethod*, int, JVMState*, ciCallProfile&, bool&)')
+f(26,239,1,4,'ParseGenerator::generate(JVMState*)')
+f(27,239,1,4,'Parse::Parse(JVMState*, ciMethod*, float)')
+f(28,239,1,4,'Parse::do_all_blocks()')
+f(29,239,1,4,'Parse::do_one_block()')
+f(30,239,1,4,'Parse::do_call()')
+f(31,239,1,4,'ParseGenerator::generate(JVMState*)')
+f(32,239,1,4,'Parse::Parse(JVMState*, ciMethod*, float)')
+f(33,239,1,4,'Parse::do_all_blocks()')
+f(34,239,1,4,'Parse::do_one_block()')
+f(35,239,1,4,'Parse::do_call()')
+f(36,239,1,4,'LibraryIntrinsic::generate(JVMState*)')
+f(37,239,1,4,'LibraryCallKit::inline_unsafe_load_store(BasicType, LibraryCallKit::LoadStoreKind, LibraryCallKit::AccessKind)')
+f(38,239,1,4,'GraphKit::access_atomic_cmpxchg_bool_at(Node*, Node*, TypePtr const*, int, Node*, Node*, Type const*, BasicType, unsigned long)')
+f(39,239,1,4,'BarrierSetC2::atomic_cmpxchg_bool_at(C2AtomicParseAccess&, Node*, Node*, Type const*) const')
+f(40,239,1,4,'ModRefBarrierSetC2::atomic_cmpxchg_bool_at_resolved(C2AtomicParseAccess&, Node*, Node*, Type const*) const')
+f(41,239,1,4,'G1BarrierSetC2::post_barrier(GraphKit*, Node*, Node*, Node*, Node*, unsigned int, Node*, BasicType, bool) const')
+f(42,239,1,4,'IdealKit::transform(Node*)')
+f(26,240,1,4,'PredictedCallGenerator::generate(JVMState*)')
+f(27,240,1,4,'ParseGenerator::generate(JVMState*)')
+f(28,240,1,4,'Parse::Parse(JVMState*, ciMethod*, float)')
+f(29,240,1,4,'Parse::do_all_blocks()')
+f(30,240,1,4,'Parse::do_one_block()')
+f(31,240,1,4,'Parse::do_call()')
+f(32,240,1,4,'Compile::call_generator(ciMethod*, int, bool, JVMState*, bool, float, ciKlass*, bool)')
+f(33,240,1,4,'InlineTree::ok_to_inline(ciMethod*, JVMState*, ciCallProfile&, bool&)')
+f(34,240,1,4,'ciMethod::get_flow_analysis()')
+f(35,240,1,4,'ciTypeFlow::do_flow()')
+f(36,240,1,4,'ciTypeFlow::flow_types()')
+f(37,240,1,4,'ciTypeFlow::df_flow_types(ciTypeFlow::Block*, bool, ciTypeFlow::StateVector*, ciTypeFlow::JsrSet*)')
+f(38,240,1,4,'ciTypeFlow::flow_block(ciTypeFlow::Block*, ciTypeFlow::StateVector*, ciTypeFlow::JsrSet*)')
+f(39,240,1,4,'ciTypeFlow::StateVector::apply_one_bytecode(ciBytecodeStream*)')
+f(40,240,1,4,'ciTypeFlow::StateVector::do_invoke(ciBytecodeStream*, bool)')
+f(41,240,1,4,'ciBytecodeStream::get_method(bool&, ciSignature**)')
+f(42,240,1,4,'ciEnv::get_method_by_index_impl(constantPoolHandle const&, int, Bytecodes::Code, ciInstanceKlass*)')
+f(43,240,1,4,'ciEnv::lookup_method(ciInstanceKlass*, ciKlass*, Symbol*, Symbol*, Bytecodes::Code, constantTag)')
+f(44,240,1,4,'LinkResolver::resolve_static_call_or_null(LinkInfo const&)')
+f(45,240,1,4,'LinkResolver::resolve_static_call(CallInfo&, LinkInfo const&, bool, JavaThread*)')
+f(46,240,1,4,'LinkResolver::resolve_method(LinkInfo const&, Bytecodes::Code, JavaThread*)')
+f(47,240,1,4,'LinkResolver::lookup_method_in_klasses(LinkInfo const&, bool, bool)')
+f(48,240,1,4,'InstanceKlass::uncached_lookup_method(Symbol const*, Symbol const*, Klass::OverpassLookupMode, Klass::PrivateLookupMode) const')
+f(49,240,1,4,'InstanceKlass::find_method_index(Array<Method*> const*, Symbol const*, Symbol const*, Klass::OverpassLookupMode, Klass::StaticLookupMode, Klass::PrivateLookupMode) [clone .constprop.0]')
+f(12,241,1,4,'PhaseGVN::transform_no_reclaim(Node*)')
+f(13,241,1,4,'RegionNode::Ideal(PhaseGVN*, bool)')
+f(9,242,1,4,'PhaseRemoveUseless::PhaseRemoveUseless(PhaseGVN*, Unique_Node_List&, Phase::PhaseNumber)')
+f(7,243,3,4,'Compiler::compile_method(ciEnv*, ciMethod*, int, bool, DirectiveSet*)')
+f(8,243,3,4,'Compilation::Compilation(AbstractCompiler*, ciEnv*, ciMethod*, int, BufferBlob*, bool, DirectiveSet*)')
+f(9,243,3,4,'Compilation::compile_method()')
+f(10,243,3,4,'Compilation::compile_java_method()')
+f(11,243,2,4,'Compilation::build_hir() [clone .part.0]')
+f(12,243,2,4,'IR::IR(Compilation*, ciMethod*, int)')
+f(13,243,2,4,'IRScope::IRScope(Compilation*, IRScope*, int, ciMethod*, int, bool)')
+f(14,243,2,4,'GraphBuilder::GraphBuilder(Compilation*, IRScope*)')
+f(15,243,2,4,'GraphBuilder::iterate_all_blocks(bool)')
+f(16,243,2,4,'GraphBuilder::iterate_bytecodes_for_block(int)')
+f(17,243,2,4,'GraphBuilder::invoke(Bytecodes::Code)')
+f(18,243,2,4,'GraphBuilder::try_inline(ciMethod*, bool, bool, Bytecodes::Code, Instruction*)')
+f(19,243,2,4,'GraphBuilder::try_inline_full(ciMethod*, bool, bool, Bytecodes::Code, Instruction*)')
+f(20,243,2,4,'GraphBuilder::iterate_all_blocks(bool)')
+f(21,243,2,4,'GraphBuilder::iterate_bytecodes_for_block(int)')
+f(22,243,2,4,'GraphBuilder::invoke(Bytecodes::Code)')
+f(23,243,2,4,'GraphBuilder::try_inline(ciMethod*, bool, bool, Bytecodes::Code, Instruction*)')
+f(24,243,2,4,'GraphBuilder::try_inline_full(ciMethod*, bool, bool, Bytecodes::Code, Instruction*)')
+f(25,243,1,4,'GraphBuilder::iterate_all_blocks(bool)')
+f(26,243,1,4,'GraphBuilder::iterate_bytecodes_for_block(int)')
+f(27,243,1,4,'GraphBuilder::invoke(Bytecodes::Code)')
+f(28,243,1,4,'GraphBuilder::try_inline(ciMethod*, bool, bool, Bytecodes::Code, Instruction*)')
+f(29,243,1,4,'GraphBuilder::try_inline_full(ciMethod*, bool, bool, Bytecodes::Code, Instruction*)')
+f(30,243,1,4,'GraphBuilder::iterate_all_blocks(bool)')
+f(31,243,1,4,'GraphBuilder::iterate_bytecodes_for_block(int)')
+f(32,243,1,4,'GraphBuilder::invoke(Bytecodes::Code)')
+f(33,243,1,4,'GraphBuilder::append_with_bci(Instruction*, int)')
+f(34,243,1,4,'GraphBuilder::handle_exception(Instruction*)')
+f(35,243,1,4,'ValueStack::ValueStack(ValueStack*, ValueStack::Kind, int)')
+f(36,243,1,4,'resource_allocate_bytes(unsigned long, AllocFailStrategy::AllocFailEnum)')
+f(25,244,1,4,'GraphBuilder::print_inlining(ciMethod*, char const*, bool)')
+f(11,245,1,4,'Compilation::emit_code_body()')
+f(12,245,1,4,'LIR_Assembler::emit_code(BlockList*)')
+f(13,245,1,4,'LIR_Assembler::emit_lir_list(LIR_List*)')
+f(14,245,1,4,'LIR_Assembler::emit_call(LIR_OpJavaCall*)')
+f(15,245,1,4,'LIR_Assembler::call(LIR_OpJavaCall*, relocInfo::relocType)')
+f(16,245,1,4,'LIR_Assembler::add_call_info(int, CodeEmitInfo*)')
+f(17,245,1,4,'LIR_Assembler::record_non_safepoint_debug_info()')
+f(18,245,1,4,'DebugInformationRecorder::describe_scope(int, methodHandle const&, ciMethod*, int, bool, bool, bool, bool, bool, bool, DebugToken*, DebugToken*, DebugToken*)')
+f(19,245,1,4,'DebugInformationRecorder::find_sharable_decode_offset(int)')
+f(4,246,1,4,'WatcherThread::run()')
+f(5,246,1,3,'__GI___pthread_mutex_unlock')
+f(4,247,8,4,'WorkerThread::run()')
+f(5,247,8,4,'G1EvacuateRegionsBaseTask::work(unsigned int)')
+f(6,247,8,4,'G1EvacuateRegionsTask::scan_roots(G1ParScanThreadState*, unsigned int)')
+f(7,247,8,4,'G1RemSet::scan_heap_roots(G1ParScanThreadState*, unsigned int, G1GCPhaseTimes::GCParPhases, G1GCPhaseTimes::GCParPhases, bool)')
+f(8,247,8,4,'G1ScanHRForRegionClosure::scan_heap_roots(HeapRegion*)')
+f(9,247,8,4,'G1ParScanThreadState::trim_queue_to_threshold(unsigned int)')
+
+search();
+</script></body></html>
