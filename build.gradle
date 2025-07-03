@@ -1,10 +1,41 @@
 import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 import org.gradle.api.tasks.testing.logging.TestLogEvent
 
+import java.net.http.HttpClient
+import java.net.http.HttpRequest
+import java.net.http.HttpResponse
+
 plugins {
     id "me.champeau.jmh" version "0.6.6" apply false
     id 'com.github.johnrengelman.shadow' version '8.1.1' apply false
     id 'io.freefair.lombok' version '8.2.2' apply false
+}
+
+// After sunsetting OSSRH, we need to publish artifacts on Sonatype Central Publisher Portal, after
+// publishing artifacts to OSSRH staging service.
+// refs: https://central.sonatype.org/publish/publish-portal-ossrh-staging-api/
+//
+// However, as described in the above link, just publishing artifacts to OSSRH staging service doesn't
+// create deployment on the portal, so we need to upload artifacts to the portal manually by
+// calling API.
+// This task is used to upload artifacts to the portal after publishing artifacts to OSSRH staging service.
+task sonatypeUpload {
+    description = "Uploads artifacts to Sonatype Portal from OSSRH staging service."
+    doLast {
+        def token = findProperty("sonatypeUsername") + ':' + findProperty("sonatypePassword")
+        def client = HttpClient.newHttpClient()
+        def request = HttpRequest.newBuilder()
+                .uri(URI.create("https://ossrh-staging-api.central.sonatype.com/manual/upload/defaultRepository/com.linecorp"))
+                .header("Authorization", "Bearer " + token.bytes.encodeBase64().toString())
+                .POST(HttpRequest.BodyPublishers.noBody())
+                .build()
+        def response = client.send(request, HttpResponse.BodyHandlers.ofString())
+        if (response.statusCode() != 200) {
+            throw new RuntimeException("Failed to upload artifacts to Sonatype Portal. Status: ${response.statusCode()}, Response: ${response.body()}")
+        } else {
+            println("Successfully uploaded artifacts to Sonatype Portal.")
+        }
+    }
 }
 
 subprojects {

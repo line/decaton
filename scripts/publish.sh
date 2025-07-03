@@ -81,4 +81,5 @@ fi
 
 echo "Publishing Decaton $version"
 ./gradlew -P snapshot=false -P version="$version" clean build validateDocs publish
+./gradlew sonatypeUpload # this will take a while
 bump_version $version
