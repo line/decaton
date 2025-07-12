@@ -113,6 +113,9 @@ public class CentralDogmaPropertySupplier implements PropertySupplier, AutoClose
     // visible for testing
     void setValue(DynamicProperty<?> prop, JsonNode valueNode) {
         Object instantValue = convertNodeToValue(prop, valueNode);
+        if(instantValue == null) {
+            instantValue = prop.definition().defaultValue();
+        }
         prop.checkingSet(instantValue);
     }
 

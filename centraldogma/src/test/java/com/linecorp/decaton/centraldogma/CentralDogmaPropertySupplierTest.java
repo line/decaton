@@ -144,6 +144,15 @@ public class CentralDogmaPropertySupplierTest {
     }
 
     @Test
+    public void testSetNullValue() {
+        JsonNodeFactory factory = objectMapper.getNodeFactory();
+
+        DynamicProperty<Long> prop = spy(new DynamicProperty<>(LONG_PROPERTY));
+        supplier.setValue(prop, factory.nullNode());
+        verify(prop).checkingSet(LONG_PROPERTY.defaultValue());
+    }
+
+    @Test
     public void testGetPropertyAbsentName() {
         when(rootWatcher.latestValue()).thenReturn(objectMapper.createObjectNode());
 
