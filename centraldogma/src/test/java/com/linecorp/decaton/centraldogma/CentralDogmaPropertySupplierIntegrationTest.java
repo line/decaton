@@ -57,7 +57,7 @@ import com.linecorp.decaton.processor.runtime.Property;
 
 public class CentralDogmaPropertySupplierIntegrationTest {
     @RegisterExtension
-    static final CentralDogmaExtension extension = new CentralDogmaExtension() {
+    final CentralDogmaExtension extension = new CentralDogmaExtension() {
         @Override
         protected boolean runForEachTest() {
             return true;
