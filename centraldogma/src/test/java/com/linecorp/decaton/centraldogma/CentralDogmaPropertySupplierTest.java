@@ -16,10 +16,10 @@
 
 package com.linecorp.decaton.centraldogma;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -36,12 +36,12 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnit;
-import org.mockito.junit.MockitoRule;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -65,10 +65,9 @@ import com.linecorp.decaton.processor.runtime.PropertyDefinition;
 import com.linecorp.decaton.processor.runtime.PropertySupplier;
 import com.linecorp.decaton.processor.runtime.StaticPropertySupplier;
 
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class CentralDogmaPropertySupplierTest {
-    @Rule
-    public MockitoRule rule = MockitoJUnit.rule().strictness(Strictness.STRICT_STUBS);
-
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     private static final String FILENAME = "/subscription.json";
@@ -92,7 +91,7 @@ public class CentralDogmaPropertySupplierTest {
 
     private CentralDogmaPropertySupplier supplier;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         when(centralDogmaRepository.watcher(Query.ofJsonPath(FILENAME))).thenReturn(watcherRequest);
         when(watcherRequest.start()).thenReturn(rootWatcher);
