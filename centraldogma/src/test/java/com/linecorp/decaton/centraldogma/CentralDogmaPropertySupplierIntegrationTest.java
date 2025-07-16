@@ -189,17 +189,17 @@ public class CentralDogmaPropertySupplierIntegrationTest {
     @Test
     @Timeout(15)
     public void testCDRegisterTimeout() {
+        CentralDogma client = extension.client();
+        client.createProject(PROJECT_NAME).join();
+        CentralDogmaRepository centralDogmaRepository = spy(client.createRepository(PROJECT_NAME, REPOSITORY_NAME).join());
+
+        doReturn(CompletableFuture.completedFuture(new Revision(1)))
+                .when(centralDogmaRepository)
+                .normalize(any());
+
+        CentralDogmaPropertySupplier.register(centralDogmaRepository, FILENAME);
+
         assertThrows(RuntimeException.class, () -> {
-            CentralDogma client = extension.client();
-            client.createProject(PROJECT_NAME).join();
-            CentralDogmaRepository centralDogmaRepository = spy(client.createRepository(PROJECT_NAME, REPOSITORY_NAME).join());
-
-            doReturn(CompletableFuture.completedFuture(new Revision(1)))
-                    .when(centralDogmaRepository)
-                    .normalize(any());
-
-            CentralDogmaPropertySupplier.register(centralDogmaRepository, FILENAME);
-
             CentralDogmaPropertySupplier.register(centralDogmaRepository, FILENAME);
         });
     }
