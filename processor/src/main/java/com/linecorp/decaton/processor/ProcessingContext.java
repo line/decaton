@@ -81,12 +81,12 @@ public interface ProcessingContext<T> {
      * Otherwise consumption will stuck in short future and no new task will be given to the processor.
      * To avoid that with some risks, consider setting
      * {@link ProcessorProperties#CONFIG_DEFERRED_COMPLETE_TIMEOUT_MS}.
-     *
+     * <p>
      * This method takes a callback that is called when the returned completion "timed out".
      * For the detail of deferred completion timeout, see
      * {@link ProcessorProperties#CONFIG_DEFERRED_COMPLETE_TIMEOUT_MS}.
      * You can do several things with the callback.
-     *
+     * <p>
      * If you know that the asynchronous processing is taking longer than expected but still running normally,
      * thus want to tell decaton to extend timeout and let the processing complete, you can simply return
      * {@link TimeoutChoice#EXTEND} from the callback.
@@ -98,7 +98,7 @@ public interface ProcessingContext<T> {
      *     return TimeoutChoice.GIVE_UP;
      * });
      * }
-
+     *
      * If you've configured "retry" feature (see {@link SubscriptionBuilder#enableRetry(RetryConfig)}), you can
      * send the timed out task to retry queue by calling {@link #retry()}.
      * {@code
@@ -110,8 +110,8 @@ public interface ProcessingContext<T> {
      *
      * Note that you must return {@link TimeoutChoice#EXTEND} from the callback even in this case to make sure
      * that decaton waits until it completes retry-queuing asynchronously.
-     *
-     * if the callback returns false, decaton times out completion and forcefully completes it.
+     * <p>
+     * if the callback returns {@link TimeoutChoice#GIVE_UP}, decaton times out completion and forcefully completes it.
      *
      * @param callback callback which is called when the returned completion times out.
      * @return a {@link Completion} which can be used to tell the completion of processing asynchronously.
