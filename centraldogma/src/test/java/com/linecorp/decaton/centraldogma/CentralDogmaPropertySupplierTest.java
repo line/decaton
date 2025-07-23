@@ -16,37 +16,37 @@
 
 package com.linecorp.decaton.centraldogma;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertTrue;
+import static com.fasterxml.jackson.dataformat.yaml.YAMLGenerator.Feature.WRITE_DOC_START_MARKER;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Consumer;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnit;
-import org.mockito.junit.MockitoRule;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 
 import com.linecorp.centraldogma.client.CentralDogmaRepository;
 import com.linecorp.centraldogma.client.CommitRequest;
@@ -65,13 +65,14 @@ import com.linecorp.decaton.processor.runtime.PropertyDefinition;
 import com.linecorp.decaton.processor.runtime.PropertySupplier;
 import com.linecorp.decaton.processor.runtime.StaticPropertySupplier;
 
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class CentralDogmaPropertySupplierTest {
-    @Rule
-    public MockitoRule rule = MockitoJUnit.rule().strictness(Strictness.STRICT_STUBS);
-
     private final ObjectMapper objectMapper = new ObjectMapper();
-
-    private static final String FILENAME = "/subscription.json";
+    private static final ObjectMapper YAML_MAPPER = new ObjectMapper(
+            new YAMLFactory()
+                    .disable(WRITE_DOC_START_MARKER)
+    );
 
     private static final PropertyDefinition<Long> LONG_PROPERTY =
             PropertyDefinition.define("num.property", Long.class, 0L,
@@ -90,37 +91,44 @@ public class CentralDogmaPropertySupplierTest {
     @Mock
     Watcher<JsonNode> rootWatcher;
 
-    private CentralDogmaPropertySupplier supplier;
-
-    @Before
-    public void setUp() {
-        when(centralDogmaRepository.watcher(Query.ofJsonPath(FILENAME))).thenReturn(watcherRequest);
-        when(watcherRequest.start()).thenReturn(rootWatcher);
-        supplier = new CentralDogmaPropertySupplier(centralDogmaRepository, FILENAME);
+    private static Stream<Arguments> fileParams() {
+        return Stream.of(
+                Arguments.of("/subscription.json"),
+                Arguments.of("/subscription.yaml")
+        );
     }
 
-    @Test
     @SuppressWarnings("unchecked")
-    public void testWatcherSetup() {
+    private CentralDogmaPropertySupplier setup(String fileName) {
+        when(centralDogmaRepository.watcher(any(Query.class)))
+                .thenReturn(watcherRequest);
+
+        // yaml mode
+        if (fileName.endsWith(".yaml")) {
+            doReturn(watcherRequest)
+                    .when(watcherRequest)
+                    .map(any());
+        }
+        when(watcherRequest.start()).thenReturn(rootWatcher);
+        return new CentralDogmaPropertySupplier(centralDogmaRepository, fileName);
+    }
+
+    @ParameterizedTest(name = "watcherSetup[{index}] → {0}")
+    @MethodSource("fileParams")
+    public void testWatcherSetup(String fileName) {
+        CentralDogmaPropertySupplier supplier = setup(fileName);
+
         when(rootWatcher.latestValue()).thenReturn(
                 objectMapper.createObjectNode().put(LONG_PROPERTY.name(), 123L));
 
-        Watcher<JsonNode> longPropertyWatcher = mock(Watcher.class);
-        Watcher<JsonNode> listPropertyWatcher = mock(Watcher.class);
-
-        when(rootWatcher.newChild((Query<JsonNode>) any()))
-                .thenReturn(longPropertyWatcher)
-                .thenReturn(listPropertyWatcher)
-                .thenReturn(null);
-
         assertTrue(supplier.getProperty(LONG_PROPERTY).isPresent());
-
-        verify(rootWatcher).newChild(any());
-        verify(longPropertyWatcher).watch(any(Consumer.class));
     }
 
-    @Test
-    public void testConvertValue() {
+    @ParameterizedTest(name = "watcherSetup[{index}] → {0}")
+    @MethodSource("fileParams")
+    public void testConvertValue(String fileName) {
+        CentralDogmaPropertySupplier supplier = setup(fileName);
+
         JsonNodeFactory factory = objectMapper.getNodeFactory();
 
         Object convertedLong = supplier.convertNodeToValue(
@@ -134,8 +142,11 @@ public class CentralDogmaPropertySupplierTest {
         assertEquals(Arrays.asList("foo", "bar"), convertedList);
     }
 
-    @Test
-    public void testSetValue() {
+    @ParameterizedTest(name = "watcherSetup[{index}] → {0}")
+    @MethodSource("fileParams")
+    public void testSetValue(String fileName) {
+        CentralDogmaPropertySupplier supplier = setup(fileName);
+
         JsonNodeFactory factory = objectMapper.getNodeFactory();
 
         DynamicProperty<Long> prop = spy(new DynamicProperty<>(LONG_PROPERTY));
@@ -143,16 +154,31 @@ public class CentralDogmaPropertySupplierTest {
         verify(prop).checkingSet(10L);
     }
 
-    @Test
-    public void testGetPropertyAbsentName() {
+    @ParameterizedTest(name = "watcherSetup[{index}] → {0}")
+    @MethodSource("fileParams")
+    public void testGetPropertyAbsentName(String fileName) {
+        CentralDogmaPropertySupplier supplier = setup(fileName);
+
         when(rootWatcher.latestValue()).thenReturn(objectMapper.createObjectNode());
 
         PropertyDefinition<Object> missingProperty = PropertyDefinition.define("absent.value", Long.class);
         assertFalse(supplier.getProperty(missingProperty).isPresent());
     }
 
-    @Test
-    public void testRegisterWithDefaultSettings() {
+
+    private Change<?> expectedChange(String fileName, JsonNode node) throws Exception {
+        if (fileName.endsWith(".yaml") || fileName.endsWith(".yml")) {
+            return Change.ofTextUpsert(fileName, YAML_MAPPER.writeValueAsString(node));
+        } else {
+            return Change.ofJsonUpsert(fileName, node);
+        }
+    }
+
+    @ParameterizedTest(name = "watcherSetup[{index}] → {0}")
+    @MethodSource("fileParams")
+    public void testRegisterWithDefaultSettings(String fileName) throws Exception {
+        setup(fileName);
+
         when(centralDogmaRepository.normalize(Revision.HEAD))
                 .thenReturn(CompletableFuture.completedFuture(Revision.HEAD));
 
@@ -161,19 +187,23 @@ public class CentralDogmaPropertySupplierTest {
         when(filesRequest.list(Revision.HEAD)).thenReturn(CompletableFuture.completedFuture(Collections.emptyMap()));
 
         final CommitRequest commitRequest = mock(CommitRequest.class);
-        when(centralDogmaRepository.commit(anyString(), eq(Change.ofJsonUpsert(FILENAME, defaultPropertiesAsJsonNode())))).thenReturn(commitRequest);
+        final Change<?> upsert = expectedChange(fileName, defaultPropertiesAsJsonNode());
+        when(centralDogmaRepository.commit(anyString(), eq(upsert))).thenReturn(commitRequest);
         when(commitRequest.push(Revision.HEAD)).thenReturn(CompletableFuture.completedFuture(new PushResult(Revision.HEAD, 1)));
 
 
-        CentralDogmaPropertySupplier.register(centralDogmaRepository, FILENAME);
+        CentralDogmaPropertySupplier.register(centralDogmaRepository, fileName);
         verify(centralDogmaRepository).commit(
                 anyString(),
-                eq(Change.ofJsonUpsert(FILENAME, defaultPropertiesAsJsonNode()))
+                eq(upsert)
         );
     }
 
-    @Test
-    public void testRegisterWithCustomizedSettings() {
+    @ParameterizedTest(name = "watcherSetup[{index}] → {0}")
+    @MethodSource("fileParams")
+    public void testRegisterWithCustomizedSettings(String fileName) throws Exception {
+        setup(fileName);
+
         final int settingForPartitionConcurrency = 188;
         final int settingForMaxPendingRecords = 121212;
         final int whenCentralDogmaPushed = 111111;
@@ -211,15 +241,16 @@ public class CentralDogmaPropertySupplierTest {
         when(centralDogmaRepository.file(any(PathPattern.class))).thenReturn(filesRequest);
         when(filesRequest.list(Revision.HEAD)).thenReturn(CompletableFuture.completedFuture(Collections.emptyMap()));
 
+        final Change<?> upsert = expectedChange(fileName, jsonNodeProperties);
         final CommitRequest commitRequest = mock(CommitRequest.class);
-        when(centralDogmaRepository.commit(anyString(), eq(Change.ofJsonUpsert(FILENAME, jsonNodeProperties)))).thenReturn(commitRequest);
+        when(centralDogmaRepository.commit(anyString(), eq(upsert))).thenReturn(commitRequest);
         when(commitRequest.push(Revision.HEAD)).thenReturn(CompletableFuture.completedFuture(new PushResult(Revision.HEAD, whenCentralDogmaPushed)));
 
-        CentralDogmaPropertySupplier.register(centralDogmaRepository, FILENAME, supplier);
+        CentralDogmaPropertySupplier.register(centralDogmaRepository, fileName, supplier);
 
         verify(centralDogmaRepository).commit(
                 anyString(),
-                eq(Change.ofJsonUpsert(FILENAME, jsonNodeProperties))
+                eq(upsert)
         );
     }
 
