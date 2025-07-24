@@ -17,10 +17,11 @@
 package com.linecorp.decaton.centraldogma;
 
 import static com.linecorp.decaton.processor.runtime.ProcessorProperties.CONFIG_PARTITION_CONCURRENCY;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
@@ -34,8 +35,9 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
 
-import org.junit.Rule;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.extension.RegisterExtension;
 
 import com.fasterxml.jackson.databind.JsonNode;
 
@@ -49,14 +51,18 @@ import com.linecorp.centraldogma.common.Entry;
 import com.linecorp.centraldogma.common.Query;
 import com.linecorp.centraldogma.common.Revision;
 import com.linecorp.centraldogma.internal.Jackson;
-import com.linecorp.centraldogma.testing.junit4.CentralDogmaRule;
+import com.linecorp.centraldogma.testing.junit.CentralDogmaExtension;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.Property;
 
 public class CentralDogmaPropertySupplierIntegrationTest {
+    @RegisterExtension
+    final CentralDogmaExtension extension = new CentralDogmaExtension() {
+        @Override
+        protected boolean runForEachTest() {
+            return true;
+        }
 
-    @Rule
-    public CentralDogmaRule centralDogmaRule = new CentralDogmaRule() {
         @Override
         protected void configureHttpClient(WebClientBuilder builder) {
             builder.decorator(RetryingClient.builder(RetryRule.onUnprocessed())
@@ -74,9 +80,10 @@ public class CentralDogmaPropertySupplierIntegrationTest {
                 ProcessorProperties.defaultProperties());
     }
 
-    @Test(timeout = 50000)
+    @Test
+    @Timeout(50)
     public void testCDIntegration() throws InterruptedException {
-        CentralDogma client = centralDogmaRule.client();
+        CentralDogma client = extension.client();
 
         final String ORIGINAL =
                 "{\n"
@@ -134,7 +141,7 @@ public class CentralDogmaPropertySupplierIntegrationTest {
 
     @Test
     public void testFileExist() {
-        CentralDogma client = centralDogmaRule.client();
+        CentralDogma client = extension.client();
         client.createProject(PROJECT_NAME).join();
         CentralDogmaRepository centralDogmaRepository = client.createRepository(PROJECT_NAME, REPOSITORY_NAME)
                                                               .join();
@@ -149,16 +156,17 @@ public class CentralDogmaPropertySupplierIntegrationTest {
 
     @Test
     public void testFileNonExistent() {
-        CentralDogma client = centralDogmaRule.client();
+        CentralDogma client = extension.client();
         client.createProject(PROJECT_NAME).join();
         CentralDogmaRepository centralDogmaRepository = client.createRepository(PROJECT_NAME, REPOSITORY_NAME).join();
         assertFalse(CentralDogmaPropertySupplier
                             .fileExists(centralDogmaRepository, FILENAME, Revision.HEAD));
     }
 
-    @Test(timeout = 10000)
+    @Test
+    @Timeout(10)
     public void testCDRegisterSuccess() {
-        CentralDogma client = centralDogmaRule.client();
+        CentralDogma client = extension.client();
         client.createProject(PROJECT_NAME).join();
         CentralDogmaRepository centralDogmaRepository = client.createRepository(PROJECT_NAME, REPOSITORY_NAME).join();
 
@@ -169,15 +177,19 @@ public class CentralDogmaPropertySupplierIntegrationTest {
                      prop.content().asText());
     }
 
-    @Test(timeout = 10000, expected = RuntimeException.class)
+    @Test
+    @Timeout(10)
     public void testCDRegisterNonExistentProject() {
-        CentralDogmaPropertySupplier.register(centralDogmaRule.client(),
-                                              "non-existent-project", REPOSITORY_NAME, FILENAME);
+        assertThrows(RuntimeException.class, () -> {
+            CentralDogmaPropertySupplier.register(extension.client(),
+                                                  "non-existent-project", REPOSITORY_NAME, FILENAME);
+        });
     }
 
-    @Test(timeout = 15000, expected = RuntimeException.class)
+    @Test
+    @Timeout(15)
     public void testCDRegisterTimeout() {
-        CentralDogma client = centralDogmaRule.client();
+        CentralDogma client = extension.client();
         client.createProject(PROJECT_NAME).join();
         CentralDogmaRepository centralDogmaRepository = spy(client.createRepository(PROJECT_NAME, REPOSITORY_NAME).join());
 
@@ -187,15 +199,18 @@ public class CentralDogmaPropertySupplierIntegrationTest {
 
         CentralDogmaPropertySupplier.register(centralDogmaRepository, FILENAME);
 
-        CentralDogmaPropertySupplier.register(centralDogmaRepository, FILENAME);
+        assertThrows(RuntimeException.class, () -> {
+            CentralDogmaPropertySupplier.register(centralDogmaRepository, FILENAME);
+        });
     }
 
-    @Test(timeout = 15000)
+    @Test
+    @Timeout(15)
     public void testCDRegisterConflict() throws Exception {
         CountDownLatch userAIsRunning = new CountDownLatch(1);
         CountDownLatch userBIsRunning = new CountDownLatch(1);
 
-        CentralDogma client = centralDogmaRule.client();
+        CentralDogma client = extension.client();
         client.createProject(PROJECT_NAME).join();
         CentralDogmaRepository userB = client.createRepository(PROJECT_NAME, REPOSITORY_NAME).join();
         CentralDogmaRepository userA = spy(client.forRepo(PROJECT_NAME, REPOSITORY_NAME));
