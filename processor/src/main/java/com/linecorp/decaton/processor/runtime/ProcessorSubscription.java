@@ -23,7 +23,6 @@ import java.util.Collection;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionStage;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -34,6 +33,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.TimeoutException;
 
+import com.linecorp.decaton.client.internal.TaskMetadataUtil;
 import com.linecorp.decaton.processor.metrics.Metrics;
 import com.linecorp.decaton.processor.metrics.Metrics.SubscriptionMetrics;
 import com.linecorp.decaton.processor.runtime.internal.AssignmentManager;
@@ -53,6 +53,7 @@ import com.linecorp.decaton.processor.runtime.internal.Utils.Timer;
 import com.linecorp.decaton.processor.tracing.TracingProvider;
 import com.linecorp.decaton.processor.tracing.TracingProvider.RecordTraceHandle;
 
+import io.micrometer.core.instrument.Counter;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -104,6 +105,7 @@ public class ProcessorSubscription extends Thread implements AsyncClosable {
         public void receive(ConsumerRecord<byte[], byte[]> record) {
             TopicPartition tp = new TopicPartition(record.topic(), record.partition());
             PartitionContext context = contexts.get(tp);
+            recordsConsumed(tp.topic(), TaskMetadataUtil.hasMetadataHeader(record.headers())).increment();
 
             OffsetState offsetState;
             try {
@@ -171,6 +173,22 @@ public class ProcessorSubscription extends Thread implements AsyncClosable {
                                  SubscriptionStateListener stateListener) {
         this(scope, consumer, quotaApplier, processors, props, stateListener,
              new PartitionContexts(scope, processors));
+    }
+
+    /**
+     * Per-topic metric intended to be referred when v9 upgrade.
+     * You can use this metric to decide whether if you can disable {@link ProcessorProperties#CONFIG_LEGACY_PARSE_FALLBACK_ENABLED}
+     * when you use Decaton client for the task producer.
+     * <p>
+     * TODO: This metric will be removed in the future major version, along with the legacy format support.
+     */
+    private Counter recordsConsumed(String topic, boolean hasMetadataHeader) {
+        return Counter.builder("records.consumed")
+                      .description("The number of records consumed from the topic")
+                      .tags("subscription", scope.subscriptionId(),
+                            "topic", topic,
+                            "format", hasMetadataHeader ? "client-v9" : "other")
+                      .register(Metrics.registry());
     }
 
     private void waitForRemainingTasksCompletion(long timeoutMillis) {

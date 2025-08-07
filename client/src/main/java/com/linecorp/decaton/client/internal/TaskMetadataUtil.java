@@ -55,4 +55,8 @@ public class TaskMetadataUtil {
             throw new UncheckedIOException(e);
         }
     }
+
+    public static boolean hasMetadataHeader(Headers headers) {
+        return headers.lastHeader(METADATA_HEADER_KEY) != null;
+    }
 }
