@@ -20,6 +20,7 @@ import static com.linecorp.decaton.processor.runtime.ProcessorProperties.CONFIG_
 
 import java.time.Duration;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -54,6 +55,7 @@ import com.linecorp.decaton.processor.tracing.TracingProvider;
 import com.linecorp.decaton.processor.tracing.TracingProvider.RecordTraceHandle;
 
 import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Meter;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -70,6 +72,7 @@ public class ProcessorSubscription extends Thread implements AsyncClosable {
     private final ConsumeManager consumeManager;
     private final QuotaApplier quotaApplier;
     private final CompletableFuture<Void> loopTerminateFuture;
+    private final Set<Meter.Id> consumedRecordsMeters;
     private volatile boolean started;
     private volatile boolean terminated;
 
@@ -161,6 +164,7 @@ public class ProcessorSubscription extends Thread implements AsyncClosable {
         rebalanceTimeoutMillis = props.get(ProcessorProperties.CONFIG_GROUP_REBALANCE_TIMEOUT_MS);
 
         loopTerminateFuture = new CompletableFuture<>();
+        consumedRecordsMeters = new HashSet<>();
 
         setName(String.format("DecatonSubscriptionThread-%s", scope));
     }
@@ -180,15 +184,24 @@ public class ProcessorSubscription extends Thread implements AsyncClosable {
      * You can use this metric to decide whether if you can disable {@link ProcessorProperties#CONFIG_LEGACY_PARSE_FALLBACK_ENABLED}
      * when you use Decaton client for the task producer.
      * <p>
+     * We don't use {@link Metrics} because of below reasons:
+     * - {@link Metrics} is designed to be tied to a structure that corresponds to and has same lifecycle the metric tag (e.g. ProcessorSubscription, SubPartitions, ...).
+     *   But in Decaton, there's no such structure that corresponds to the topic.
+     * - Expose as partition-level metric with existing per-partition structure is also not an option here, because we want to expose this metric before extracting the task (i.e. before blacklisted or before PKQ-shaped).
+     * - This metric is only used for v9 migration, which will be removed in the future major version. We don't want to introduce drastic code changes just for this, to achieve
+     *   managing in {@link Metrics} in a consistent way.
+     * <p>
      * TODO: This metric will be removed in the future major version, along with the legacy format support.
      */
     private Counter recordsConsumed(String topic, boolean hasMetadataHeader) {
-        return Counter.builder("records.consumed")
+        Counter counter = Counter.builder("records.consumed")
                       .description("The number of records consumed from the topic")
                       .tags("subscription", scope.subscriptionId(),
                             "topic", topic,
                             "format", hasMetadataHeader ? "client-v9" : "other")
                       .register(Metrics.registry());
+        consumedRecordsMeters.add(counter.getId());
+        return counter;
     }
 
     private void waitForRemainingTasksCompletion(long timeoutMillis) {
@@ -302,6 +315,7 @@ public class ProcessorSubscription extends Thread implements AsyncClosable {
         consumeManager.close();
         quotaApplier.close();
         metrics.close();
+        consumedRecordsMeters.forEach(Metrics.registry()::remove);
         updateState(SubscriptionStateListener.State.TERMINATED);
     }
 
