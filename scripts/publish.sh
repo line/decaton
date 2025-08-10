@@ -51,7 +51,7 @@ bump_version() {
     sed -i "" -e "s/^version=.*$/version=$new_version/" gradle.properties
     ./gradlew build
     git add gradle.properties
-    git add jsonschema/dist
+    git add centraldogma/src/jsonschema/dist
     git commit -m "Release $new_version"
 
     git push origin master
