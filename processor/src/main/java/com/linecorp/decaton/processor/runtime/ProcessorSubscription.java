@@ -20,7 +20,6 @@ import static com.linecorp.decaton.processor.runtime.ProcessorProperties.CONFIG_
 
 import java.time.Duration;
 import java.util.Collection;
-import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -34,7 +33,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.TimeoutException;
 
-import com.linecorp.decaton.client.internal.TaskMetadataUtil;
 import com.linecorp.decaton.processor.metrics.Metrics;
 import com.linecorp.decaton.processor.metrics.Metrics.SubscriptionMetrics;
 import com.linecorp.decaton.processor.runtime.internal.AssignmentManager;
@@ -54,8 +52,6 @@ import com.linecorp.decaton.processor.runtime.internal.Utils.Timer;
 import com.linecorp.decaton.processor.tracing.TracingProvider;
 import com.linecorp.decaton.processor.tracing.TracingProvider.RecordTraceHandle;
 
-import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.Meter;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -72,7 +68,6 @@ public class ProcessorSubscription extends Thread implements AsyncClosable {
     private final ConsumeManager consumeManager;
     private final QuotaApplier quotaApplier;
     private final CompletableFuture<Void> loopTerminateFuture;
-    private final Set<Meter.Id> consumedRecordsMeters;
     private volatile boolean started;
     private volatile boolean terminated;
 
@@ -108,7 +103,6 @@ public class ProcessorSubscription extends Thread implements AsyncClosable {
         public void receive(ConsumerRecord<byte[], byte[]> record) {
             TopicPartition tp = new TopicPartition(record.topic(), record.partition());
             PartitionContext context = contexts.get(tp);
-            recordsConsumed(tp.topic(), TaskMetadataUtil.hasMetadataHeader(record.headers())).increment();
 
             OffsetState offsetState;
             try {
@@ -130,6 +124,7 @@ public class ProcessorSubscription extends Thread implements AsyncClosable {
                     log.error("Exception from tracing", e);
                 }
             });
+            context.updateRecordMetrics(record);
 
             if (blacklistedKeysFilter.shouldTake(record)) {
                 context.addRecord(record, offsetState, trace, quotaApplier);
@@ -164,7 +159,6 @@ public class ProcessorSubscription extends Thread implements AsyncClosable {
         rebalanceTimeoutMillis = props.get(ProcessorProperties.CONFIG_GROUP_REBALANCE_TIMEOUT_MS);
 
         loopTerminateFuture = new CompletableFuture<>();
-        consumedRecordsMeters = new HashSet<>();
 
         setName(String.format("DecatonSubscriptionThread-%s", scope));
     }
@@ -177,31 +171,6 @@ public class ProcessorSubscription extends Thread implements AsyncClosable {
                                  SubscriptionStateListener stateListener) {
         this(scope, consumer, quotaApplier, processors, props, stateListener,
              new PartitionContexts(scope, processors));
-    }
-
-    /**
-     * Per-topic metric intended to be referred when v9 upgrade.
-     * You can use this metric to decide whether if you can disable {@link ProcessorProperties#CONFIG_LEGACY_PARSE_FALLBACK_ENABLED}
-     * when you use Decaton client for the task producer.
-     * <p>
-     * We don't use {@link Metrics} because of below reasons:
-     * - {@link Metrics} is designed to be tied to a structure that corresponds to and has same lifecycle the metric tag (e.g. ProcessorSubscription, SubPartitions, ...).
-     *   But in Decaton, there's no such structure that corresponds to the topic.
-     * - Expose as partition-level metric with existing per-partition structure is also not an option here, because we want to expose this metric before extracting the task (i.e. before blacklisted or before PKQ-shaped).
-     * - This metric is only used for v9 migration, which will be removed in the future major version. We don't want to introduce drastic code changes just for this, to achieve
-     *   managing in {@link Metrics} in a consistent way.
-     * <p>
-     * TODO: This metric will be removed in the future major version, along with the legacy format support.
-     */
-    private Counter recordsConsumed(String topic, boolean hasMetadataHeader) {
-        Counter counter = Counter.builder("records.consumed")
-                      .description("The number of records consumed from the topic")
-                      .tags("subscription", scope.subscriptionId(),
-                            "topic", topic,
-                            "format", hasMetadataHeader ? "client-v9" : "other")
-                      .register(Metrics.registry());
-        consumedRecordsMeters.add(counter.getId());
-        return counter;
     }
 
     private void waitForRemainingTasksCompletion(long timeoutMillis) {
@@ -315,7 +284,6 @@ public class ProcessorSubscription extends Thread implements AsyncClosable {
         consumeManager.close();
         quotaApplier.close();
         metrics.close();
-        consumedRecordsMeters.forEach(Metrics.registry()::remove);
         updateState(SubscriptionStateListener.State.TERMINATED);
     }
 
