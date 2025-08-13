@@ -24,8 +24,10 @@ import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 
+import com.linecorp.decaton.client.internal.TaskMetadataUtil;
 import com.linecorp.decaton.processor.metrics.Metrics;
 import com.linecorp.decaton.processor.metrics.Metrics.PartitionStateMetrics;
+import com.linecorp.decaton.processor.metrics.Metrics.RecordMetrics;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.internal.PerKeyQuotaManager.QuotaUsage;
 import com.linecorp.decaton.processor.tracing.TracingProvider.RecordTraceHandle;
@@ -45,6 +47,7 @@ public class PartitionContext implements AutoCloseable {
     private final PerKeyQuotaManager perKeyQuotaManager;
     private final Processors<?> processors;
     private final PartitionStateMetrics metrics;
+    private final RecordMetrics recordMetrics;
     private final int maxPendingRecords;
 
     // The offset committed successfully at last commit
@@ -115,6 +118,8 @@ public class PartitionContext implements AutoCloseable {
         lastCommittedOffset = -1;
         pausedTimeNanos = -1;
         lastQueueStarvedTime = -1;
+
+        recordMetrics = metricsCtor.new RecordMetrics();
     }
 
     /**
@@ -168,6 +173,14 @@ public class PartitionContext implements AutoCloseable {
         metrics.close();
     }
 
+    public void updateRecordMetrics(ConsumerRecord<byte[], byte[]> record) {
+        if (TaskMetadataUtil.hasMetadataHeader(record.headers())) {
+            recordMetrics.decatonClientV9Records.increment();
+        } else {
+            recordMetrics.otherRecords.increment();
+        }
+    }
+
     public void addRecord(ConsumerRecord<byte[], byte[]> record,
                           OffsetState offsetState,
                           RecordTraceHandle traceHandle,
@@ -218,6 +231,7 @@ public class PartitionContext implements AutoCloseable {
     public void close() throws Exception {
         resume();
         commitControl.close();
+        recordMetrics.close();
     }
 
     // visible for testing
