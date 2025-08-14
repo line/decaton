@@ -16,9 +16,8 @@
 
 package com.linecorp.decaton.processor;
 
+import java.util.Arrays;
 import java.util.Random;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -33,6 +32,8 @@ import com.linecorp.decaton.processor.runtime.StaticPropertySupplier;
 import com.linecorp.decaton.processor.runtime.SubPartitionRuntime;
 import com.linecorp.decaton.testing.KafkaClusterExtension;
 import com.linecorp.decaton.testing.RandomExtension;
+import com.linecorp.decaton.testing.processor.KeyedExecutorService;
+import com.linecorp.decaton.testing.processor.ProcessingGuarantee.GuaranteeType;
 import com.linecorp.decaton.testing.processor.ProcessorTestSuite;
 
 @EnabledForJreRange(min = JRE.JAVA_21)
@@ -88,26 +89,27 @@ public class VThreadCoreFunctionalityTest {
     @Test
     @Timeout(30)
     public void testAsyncTaskCompletion() throws Exception {
-        ExecutorService executorService = Executors.newFixedThreadPool(16);
-        Random rand = randomExtension.random();
-        ProcessorTestSuite
-                .builder(rule)
-                .subPartitionRuntime(SubPartitionRuntime.VIRTUAL_THREAD)
-                .configureProcessorsBuilder(builder -> builder.thenProcess((ctx, task) -> {
-                    DeferredCompletion completion = ctx.deferCompletion();
-                    executorService.execute(() -> {
-                        try {
-                            Thread.sleep(rand.nextInt(10));
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                            throw new RuntimeException(e);
-                        } finally {
-                            completion.complete();
-                        }
-                    });
-                }))
-                .build()
-                .run();
+        try (KeyedExecutorService executor = new KeyedExecutorService(16)) {
+            Random rand = randomExtension.random();
+            ProcessorTestSuite
+                    .builder(rule)
+                    .subPartitionRuntime(SubPartitionRuntime.VIRTUAL_THREAD)
+                    .configureProcessorsBuilder(builder -> builder.thenProcess((ctx, task) -> {
+                        DeferredCompletion completion = ctx.deferCompletion();
+                        executor.execute(Arrays.hashCode(task.getKey()), () -> {
+                            try {
+                                Thread.sleep(rand.nextInt(10));
+                            } catch (InterruptedException e) {
+                                Thread.currentThread().interrupt();
+                                throw new RuntimeException(e);
+                            } finally {
+                                completion.complete();
+                            }
+                        });
+                    }))
+                    .build()
+                    .run();
+        }
     }
 
     /*
@@ -121,26 +123,27 @@ public class VThreadCoreFunctionalityTest {
     @Test
     @Timeout(30)
     public void testGetCompletionInstanceLater() throws Exception {
-        ExecutorService executorService = Executors.newFixedThreadPool(16);
-        Random rand = randomExtension.random();
-        ProcessorTestSuite
-                .builder(rule)
-                .subPartitionRuntime(SubPartitionRuntime.VIRTUAL_THREAD)
-                .configureProcessorsBuilder(builder -> builder.thenProcess((ctx, task) -> {
-                    ctx.deferCompletion();
-                    executorService.execute(() -> {
-                        try {
-                            Thread.sleep(rand.nextInt(10));
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                            throw new RuntimeException(e);
-                        } finally {
-                            ctx.deferCompletion().complete();
-                        }
-                    });
-                }))
-                .build()
-                .run();
+        try (KeyedExecutorService executor = new KeyedExecutorService(16)) {
+            Random rand = randomExtension.random();
+            ProcessorTestSuite
+                    .builder(rule)
+                    .subPartitionRuntime(SubPartitionRuntime.VIRTUAL_THREAD)
+                    .configureProcessorsBuilder(builder -> builder.thenProcess((ctx, task) -> {
+                        ctx.deferCompletion();
+                        executor.execute(Arrays.hashCode(task.getKey()), () -> {
+                            try {
+                                Thread.sleep(rand.nextInt(10));
+                            } catch (InterruptedException e) {
+                                Thread.currentThread().interrupt();
+                                throw new RuntimeException(e);
+                            } finally {
+                                ctx.deferCompletion().complete();
+                            }
+                        });
+                    }))
+                    .build()
+                    .run();
+        }
     }
 
     @Test
@@ -159,6 +162,7 @@ public class VThreadCoreFunctionalityTest {
                         ctx.deferCompletion();
                     }
                 }))
+                .excludeSemantics(GuaranteeType.PROCESS_ORDERING)
                 .build()
                 .run();
     }

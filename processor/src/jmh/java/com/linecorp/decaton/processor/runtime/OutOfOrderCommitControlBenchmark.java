@@ -57,8 +57,8 @@ import com.linecorp.decaton.processor.runtime.internal.OutOfOrderCommitControl;
  *   it.
  * - They are passed into threads pool consists of {@link #NUM_WORKER_THREADS}, and then completed immediately.
  * - Consumer loop thread calls {@link OutOfOrderCommitControl#updateHighWatermark()} after feeding
- *   {@link #BATCH_SIZE} and calls {@link OutOfOrderCommitControl#commitReadyOffset()}.
- * - Loop the above steps until {@link OutOfOrderCommitControl#commitReadyOffset()} returns the value equals to
+ *   {@link #BATCH_SIZE} and calls {@link OutOfOrderCommitControl#commitReadyOffset(long)}.
+ * - Loop the above steps until {@link OutOfOrderCommitControl#commitReadyOffset(long)} returns the value equals to
  *   {@link #NUM_OFFSETS}.
  * - Measure entire execution duration as a performance indicator.
  */
@@ -169,20 +169,20 @@ public class OutOfOrderCommitControlBenchmark {
     }
 
     @State(Scope.Thread)
-    public static class BmStateV3 extends BmState<OutOfOrderCommitControl> {
+    public static class BmStateV3 extends BmState<OutOfOrderCommitControlV3> {
         @Override
-        OutOfOrderCommitControl createCommitControl() {
+        OutOfOrderCommitControlV3 createCommitControl() {
             OffsetStateReaper reaper = new OffsetStateReaper(
                     Property.ofStatic(ProcessorProperties.CONFIG_DEFERRED_COMPLETE_TIMEOUT_MS),
                     Metrics.withTags("subscription", "subsc", "topic", "topic", "partition", "1")
                             .new CommitControlMetrics());
-            return new OutOfOrderCommitControl(topicPartition, CAPACITY, reaper);
+            return new OutOfOrderCommitControlV3(topicPartition, CAPACITY, reaper);
         }
     }
 
     @Benchmark
     public void outOfOrderCommitControlV3(BmStateV3 state) throws InterruptedException {
-        OutOfOrderCommitControl control = state.control;
+        OutOfOrderCommitControlV3 control = state.control;
 
         for (long offset = 1; offset <= NUM_OFFSETS; ) {
             boolean noProgress = true;
@@ -204,6 +204,47 @@ public class OutOfOrderCommitControlBenchmark {
 
         control.updateHighWatermark();
         while (control.commitReadyOffset() < NUM_OFFSETS) {
+            Thread.yield();
+            control.updateHighWatermark();
+        }
+    }
+
+    @State(Scope.Thread)
+    public static class BmStateV4 extends BmState<OutOfOrderCommitControl> {
+        @Override
+        OutOfOrderCommitControl createCommitControl() {
+            OffsetStateReaper reaper = new OffsetStateReaper(
+                    Property.ofStatic(ProcessorProperties.CONFIG_DEFERRED_COMPLETE_TIMEOUT_MS),
+                    Metrics.withTags("subscription", "subsc", "topic", "topic", "partition", "1")
+                            .new CommitControlMetrics());
+            return new OutOfOrderCommitControl(topicPartition, CAPACITY, reaper);
+        }
+    }
+
+    @Benchmark
+    public void outOfOrderCommitControlV4(BmStateV4 state) throws InterruptedException {
+        OutOfOrderCommitControl control = state.control;
+
+        for (long offset = 1; offset <= NUM_OFFSETS; ) {
+            boolean noProgress = true;
+
+            for (int i = 0; i < BATCH_SIZE; i++, offset++) {
+                if (control.pendingOffsetsCount() >= CAPACITY) {
+                    break;
+                }
+                noProgress = false;
+                OffsetState offsetState = control.reportFetchedOffset(offset);
+
+                state.workers.execute(offsetState.completion()::complete);
+            }
+            if (noProgress) {
+                Thread.yield();
+            }
+            control.updateHighWatermark();
+        }
+
+        control.updateHighWatermark();
+        while (control.commitReadyOffset(0).offset() < NUM_OFFSETS + 1) {
             Thread.yield();
             control.updateHighWatermark();
         }

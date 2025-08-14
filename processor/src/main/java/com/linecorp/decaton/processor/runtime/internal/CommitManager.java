@@ -124,6 +124,7 @@ public class CommitManager {
             log.debug("Skipping commit due to another async commit is currently in-flight");
             return;
         }
+        log.debug("Committing offsets ASYNC: {}", offsets);
         Thread callingThread = Thread.currentThread();
         consumer.commitAsync(offsets, (ignored, exception) -> {
             asyncCommitInFlight = false;
@@ -131,6 +132,7 @@ public class CommitManager {
                 log.warn("Offset commit failed asynchronously", exception);
                 return;
             }
+            log.debug("Successful async offset commit: {}", offsets);
             if (Thread.currentThread() != callingThread) {
                 // This isn't expected to happen (see below comment) but we check it with cheap cost
                 // just in case to avoid silent corruption.
@@ -157,7 +159,7 @@ public class CommitManager {
                 // 2. When dynamic processor reload is triggered and the context is renewed by
                 // PartitionContexts.maybeHandlePropertyReload.
                 // The case 2 is safe (safe to keep updating committed offset in renewed PartitionContext) because
-                // it caries previously consuming offset without reset.
+                // it carries previously consuming offset without reset.
                 // The case 1 is somewhat suspicious but should still be safe, because whenever partition revoke
                 // happens it calls commitSync() through onPartitionsRevoked(). According to the document of
                 // commitAsync(), it is guaranteed that its callback is called before subsequent commitSync()

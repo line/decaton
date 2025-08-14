@@ -246,11 +246,12 @@ public class MetricsTest {
                                      () -> Metrics.registry()
                                                   .find("decaton.offset.last.committed")
                                                   .tags("topic", topicName, "partition", "0")
-                                                  .gauge().value() == 1.0);
+                                                  .gauge().value() == 2.0);
             TestUtils.awaitCondition("latest consumed offset should becomes 9",
                                      () -> Metrics.registry()
                                                   .find("decaton.offset.latest.consumed")
                                                   .tags("topic", topicName, "partition", "0")
                                                   .gauge().value() == 9.0);
-        }}
+        }
+    }
 }

@@ -26,6 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
@@ -98,8 +99,8 @@ public class PartitionContextsTest {
             TopicPartition tp = tp(i);
             PartitionContext context = mock(PartitionContext.class);
             doReturn(tp).when(context).topicPartition();
-            doReturn(context).when(contexts).instantiateContext(tp);
-            cts.add(contexts.initContext(tp, false));
+            doReturn(context).when(contexts).instantiateContext(tp, null);
+            cts.add(contexts.initContext(tp, null, false));
         }
         return cts;
     }
@@ -120,24 +121,24 @@ public class PartitionContextsTest {
         PartitionContext context = putContexts(1).get(0);
 
         long offset = 1L;
-        doReturn(OptionalLong.of(offset)).when(context).offsetWaitingCommit();
+        doReturn(Optional.of(new OffsetAndMetadata(offset))).when(context).offsetWaitingCommit();
 
         Map<TopicPartition, OffsetAndMetadata> committedOffsets = contexts.commitReadyOffsets();
-        assertEquals(offset + 1, committedOffsets.get(context.topicPartition()).offset());
+        assertEquals(offset, committedOffsets.get(context.topicPartition()).offset());
     }
 
     @Test
     public void testCommittedOffsetsNeverReturnsZero() {
         List<PartitionContext> cts = putContexts(2);
 
-        doReturn(OptionalLong.empty()).when(cts.get(0)).offsetWaitingCommit();
-        doReturn(OptionalLong.empty()).when(cts.get(1)).offsetWaitingCommit();
+        doReturn(Optional.empty()).when(cts.get(0)).offsetWaitingCommit();
+        doReturn(Optional.empty()).when(cts.get(1)).offsetWaitingCommit();
 
         Map<TopicPartition, OffsetAndMetadata> committedOffsets = contexts.commitReadyOffsets();
         // No record has been committed so returned map should be empty
         assertTrue(committedOffsets.isEmpty());
 
-        doReturn(OptionalLong.of(1)).when(cts.get(0)).offsetWaitingCommit();
+        doReturn(Optional.of(new OffsetAndMetadata(1))).when(cts.get(0)).offsetWaitingCommit();
         committedOffsets = contexts.commitReadyOffsets();
         // No record has been committed for tp1 so the returned map shouldn't contain entry for it.
         assertEquals(1, committedOffsets.size());
@@ -157,8 +158,8 @@ public class PartitionContextsTest {
 
         // PartitionContext manages their "completed" offset so its minus 1 from committed offset
         // which indicates the offset to "fetch next".
-        verify(ctxs.get(0), times(1)).updateCommittedOffset(100);
-        verify(ctxs.get(1), times(1)).updateCommittedOffset(200);
+        verify(ctxs.get(0), times(1)).updateCommittedOffset(101);
+        verify(ctxs.get(1), times(1)).updateCommittedOffset(201);
     }
 
     @Test
@@ -305,7 +306,7 @@ public class PartitionContextsTest {
 
         contexts.maybeHandlePropertyReload();
         // property reload is not requested yet
-        verify(contexts, never()).instantiateContext(any());
+        verify(contexts, never()).instantiateContext(any(), isNull());
 
         partitionConcurrencyProperty.set(42);
         for (PartitionContext context: allContexts) {
@@ -314,7 +315,7 @@ public class PartitionContextsTest {
         contexts.maybeHandlePropertyReload();
 
         // property reload is requested, but there are pending tasks
-        verify(contexts, times(reloadableContexts.size())).instantiateContext(any());
+        verify(contexts, times(reloadableContexts.size())).instantiateContext(any(), isNull());
         for (PartitionContext context: reloadableContexts) {
             doReturn(false).when(context).reloadRequested();
         }
@@ -324,7 +325,7 @@ public class PartitionContextsTest {
         }
         contexts.maybeHandlePropertyReload();
         // completed reloading request
-        verify(contexts, times(count)).instantiateContext(any());
+        verify(contexts, times(count)).instantiateContext(any(), isNull());
     }
 
     @Test
@@ -372,19 +373,18 @@ public class PartitionContextsTest {
         // mark revoking
         doReturn(true).when(cts.get(0)).revoking();
 
-        doReturn(OptionalLong.of(0)).when(cts.get(0)).offsetWaitingCommit();
-        doReturn(OptionalLong.of(1)).when(cts.get(1)).offsetWaitingCommit();
-        doReturn(OptionalLong.empty()).when(cts.get(2)).offsetWaitingCommit();
+        doReturn(Optional.empty()).when(cts.get(0)).offsetWaitingCommit();
+        doReturn(Optional.of(new OffsetAndMetadata(1))).when(cts.get(1)).offsetWaitingCommit();
+        doReturn(Optional.empty()).when(cts.get(2)).offsetWaitingCommit();
         Map<TopicPartition, OffsetAndMetadata> readyOffsets = contexts.commitReadyOffsets();
 
         assertEquals(1, readyOffsets.size());
-        assertEquals(2L, readyOffsets.get(tp(1)).offset());
+        assertEquals(1L, readyOffsets.get(tp(1)).offset());
 
         // unmark revoking
         doReturn(false).when(cts.get(0)).revoking();
-        doReturn(OptionalLong.empty()).when(cts.get(1)).offsetWaitingCommit();
+        doReturn(Optional.empty()).when(cts.get(1)).offsetWaitingCommit();
         readyOffsets = contexts.commitReadyOffsets();
-        assertEquals(1, readyOffsets.size());
-        assertEquals(1L, readyOffsets.get(tp(0)).offset());
+        assertTrue(readyOffsets.isEmpty());
     }
 }

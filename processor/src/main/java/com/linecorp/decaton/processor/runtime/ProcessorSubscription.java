@@ -20,6 +20,7 @@ import static com.linecorp.decaton.processor.runtime.ProcessorProperties.CONFIG_
 
 import java.time.Duration;
 import java.util.Collection;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -29,6 +30,7 @@ import java.util.stream.Stream;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -93,7 +95,7 @@ public class ProcessorSubscription extends Thread implements AsyncClosable {
         }
 
         @Override
-        public void updateAssignment(Collection<TopicPartition> newAssignment) {
+        public void updateAssignment(Map<TopicPartition, OffsetAndMetadata> newAssignment) {
             assignManager.assign(newAssignment);
 
             updateState(SubscriptionStateListener.State.RUNNING);
@@ -108,11 +110,15 @@ public class ProcessorSubscription extends Thread implements AsyncClosable {
             try {
                 offsetState = context.registerOffset(record.offset());
             } catch (OffsetRegressionException e) {
-                log.warn("Offset regression at partition {}", tp);
+                log.warn("Offset regression at partition {}, by offset {}", tp, record.offset(), e);
                 assignManager.repair(tp);
                 context = contexts.get(tp);
                 // If it fails even at 2nd attempt... no idea let it die.
                 offsetState = context.registerOffset(record.offset());
+            }
+            if (offsetState == null) {
+                // Means this offset has already been processed
+                return;
             }
 
             TracingProvider provider = scope.tracingProvider();
@@ -233,6 +239,8 @@ public class ProcessorSubscription extends Thread implements AsyncClosable {
                 consumeManager.init(subscribeTopics());
                 consumeLoop();
             }
+        } catch (RuntimeException e) {
+            log.error("Unexpected exception in subscription thread, terminating", e);
         } finally {
             loopTerminateFuture.complete(null);
         }

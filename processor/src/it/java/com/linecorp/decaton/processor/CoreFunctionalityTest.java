@@ -16,16 +16,17 @@
 
 package com.linecorp.decaton.processor;
 
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Map.Entry;
 import java.util.Properties;
 import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.stream.Collectors;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.CooperativeStickyAssignor;
@@ -40,12 +41,17 @@ import com.linecorp.decaton.processor.runtime.Property;
 import com.linecorp.decaton.processor.runtime.StaticPropertySupplier;
 import com.linecorp.decaton.testing.KafkaClusterExtension;
 import com.linecorp.decaton.testing.RandomExtension;
+import com.linecorp.decaton.testing.processor.KeyedExecutorService;
 import com.linecorp.decaton.testing.processor.ProcessedRecord;
 import com.linecorp.decaton.testing.processor.ProcessingGuarantee;
+import com.linecorp.decaton.testing.processor.ProcessingGuarantee.GuaranteeType;
 import com.linecorp.decaton.testing.processor.ProcessorTestSuite;
 import com.linecorp.decaton.testing.processor.ProducedRecord;
 import com.linecorp.decaton.testing.processor.TestTask;
 
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
 public class CoreFunctionalityTest {
     @RegisterExtension
     public static KafkaClusterExtension rule = new KafkaClusterExtension();
@@ -104,25 +110,26 @@ public class CoreFunctionalityTest {
     @Test
     @Timeout(30)
     public void testAsyncTaskCompletion() throws Exception {
-        ExecutorService executorService = Executors.newFixedThreadPool(16);
-        Random rand = randomExtension.random();
-        ProcessorTestSuite
-                .builder(rule)
-                .configureProcessorsBuilder(builder -> builder.thenProcess((ctx, task) -> {
-                    DeferredCompletion completion = ctx.deferCompletion();
-                    executorService.execute(() -> {
-                        try {
-                            Thread.sleep(rand.nextInt(10));
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                            throw new RuntimeException(e);
-                        } finally {
-                            completion.complete();
-                        }
-                    });
-                }))
-                .build()
-                .run();
+        try (KeyedExecutorService executor = new KeyedExecutorService(16)) {
+            Random rand = randomExtension.random();
+            ProcessorTestSuite
+                    .builder(rule)
+                    .configureProcessorsBuilder(builder -> builder.thenProcess((ctx, task) -> {
+                        DeferredCompletion completion = ctx.deferCompletion();
+                        executor.execute(Arrays.hashCode(task.getKey()), () -> {
+                            try {
+                                Thread.sleep(rand.nextInt(10));
+                            } catch (InterruptedException e) {
+                                Thread.currentThread().interrupt();
+                                throw new RuntimeException(e);
+                            } finally {
+                                completion.complete();
+                            }
+                        });
+                    }))
+                    .build()
+                    .run();
+        }
     }
 
     /*
@@ -136,25 +143,26 @@ public class CoreFunctionalityTest {
     @Test
     @Timeout(30)
     public void testGetCompletionInstanceLater() throws Exception {
-        ExecutorService executorService = Executors.newFixedThreadPool(16);
-        Random rand = randomExtension.random();
-        ProcessorTestSuite
-                .builder(rule)
-                .configureProcessorsBuilder(builder -> builder.thenProcess((ctx, task) -> {
-                    ctx.deferCompletion();
-                    executorService.execute(() -> {
-                        try {
-                            Thread.sleep(rand.nextInt(10));
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                            throw new RuntimeException(e);
-                        } finally {
-                            ctx.deferCompletion().complete();
-                        }
-                    });
-                }))
-                .build()
-                .run();
+        try (KeyedExecutorService executor = new KeyedExecutorService(16)) {
+            Random rand = randomExtension.random();
+            ProcessorTestSuite
+                    .builder(rule)
+                    .configureProcessorsBuilder(builder -> builder.thenProcess((ctx, task) -> {
+                        ctx.deferCompletion();
+                        executor.execute(Arrays.hashCode(task.getKey()), () -> {
+                            try {
+                                Thread.sleep(rand.nextInt(10));
+                            } catch (InterruptedException e) {
+                                Thread.currentThread().interrupt();
+                                throw new RuntimeException(e);
+                            } finally {
+                                ctx.deferCompletion().complete();
+                            }
+                        });
+                    }))
+                    .build()
+                    .run();
+        }
     }
 
     @Test
@@ -165,10 +173,12 @@ public class CoreFunctionalityTest {
         ProcessingGuarantee noDuplicates = new ProcessingGuarantee() {
             private final ConcurrentMap<HashableByteArray, List<TestTask>> produced = new ConcurrentHashMap<>();
             private final ConcurrentMap<HashableByteArray, List<TestTask>> processed = new ConcurrentHashMap<>();
+            private final ConcurrentMap<TestTask, Long> taskToOffset = new ConcurrentHashMap<>();
 
             @Override
             public void onProduce(ProducedRecord record) {
                 produced.computeIfAbsent(new HashableByteArray(record.key()), key -> new ArrayList<>()).add(record.task());
+                taskToOffset.put(record.task(), record.offset());
             }
 
             @Override
@@ -180,7 +190,12 @@ public class CoreFunctionalityTest {
             public void doAssert() {
                 // use assertTrue instead of assertEquals not to cause error message explosion
                 //noinspection SimplifiableJUnitAssertion
-                assertTrue(produced.equals(processed));
+                for (Entry<HashableByteArray, List<TestTask>> e : produced.entrySet()) {
+                    List<Long> producedTasks = e.getValue().stream().map(taskToOffset::get).collect(Collectors.toList());
+                    List<Long> processedTasks = processed.get(e.getKey()).stream().map(taskToOffset::get).collect(Collectors.toList());
+                    assertEquals(producedTasks, processedTasks);
+                }
+//                assertTrue(produced.equals(processed));
             }
         };
 
@@ -192,7 +207,8 @@ public class CoreFunctionalityTest {
                                 (ctx, task) -> Thread.sleep(rand.nextInt(10))))
                 .propertySupplier(StaticPropertySupplier.of(
                         Property.ofStatic(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY, 1),
-                        Property.ofStatic(ProcessorProperties.CONFIG_MAX_PENDING_RECORDS, 100)
+                        Property.ofStatic(ProcessorProperties.CONFIG_MAX_PENDING_RECORDS, 100),
+                        Property.ofStatic(ProcessorProperties.CONFIG_SHUTDOWN_TIMEOUT_MS, 1000L)
                 ))
                 .customSemantics(noDuplicates)
                 .build()
@@ -214,6 +230,7 @@ public class CoreFunctionalityTest {
                         ctx.deferCompletion();
                     }
                 }))
+                .excludeSemantics(GuaranteeType.PROCESS_ORDERING)
                 .build()
                 .run();
     }
