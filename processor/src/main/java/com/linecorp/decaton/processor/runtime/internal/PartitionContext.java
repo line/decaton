@@ -19,6 +19,7 @@ package com.linecorp.decaton.processor.runtime.internal;
 import java.util.Collection;
 import java.util.OptionalLong;
 import java.util.concurrent.TimeUnit;
+import java.util.function.LongSupplier;
 
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -92,6 +93,14 @@ public class PartitionContext implements AutoCloseable {
     PartitionContext(PartitionScope scope,
                      Processors<?> processors,
                      SubPartitions subPartitions) {
+        this(scope, processors, subPartitions, System::currentTimeMillis);
+    }
+
+    // visible for testing
+    PartitionContext(PartitionScope scope,
+                     Processors<?> processors,
+                     SubPartitions subPartitions,
+                     LongSupplier timestampSupplier) {
         this.scope = scope;
         this.processors = processors;
         this.subPartitions = subPartitions;
@@ -107,7 +116,7 @@ public class PartitionContext implements AutoCloseable {
                 metricsCtor.new CommitControlMetrics());
         commitControl = new OutOfOrderCommitControl(scope.topicPartition(), capacity, offsetStateReaper);
         if (scope.perKeyQuotaConfig().isPresent() && scope.originTopic().equals(scope.topicPartition().topic())) {
-            perKeyQuotaManager = PerKeyQuotaManager.create(scope);
+            perKeyQuotaManager = PerKeyQuotaManager.create(scope, timestampSupplier);
         } else {
             perKeyQuotaManager = null;
         }
@@ -188,7 +197,7 @@ public class PartitionContext implements AutoCloseable {
         if (!quotaApplier.apply(record, offsetState, maybeRecordQuotaUsage(record.key()))) {
             TaskRequest request = new TaskRequest(
                     record.timestamp(), scope.topicPartition(), record.offset(), offsetState, record.key(),
-                    record.headers(), traceHandle, record.value(), maybeRecordQuotaUsage(record.key()));
+                    record.headers(), traceHandle, record.value());
             subPartitions.addTask(request);
         }
 

@@ -21,10 +21,13 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -32,12 +35,14 @@ import java.util.OptionalLong;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.linecorp.decaton.processor.runtime.DefaultSubPartitioner;
+import com.linecorp.decaton.processor.runtime.DynamicProperty;
 import com.linecorp.decaton.processor.runtime.PerKeyQuotaConfig;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.Property;
@@ -50,13 +55,17 @@ import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider.NoopT
 public class PartitionContextTest {
     private static final Property<Integer> MAX_PENDING_RECORDS =
             Property.ofStatic(ProcessorProperties.CONFIG_MAX_PENDING_RECORDS, 10);
+    private static final DynamicProperty<Long> PER_KEY_QUOTA_PROCESSING_RATE =
+            new DynamicProperty<>(ProcessorProperties.CONFIG_PER_KEY_QUOTA_PROCESSING_RATE);
 
     private static PartitionScope scope(String topic, Optional<PerKeyQuotaConfig> perKeyQuotaConfig) {
         return new PartitionScope(
                 new SubscriptionScope("subscription", "topic",
                                       SubPartitionRuntime.THREAD_POOL,
                                       Optional.empty(), perKeyQuotaConfig,
-                                      ProcessorProperties.builder().set(MAX_PENDING_RECORDS).build(),
+                                      ProcessorProperties.builder()
+                                                         .set(MAX_PENDING_RECORDS)
+                                                         .set(PER_KEY_QUOTA_PROCESSING_RATE).build(),
                                       NoopTracingProvider.INSTANCE,
                                       ConsumerSupplier.DEFAULT_MAX_POLL_RECORDS,
                                       DefaultSubPartitioner::new),
@@ -145,8 +154,10 @@ public class PartitionContextTest {
 
     @Test
     public void testQuotaApplied() {
+        when(record.key()).thenReturn(new byte[0]);
+
         PartitionContext context = new PartitionContext(
-                scope("topic-shaping", Optional.of(PerKeyQuotaConfig.shape())),
+                scope("topic", Optional.of(PerKeyQuotaConfig.shape())),
                 processors,
                 subPartitions);
 
@@ -156,12 +167,48 @@ public class PartitionContextTest {
 
     @Test
     public void testQuotaNotApplied() {
+        when(record.key()).thenReturn(new byte[0]);
+
         PartitionContext context = new PartitionContext(
-                scope("topic-shaping", Optional.of(PerKeyQuotaConfig.shape())),
+                scope("topic", Optional.of(PerKeyQuotaConfig.shape())),
                 processors,
                 subPartitions);
 
         context.addRecord(record, new OffsetState(42L), NoopTrace.INSTANCE, (r, o, q) -> false);
         verify(subPartitions, times(1)).addTask(any());
+    }
+
+    // semi-integration test to verify quota is applied properly based on the observed processing rate
+    @Test
+    public void testQuotaAppliedIntegration() {
+        when(record.key()).thenReturn(new byte[0]);
+
+        long[] timestamp = {0};
+        PartitionContext context = new PartitionContext(
+                scope("topic", Optional.of(PerKeyQuotaConfig.shape().toBuilder()
+                                                            .window(Duration.ofSeconds(1))
+                                                            .build())),
+                processors,
+                subPartitions,
+                () -> timestamp[0]);
+        PER_KEY_QUOTA_PROCESSING_RATE.set(2L);
+        QuotaApplier quotaApplier = (r, o, q) -> q.type() != UsageType.COMPLY;
+
+        // add task at timestamp 0
+        timestamp[0] = 0;
+        context.addRecord(record, new OffsetState(42L), NoopTrace.INSTANCE, quotaApplier);
+        verify(subPartitions, times(1)).addTask(any());
+        timestamp[0] += 1001;
+        // add task 1001ms later.
+        // At this point, the usage should still be COMPLY as the rate is 2/1001ms < 2/sec
+        context.addRecord(record, new OffsetState(43L), NoopTrace.INSTANCE, quotaApplier);
+        verify(subPartitions, times(2)).addTask(any());
+
+        timestamp[0] += 1;
+        // add task 1ms later.
+        // At this point, the usage should be VIOLATE as the rate is 3/1002ms > 2/sec
+        context.addRecord(record, new OffsetState(44L), NoopTrace.INSTANCE, quotaApplier);
+        // should not be added to subpartition as the task is shaped
+        verify(subPartitions, times(2)).addTask(any());
     }
 }

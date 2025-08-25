@@ -91,7 +91,7 @@ public class PerKeyQuotaManager {
         PerKeyQuotaManager.delta = delta;
     }
 
-    public static PerKeyQuotaManager create(PartitionScope scope) {
+    public static PerKeyQuotaManager create(PartitionScope scope, LongSupplier timestampSupplier) {
         long seed = System.currentTimeMillis();
         log.info("Creating key counters with seed {} for partition {}", seed, scope.topicPartition());
 
@@ -103,7 +103,7 @@ public class PerKeyQuotaManager {
         WindowedKeyStat windowedStat = new WindowedKeyStat(
                 scope.perKeyQuotaConfig().get().window(),
                 counterSupplier);
-        return new PerKeyQuotaManager(scope, System::currentTimeMillis, windowedStat);
+        return new PerKeyQuotaManager(scope, timestampSupplier, windowedStat);
     }
 
     /**
