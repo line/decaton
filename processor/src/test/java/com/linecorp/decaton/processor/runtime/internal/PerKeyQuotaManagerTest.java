@@ -25,8 +25,10 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneId;
 import java.util.Optional;
-import java.util.function.LongSupplier;
 
 import org.apache.kafka.common.TopicPartition;
 import org.junit.jupiter.api.Test;
@@ -49,9 +51,7 @@ import com.linecorp.decaton.processor.tracing.internal.NoopTracingProvider;
 public class PerKeyQuotaManagerTest {
     private final byte[] key = "key".getBytes(StandardCharsets.UTF_8);
     private final long timestamp = 1677420878461L;
-
-    @Mock
-    private LongSupplier timestampSupplier;
+    private final Clock clock = Clock.fixed(Instant.ofEpochMilli(timestamp), ZoneId.systemDefault());
 
     @Mock
     private WindowedKeyStat windowedStat;
@@ -73,7 +73,7 @@ public class PerKeyQuotaManagerTest {
     @Test
     public void testUnlimited() {
         PerKeyQuotaManager manager = new PerKeyQuotaManager(
-                scope(RateLimiter.UNLIMITED), timestampSupplier, windowedStat);
+                scope(RateLimiter.UNLIMITED), clock, windowedStat);
 
         assertEquals(QuotaUsage.COMPLY, manager.record(key));
         verify(windowedStat, never()).recordAndGet(anyLong(), any());
@@ -82,9 +82,8 @@ public class PerKeyQuotaManagerTest {
     @Test
     public void testComply() {
         PerKeyQuotaManager manager = new PerKeyQuotaManager(
-                scope(42L), timestampSupplier, windowedStat);
+                scope(42L), clock, windowedStat);
 
-        doReturn(timestamp).when(timestampSupplier).getAsLong();
         // 615 / 15 sec = 41 which is under quota
         doReturn(new Stat(timestamp - 15000L, timestamp, 615)).when(windowedStat).recordAndGet(eq(timestamp), eq(key));
 
@@ -95,9 +94,8 @@ public class PerKeyQuotaManagerTest {
     @Test
     public void testViolate() {
         PerKeyQuotaManager manager = new PerKeyQuotaManager(
-                scope(42L), timestampSupplier, windowedStat);
+                scope(42L), clock, windowedStat);
 
-        doReturn(timestamp).when(timestampSupplier).getAsLong();
         // 645 / 15 sec = 43 which is over quota
         doReturn(new Stat(timestamp - 15000L, timestamp, 645)).when(windowedStat).recordAndGet(eq(timestamp), eq(key));
 
@@ -110,9 +108,8 @@ public class PerKeyQuotaManagerTest {
     @Test
     public void testDurationNotEnough() {
         PerKeyQuotaManager manager = new PerKeyQuotaManager(
-                scope(42L), timestampSupplier, windowedStat);
+                scope(42L), clock, windowedStat);
 
-        doReturn(timestamp).when(timestampSupplier).getAsLong();
         // 387 / 9 sec = 43 which is over quota but the observed duration is shorter than window size (10 sec)
         doReturn(new Stat(timestamp - 9000L, timestamp, 387)).when(windowedStat).recordAndGet(eq(timestamp), eq(key));
 
@@ -123,7 +120,7 @@ public class PerKeyQuotaManagerTest {
     @Test
     public void testNullKey() {
         PerKeyQuotaManager manager = new PerKeyQuotaManager(
-                scope(42L), timestampSupplier, windowedStat);
+                scope(42L), clock, windowedStat);
 
         assertEquals(QuotaUsage.COMPLY, manager.record(null));
         verify(windowedStat, never()).recordAndGet(anyLong(), any());

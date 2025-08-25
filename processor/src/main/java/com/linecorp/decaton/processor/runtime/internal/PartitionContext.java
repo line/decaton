@@ -16,10 +16,10 @@
 
 package com.linecorp.decaton.processor.runtime.internal;
 
+import java.time.Clock;
 import java.util.Collection;
 import java.util.OptionalLong;
 import java.util.concurrent.TimeUnit;
-import java.util.function.LongSupplier;
 
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -93,14 +93,14 @@ public class PartitionContext implements AutoCloseable {
     PartitionContext(PartitionScope scope,
                      Processors<?> processors,
                      SubPartitions subPartitions) {
-        this(scope, processors, subPartitions, System::currentTimeMillis);
+        this(scope, processors, subPartitions, Clock.systemDefaultZone());
     }
 
     // visible for testing
     PartitionContext(PartitionScope scope,
                      Processors<?> processors,
                      SubPartitions subPartitions,
-                     LongSupplier timestampSupplier) {
+                     Clock clock) {
         this.scope = scope;
         this.processors = processors;
         this.subPartitions = subPartitions;
@@ -116,7 +116,7 @@ public class PartitionContext implements AutoCloseable {
                 metricsCtor.new CommitControlMetrics());
         commitControl = new OutOfOrderCommitControl(scope.topicPartition(), capacity, offsetStateReaper);
         if (scope.perKeyQuotaConfig().isPresent() && scope.originTopic().equals(scope.topicPartition().topic())) {
-            perKeyQuotaManager = PerKeyQuotaManager.create(scope, timestampSupplier);
+            perKeyQuotaManager = PerKeyQuotaManager.create(scope, clock);
         } else {
             perKeyQuotaManager = null;
         }

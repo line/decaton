@@ -16,8 +16,8 @@
 
 package com.linecorp.decaton.processor.runtime.internal;
 
+import java.time.Clock;
 import java.util.Random;
-import java.util.function.LongSupplier;
 import java.util.function.Supplier;
 
 import com.linecorp.decaton.processor.runtime.PerKeyQuotaConfig.QuotaCallback.Metrics;
@@ -69,14 +69,14 @@ public class PerKeyQuotaManager {
     }
 
     private final WindowedKeyStat windowedStat;
-    private final LongSupplier timestampSupplier;
+    private final Clock clock;
     private final Property<Long> processingRate;
     private final long windowMs;
 
     PerKeyQuotaManager(PartitionScope scope,
-                       LongSupplier timestampSupplier,
+                       Clock clock,
                        WindowedKeyStat windowedStat) {
-        this.timestampSupplier = timestampSupplier;
+        this.clock = clock;
         this.windowedStat = windowedStat;
         processingRate = scope.props().get(ProcessorProperties.CONFIG_PER_KEY_QUOTA_PROCESSING_RATE);
         windowMs = scope.perKeyQuotaConfig().get().window().toMillis();
@@ -91,7 +91,7 @@ public class PerKeyQuotaManager {
         PerKeyQuotaManager.delta = delta;
     }
 
-    public static PerKeyQuotaManager create(PartitionScope scope, LongSupplier timestampSupplier) {
+    public static PerKeyQuotaManager create(PartitionScope scope, Clock clock) {
         long seed = System.currentTimeMillis();
         log.info("Creating key counters with seed {} for partition {}", seed, scope.topicPartition());
 
@@ -103,7 +103,7 @@ public class PerKeyQuotaManager {
         WindowedKeyStat windowedStat = new WindowedKeyStat(
                 scope.perKeyQuotaConfig().get().window(),
                 counterSupplier);
-        return new PerKeyQuotaManager(scope, timestampSupplier, windowedStat);
+        return new PerKeyQuotaManager(scope, clock, windowedStat);
     }
 
     /**
@@ -117,7 +117,7 @@ public class PerKeyQuotaManager {
             return QuotaUsage.COMPLY;
         }
 
-        Stat stat = windowedStat.recordAndGet(timestampSupplier.getAsLong(), key);
+        Stat stat = windowedStat.recordAndGet(clock.millis(), key);
         long duration = stat.toMs() - stat.fromMs();
         // If recorded duration is not enough yet (e.g. right after startup),  we wait for a while
         if (duration < windowMs) {

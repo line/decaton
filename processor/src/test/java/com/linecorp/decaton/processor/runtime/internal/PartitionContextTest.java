@@ -22,11 +22,13 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -183,28 +185,30 @@ public class PartitionContextTest {
     public void testQuotaAppliedIntegration() {
         when(record.key()).thenReturn(new byte[0]);
 
-        long[] timestamp = {0};
+        Clock clock = mock(Clock.class);
+
         PartitionContext context = new PartitionContext(
                 scope("topic", Optional.of(PerKeyQuotaConfig.shape().toBuilder()
                                                             .window(Duration.ofSeconds(1))
                                                             .build())),
                 processors,
                 subPartitions,
-                () -> timestamp[0]);
+                clock);
         PER_KEY_QUOTA_PROCESSING_RATE.set(2L);
         QuotaApplier quotaApplier = (r, o, q) -> q.type() != UsageType.COMPLY;
 
         // add task at timestamp 0
-        timestamp[0] = 0;
+        when(clock.millis()).thenReturn(0L);
         context.addRecord(record, new OffsetState(42L), NoopTrace.INSTANCE, quotaApplier);
         verify(subPartitions, times(1)).addTask(any());
-        timestamp[0] += 1001;
+
+        when(clock.millis()).thenReturn(1001L);
         // add task 1001ms later.
         // At this point, the usage should still be COMPLY as the rate is 2/1001ms < 2/sec
         context.addRecord(record, new OffsetState(43L), NoopTrace.INSTANCE, quotaApplier);
         verify(subPartitions, times(2)).addTask(any());
 
-        timestamp[0] += 1;
+        when(clock.millis()).thenReturn(1002L);
         // add task 1ms later.
         // At this point, the usage should be VIOLATE as the rate is 3/1002ms > 2/sec
         context.addRecord(record, new OffsetState(44L), NoopTrace.INSTANCE, quotaApplier);
