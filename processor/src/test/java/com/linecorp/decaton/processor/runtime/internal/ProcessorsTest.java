@@ -70,9 +70,9 @@ public class ProcessorsTest {
 
         Processors<HelloTask> processors = new Processors<>(
                 suppliers, null,
-                new DefaultTaskExtractor<>(bytes -> HelloTask.getDefaultInstance(),
+                new DefaultTaskExtractor<>((topic, bytes) -> HelloTask.getDefaultInstance(),
                                            Property.ofStatic(ProcessorProperties.CONFIG_LEGACY_PARSE_FALLBACK_ENABLED)),
-                null);
+                null, null);
 
         doThrow(new RuntimeException("exception")).when(suppliers.get(2)).getProcessor(any(), any(), anyInt());
 

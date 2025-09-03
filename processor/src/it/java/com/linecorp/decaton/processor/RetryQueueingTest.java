@@ -17,6 +17,7 @@
 package com.linecorp.decaton.processor;
 
 import java.time.Duration;
+import java.util.Base64;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -26,6 +27,9 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
+import org.apache.kafka.common.serialization.Deserializer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -293,6 +297,49 @@ public class RetryQueueingTest {
                                         .build())
                 .excludeSemantics(GuaranteeType.PROCESS_ORDERING,
                                   GuaranteeType.SERIAL_PROCESSING)
+                .customSemantics(new ProcessRetriedTask())
+                .build()
+                .run();
+    }
+
+    // This test verifies that Decaton works properly when
+    // transformation is applied to value bytes on kafka-clients serializer/serializer layer
+    // even with retry enabled.
+    @Test
+    @Timeout(30)
+    public void testConsumingWithKafkaDeserializer() throws Exception {
+        ProcessorTestSuite
+                .builder(rule)
+                .numTasks(1000)
+                .producerSupplier(bootstrapServers -> TestUtils.producer(
+                        bootstrapServers,
+                        new ByteArraySerializer(),
+                        (topic, bytes) -> Base64.getEncoder().encode(bytes)))
+                .customDeserializer(new Deserializer<TestTask>() {
+                    @Override
+                    public TestTask deserialize(String topic, byte[] data) {
+                        throw new UnsupportedOperationException();
+                    }
+
+                    @Override
+                    public TestTask deserialize(String topic, Headers headers, byte[] data) {
+                        return new TestTask.TestTaskDeserializer()
+                                .deserialize(Base64.getDecoder().decode(data));
+                    }
+                })
+                .configureProcessorsBuilder(builder -> builder.thenProcess((ctx, task) -> {
+                    if (ctx.metadata().retryCount() == 0) {
+                        ctx.retry();
+                    }
+                }))
+                .retryConfig(RetryConfig.builder()
+                                        .retryTopic(retryTopic)
+                                        .backoff(Duration.ofMillis(10))
+                                        .build())
+                // If we retry tasks, there's no guarantee about ordering nor serial processing
+                .excludeSemantics(
+                        GuaranteeType.PROCESS_ORDERING,
+                        GuaranteeType.SERIAL_PROCESSING)
                 .customSemantics(new ProcessRetriedTask())
                 .build()
                 .run();

@@ -284,6 +284,7 @@ public class ProcessorSubscription extends Thread implements AsyncClosable {
         consumeManager.close();
         quotaApplier.close();
         metrics.close();
+        processors.close();
         updateState(SubscriptionStateListener.State.TERMINATED);
     }
 

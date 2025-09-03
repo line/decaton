@@ -21,6 +21,7 @@ import java.util.Collections;
 import java.util.List;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.serialization.Deserializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -29,22 +30,25 @@ import com.linecorp.decaton.processor.metrics.Metrics.TaskMetrics;
 import com.linecorp.decaton.processor.runtime.DecatonProcessorSupplier;
 import com.linecorp.decaton.processor.runtime.TaskExtractor;
 
-public class Processors<T> {
+public class Processors<T> implements AutoCloseable {
     private static final Logger logger = LoggerFactory.getLogger(Processors.class);
 
     private final List<DecatonProcessorSupplier<T>> suppliers;
     private final DecatonProcessorSupplier<byte[]> retryProcessorSupplier;
     private final TaskExtractor<T> taskExtractor;
     private final TaskExtractor<T> retryTaskExtractor;
+    private final Deserializer<T> userSuppliedDeserializer;
 
     public Processors(List<DecatonProcessorSupplier<T>> suppliers,
                       DecatonProcessorSupplier<byte[]> retryProcessorSupplier,
                       TaskExtractor<T> taskExtractor,
-                      TaskExtractor<T> retryTaskExtractor) {
+                      TaskExtractor<T> retryTaskExtractor,
+                      Deserializer<T> userSuppliedDeserializer) {
         this.suppliers = Collections.unmodifiableList(suppliers);
         this.retryProcessorSupplier = retryProcessorSupplier;
         this.taskExtractor = taskExtractor;
         this.retryTaskExtractor = retryTaskExtractor;
+        this.userSuppliedDeserializer = userSuppliedDeserializer;
     }
 
     private DecatonProcessor<byte[]> retryProcessor(ThreadScope scope) {
@@ -123,6 +127,17 @@ public class Processors<T> {
         suppliers.forEach(supplier -> supplier.leaveThreadScope(subscriptionId, tp, threadId));
         if (retryProcessorSupplier != null) {
             retryProcessorSupplier.leaveThreadScope(subscriptionId, tp, threadId);
+        }
+    }
+
+    @Override
+    public void close() {
+        if (userSuppliedDeserializer != null) {
+            try {
+                userSuppliedDeserializer.close();
+            } catch (Exception e) {
+                logger.warn("User supplied deserializer threw exception while closing", e);
+            }
         }
     }
 }

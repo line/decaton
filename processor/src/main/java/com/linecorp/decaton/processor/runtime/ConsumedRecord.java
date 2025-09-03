@@ -30,6 +30,11 @@ import lombok.experimental.Accessors;
 @Accessors(fluent = true)
 public class ConsumedRecord {
     /**
+     * The topic the record is consumed from
+     */
+    String topic;
+
+    /**
      * The timestamp of the record
      */
     long recordTimestampMillis;

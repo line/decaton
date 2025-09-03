@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Supplier;
 
+import com.linecorp.decaton.client.DecatonClient;
 import com.linecorp.decaton.common.Deserializer;
 import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.TaskMetadata;
@@ -39,12 +40,12 @@ import lombok.experimental.Accessors;
 public class ProcessorsBuilder<T> {
     @Getter
     private final String topic;
-    private final Deserializer<T> userSuppliedDeserializer;
+    private final org.apache.kafka.common.serialization.Deserializer<T> userSuppliedDeserializer;
     private final TaskExtractor<T> userSuppliedTaskExtractor;
 
     private final List<DecatonProcessorSupplier<T>> suppliers;
 
-    ProcessorsBuilder(String topic, Deserializer<T> userSuppliedDeserializer, TaskExtractor<T> userSuppliedTaskExtractor) {
+    ProcessorsBuilder(String topic, org.apache.kafka.common.serialization.Deserializer<T> userSuppliedDeserializer, TaskExtractor<T> userSuppliedTaskExtractor) {
         this.topic = topic;
         this.userSuppliedDeserializer = userSuppliedDeserializer;
         this.userSuppliedTaskExtractor = userSuppliedTaskExtractor;
@@ -66,12 +67,29 @@ public class ProcessorsBuilder<T> {
      * @return an instance of {@link ProcessorsBuilder}.
      */
     public static <T> ProcessorsBuilder<T> consuming(String topic, Deserializer<T> deserializer) {
+        return new ProcessorsBuilder<>(topic, (t, bytes) -> deserializer.deserialize(bytes), null);
+    }
+
+    /**
+     * Create new {@link ProcessorsBuilder} that consumes message from topic expecting tasks of type
+     * which can be parsed by deserializer.
+     * <p>
+     * If you want to extract custom {@link TaskMetadata} (e.g. for delayed processing), you can use
+     * {@link #consuming(String, TaskExtractor)} instead.
+     * @param topic the name of topic to consume.
+     * @param deserializer the deserializer to instantiate task of type {@link T} from serialized bytes.
+     * @param <T> the type of instantiated tasks.
+     * @return an instance of {@link ProcessorsBuilder}.
+     */
+    public static <T> ProcessorsBuilder<T> consuming(String topic, org.apache.kafka.common.serialization.Deserializer<T> deserializer) {
         return new ProcessorsBuilder<>(topic, deserializer, null);
     }
 
     /**
      * Create new {@link ProcessorsBuilder} that consumes message from topic expecting tasks of type
      * which can be parsed by taskExtractor.
+     * When this overload is used, it is user's responsibility to extract {@link TaskMetadata} from record
+     * even for ones produced by {@link DecatonClient}.
      * @param topic the name of topic to consume.
      * @param taskExtractor the extractor to extract task of type {@link T} from message bytes.
      * @param <T> the type of instantiated tasks.
@@ -138,7 +156,7 @@ public class ProcessorsBuilder<T> {
             retryTaskExtractor = new RetryTaskExtractor<>(legacyFallbackEnabledProperty, userSuppliedTaskExtractor);
         }
 
-        return new Processors<>(suppliers, retryProcessorSupplier, taskExtractor, retryTaskExtractor);
+        return new Processors<>(suppliers, retryProcessorSupplier, taskExtractor, retryTaskExtractor, userSuppliedDeserializer);
     }
 
     private static class RetryTaskExtractor<T> implements TaskExtractor<T> {
@@ -148,7 +166,7 @@ public class ProcessorsBuilder<T> {
         RetryTaskExtractor(Property<Boolean> legacyFallbackEnabledProperty,
                            TaskExtractor<T> innerExtractor) {
             this.innerExtractor = innerExtractor;
-            this.outerExtractor = new DefaultTaskExtractor<>(bytes -> bytes, legacyFallbackEnabledProperty);
+            outerExtractor = new DefaultTaskExtractor<>((topic, bytes) -> bytes, legacyFallbackEnabledProperty);
         }
 
         @Override
@@ -160,6 +178,7 @@ public class ProcessorsBuilder<T> {
             DecatonTask<byte[]> outerTask = outerExtractor.extract(record);
             ConsumedRecord inner = ConsumedRecord
                     .builder()
+                    .topic(record.topic())
                     .recordTimestampMillis(record.recordTimestampMillis())
                     .headers(record.headers())
                     .key(record.key())
