@@ -263,6 +263,7 @@ public class SubscriptionBuilder {
         return new ProcessorSubscription(scope,
                                          consumerSupplier.get(),
                                          quotaApplier(scope),
+                                         processorsBuilder.userSuppliedDeserializer(),
                                          processorsBuilder.build(maybeRetryProcessorSupplier(scope), props),
                                          props,
                                          stateListener);

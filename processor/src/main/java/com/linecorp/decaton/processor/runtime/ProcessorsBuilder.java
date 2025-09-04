@@ -28,6 +28,7 @@ import com.linecorp.decaton.processor.runtime.internal.DecatonProcessorSupplierI
 import com.linecorp.decaton.processor.runtime.internal.DefaultTaskExtractor;
 import com.linecorp.decaton.processor.runtime.internal.Processors;
 
+import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.experimental.Accessors;
 
@@ -40,6 +41,7 @@ import lombok.experimental.Accessors;
 public class ProcessorsBuilder<T> {
     @Getter
     private final String topic;
+    @Getter(AccessLevel.PACKAGE)
     private final org.apache.kafka.common.serialization.Deserializer<T> userSuppliedDeserializer;
     private final TaskExtractor<T> userSuppliedTaskExtractor;
 
@@ -156,7 +158,7 @@ public class ProcessorsBuilder<T> {
             retryTaskExtractor = new RetryTaskExtractor<>(legacyFallbackEnabledProperty, userSuppliedTaskExtractor);
         }
 
-        return new Processors<>(suppliers, retryProcessorSupplier, taskExtractor, retryTaskExtractor, userSuppliedDeserializer);
+        return new Processors<>(suppliers, retryProcessorSupplier, taskExtractor, retryTaskExtractor);
     }
 
     private static class RetryTaskExtractor<T> implements TaskExtractor<T> {
