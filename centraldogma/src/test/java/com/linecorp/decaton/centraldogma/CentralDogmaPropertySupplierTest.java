@@ -24,7 +24,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -34,7 +38,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -114,7 +117,7 @@ public class CentralDogmaPropertySupplierTest {
         return new CentralDogmaPropertySupplier(centralDogmaRepository, fileName);
     }
 
-    @ParameterizedTest(name = "watcherSetup[{index}] → {0}")
+    @ParameterizedTest()
     @MethodSource("fileParams")
     public void testWatcherSetup(String fileName) {
         CentralDogmaPropertySupplier supplier = setup(fileName);
@@ -125,7 +128,7 @@ public class CentralDogmaPropertySupplierTest {
         assertTrue(supplier.getProperty(LONG_PROPERTY).isPresent());
     }
 
-    @ParameterizedTest(name = "watcherSetup[{index}] → {0}")
+    @ParameterizedTest()
     @MethodSource("fileParams")
     public void testConvertValue(String fileName) {
         CentralDogmaPropertySupplier supplier = setup(fileName);
@@ -143,7 +146,7 @@ public class CentralDogmaPropertySupplierTest {
         assertEquals(Arrays.asList("foo", "bar"), convertedList);
     }
 
-    @ParameterizedTest(name = "watcherSetup[{index}] → {0}")
+    @ParameterizedTest()
     @MethodSource("fileParams")
     public void testSetValue(String fileName) {
         CentralDogmaPropertySupplier supplier = setup(fileName);
@@ -155,7 +158,18 @@ public class CentralDogmaPropertySupplierTest {
         verify(prop).checkingSet(10L);
     }
 
-    @ParameterizedTest(name = "watcherSetup[{index}] → {0}")
+    @ParameterizedTest()
+    @MethodSource("fileParams")
+    public void testSetNullValue(String fileName) {
+        CentralDogmaPropertySupplier supplier = setup(fileName);
+        JsonNodeFactory factory = objectMapper.getNodeFactory();
+
+        DynamicProperty<Long> prop = spy(new DynamicProperty<>(LONG_PROPERTY));
+        supplier.setValue(prop, factory.nullNode());
+        verify(prop).checkingSet(LONG_PROPERTY.defaultValue());
+    }
+
+    @ParameterizedTest()
     @MethodSource("fileParams")
     public void testGetPropertyAbsentName(String fileName) {
         CentralDogmaPropertySupplier supplier = setup(fileName);
@@ -166,16 +180,6 @@ public class CentralDogmaPropertySupplierTest {
         assertFalse(supplier.getProperty(missingProperty).isPresent());
     }
 
-//    @Test
-//    public void testSetNullValue() {
-//        JsonNodeFactory factory = objectMapper.getNodeFactory();
-//
-//        DynamicProperty<Long> prop = spy(new DynamicProperty<>(LONG_PROPERTY));
-//        supplier.setValue(prop, factory.nullNode());
-//        verify(prop).checkingSet(LONG_PROPERTY.defaultValue());
-//    }
-
-
     private Change<?> expectedChange(String fileName, JsonNode node) throws Exception {
         if (fileName.endsWith(".yaml") || fileName.endsWith(".yml")) {
             return Change.ofTextUpsert(fileName, YAML_MAPPER.writeValueAsString(node));
@@ -184,7 +188,7 @@ public class CentralDogmaPropertySupplierTest {
         }
     }
 
-    @ParameterizedTest(name = "watcherSetup[{index}] → {0}")
+    @ParameterizedTest()
     @MethodSource("fileParams")
     public void testRegisterWithDefaultSettings(String fileName) throws Exception {
         setup(fileName);
@@ -209,7 +213,7 @@ public class CentralDogmaPropertySupplierTest {
         );
     }
 
-    @ParameterizedTest(name = "watcherSetup[{index}] → {0}")
+    @ParameterizedTest()
     @MethodSource("fileParams")
     public void testRegisterWithCustomizedSettings(String fileName) throws Exception {
         setup(fileName);

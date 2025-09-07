@@ -18,7 +18,12 @@ package com.linecorp.decaton.centraldogma;
 
 import static com.fasterxml.jackson.dataformat.yaml.YAMLGenerator.Feature.WRITE_DOC_START_MARKER;
 import static com.linecorp.decaton.processor.runtime.ProcessorProperties.CONFIG_PARTITION_CONCURRENCY;
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
@@ -36,8 +41,6 @@ import java.util.stream.Stream;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
-import lombok.extern.slf4j.Slf4j;
-import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.extension.RegisterExtension;
@@ -60,7 +63,6 @@ import com.linecorp.decaton.processor.runtime.Property;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
-@Slf4j
 public class CentralDogmaPropertySupplierIntegrationTest {
     @RegisterExtension
     final CentralDogmaExtension extension = new CentralDogmaExtension() {
@@ -210,16 +212,14 @@ public class CentralDogmaPropertySupplierIntegrationTest {
         assertEquals(20, concurrency.value());
         assertEquals(java.util.Arrays.asList("123456", "79797979"), ignoreKeys.value());
 
-        assertEquals(20,
-                IntStream.range(0, 10_000)
-                        .mapToObj(i -> CONFIG_PARTITION_CONCURRENCY)
-                        .map(supplier::getProperty)
-                        .reduce((l, r) -> {
-                            assertSame(l.get(), r.get());
-                            return l;
-                        })
-                        .orElseThrow()
-                        .get().value().intValue());
+        assertEquals(20, IntStream
+                .range(0, 10_000)
+                .mapToObj(i -> CONFIG_PARTITION_CONCURRENCY)
+                .map(supplier::getProperty)
+                .reduce((l, r) -> {
+                    assertSame(l.get(), r.get());
+                    return l;
+                }).get().get().value().intValue());
     }
 
     @Test
@@ -242,7 +242,7 @@ public class CentralDogmaPropertySupplierIntegrationTest {
 
     @Test
     @Timeout(10)
-    public void testCDRegisterSuccessYaml() {
+    public void testCDRegisterSuccessYaml() throws Exception {
         String yamlFile = "/subscription.yaml";
         CentralDogma client = extension.client();
         client.createProject(PROJECT_NAME).join();
@@ -250,24 +250,18 @@ public class CentralDogmaPropertySupplierIntegrationTest {
 
         CentralDogmaPropertySupplier.register(centralDogmaRepository, yamlFile);
 
-        String expectedYaml = "decaton.ignore.keys: []\n"
-                + "decaton.processing.rate.per.partition: -1\n"
-                + "decaton.partition.concurrency: 1\n"
-                + "decaton.max.pending.records: 10000\n"
-                + "decaton.commit.interval.ms: 1000\n"
-                + "decaton.group.rebalance.timeout.ms: 1000\n"
-                + "decaton.processing.shutdown.timeout.ms: 0\n"
-                + "decaton.logging.mdc.enabled: true\n"
-                + "decaton.client.metrics.micrometer.bound: false\n"
-                + "decaton.deferred.complete.timeout.ms: -1\n"
-                + "decaton.processor.threads.termination.timeout.ms: 9223372036854775807\n"
-                + "decaton.per.key.quota.processing.rate: -1\n"
-                + "decaton.retry.task.in.legacy.format: false\n"
-                + "decaton.legacy.parse.fallback.enabled: false\n";
-
         String actualText = centralDogmaRepository.file(Query.ofText(yamlFile)).get().join().content();
-        assertEquals(expectedYaml, actualText);
-        log.info("Content of {}: {}", yamlFile, actualText);
+
+        ObjectMapper yaml = new ObjectMapper(new YAMLFactory());
+        JsonNode actual = yaml.readTree(actualText);
+        JsonNode expected = defaultProperties();
+
+        assertEquals(expected.toString(), actual.toString(),
+                () -> "\nexpected: " + expected.toPrettyString()
+                        + "\nactual: " + actual.toPrettyString());
+
+        assertFalse(actualText.startsWith("---"), "YAML should not include doc start marker");
+        assertFalse(actualText.trim().startsWith("{"), "YAML should not be JSON text");
     }
 
     @Test
@@ -331,7 +325,7 @@ public class CentralDogmaPropertySupplierIntegrationTest {
                 "# pushed by user‑B (should win the race)\n"
                         + "foo: bar\n";
 
-        JsonNode userBPush = Jackson.readTree("{\"foo\":\"bar\"}");
+        JsonNode userBYamlAsJsonNode = Jackson.readTree("{\"foo\":\"bar\"}");
 
         String defaultYaml = new ObjectMapper(new YAMLFactory().disable(WRITE_DOC_START_MARKER))
                 .writeValueAsString(defaultProperties());
@@ -344,9 +338,7 @@ public class CentralDogmaPropertySupplierIntegrationTest {
                 .commit(any(), eq(Change.ofTextUpsert(FILE, defaultYaml)));
 
         ExecutorService svc = Executors.newFixedThreadPool(2);
-
         svc.submit(() -> CentralDogmaPropertySupplier.register(userA, FILE));
-
         svc.submit(() -> {
             try {
                 userAIsRunning.await();
@@ -368,7 +360,7 @@ public class CentralDogmaPropertySupplierIntegrationTest {
 
         JsonNode actual = new ObjectMapper(new YAMLFactory())
                 .readTree(entry.content());
-        assertEquals(userBPush, actual);
+        assertEquals(userBYamlAsJsonNode, actual);
     }
 
 

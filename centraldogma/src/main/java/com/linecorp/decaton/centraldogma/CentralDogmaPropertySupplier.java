@@ -47,6 +47,8 @@ import com.linecorp.decaton.processor.runtime.Property;
 import com.linecorp.decaton.processor.runtime.PropertyDefinition;
 import com.linecorp.decaton.processor.runtime.PropertySupplier;
 
+import static com.linecorp.decaton.processor.runtime.ProcessorProperties.PROPERTY_DEFINITIONS;
+
 /**
  * A {@link PropertySupplier} implementation with Central Dogma backend.
  * <p>
@@ -119,18 +121,18 @@ public class CentralDogmaPropertySupplier implements PropertySupplier, AutoClose
         }
 
         rootWatcher.watch(node -> {
-            node.fields().forEachRemaining(entry -> {
-                DynamicProperty<?> p = cachedProperties.get(entry.getKey());
-                if (p != null) {
+            for (PropertyDefinition<?> definition : PROPERTY_DEFINITIONS) {
+                DynamicProperty<?> p = cachedProperties.get(definition.name());
+                if (p != null && node.has(definition.name())) {
                     try {
-                        setValue(p, entry.getValue());
+                        setValue(p, node.get(definition.name()));
                     } catch (Exception e) {
                         // Catching Exception instead of RuntimeException, since
                         // Kotlin-implemented DynamicProperty would throw checked exceptions
-                        logger.warn("Failed to set initial value from CentralDogma for {}", entry.getKey(), e);
+                        logger.warn("Failed to set value from CentralDogma for {}", definition.name(), e);
                     }
                 }
-            });
+            }
         });
     }
 
@@ -163,7 +165,7 @@ public class CentralDogmaPropertySupplier implements PropertySupplier, AutoClose
             } catch (Exception e) {
                 // Catching Exception instead of RuntimeException, since
                 // Kotlin-implemented DynamicProperty would throw checked exceptions
-                logger.warn("Failed to set initial value from CentralDogma for {}", definition.name(), e);
+                logger.warn("Failed to set value from CentralDogma for {}", definition.name(), e);
             }
             return prop;
         });
@@ -247,13 +249,6 @@ public class CentralDogmaPropertySupplier implements PropertySupplier, AutoClose
 
     private static void createPropertyFile(CentralDogmaRepository centralDogmaRepository, String fileName,
                                            List<Property<?>> properties) {
-        // show given properties
-        logger.info("Creating CentralDogma property file: {} with properties: {}",
-                    fileName,
-                    properties.stream()
-                              .map(p -> String.format("%s=%s", p.definition().name(), p.value()))
-                              .collect(Collectors.joining(", ")));
-
         Revision baseRevision = normalizeRevision(centralDogmaRepository, Revision.HEAD);
         boolean fileExists = fileExists(centralDogmaRepository, fileName, baseRevision);
         long startedTime = System.currentTimeMillis();
