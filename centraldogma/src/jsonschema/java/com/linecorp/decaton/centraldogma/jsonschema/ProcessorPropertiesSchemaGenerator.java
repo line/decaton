@@ -97,30 +97,27 @@ public final class ProcessorPropertiesSchemaGenerator {
      * Main method to generate JSON schema files for Decaton ProcessorProperties for Central Dogma.
      *
      * @param args args[0] should be the output directory where the schema files will be written.
-     *             args[1] should be the Decaton version to be used in the generated schema.
      * @throws IOException if an I/O error occurs while writing the schema files.
      */
     public static void main(String[] args) throws IOException {
-        if (args.length != 2) {
-            System.err.println("usage: <outDir> <decatonVersion>");
+        if (args.length != 1) {
+            System.err.println("usage: <outDir>");
             System.exit(1);
         }
         Path outDir = Paths.get(args[0]);
         Files.createDirectories(outDir);
-        String decatonVersion = args[1];
 
         for (SchemaVersion draft : TARGET_VERSIONS) {
-            generateForDraft(outDir, draft, false, decatonVersion);
-            generateForDraft(outDir, draft, true, decatonVersion);
+            generateForDraft(outDir, draft, false);
+            generateForDraft(outDir, draft, true);
         }
-        generateCentralDogmaJsonExample(outDir, decatonVersion);
+        generateCentralDogmaJsonExample(outDir);
     }
 
     private static void generateForDraft(
             Path dir,
             SchemaVersion draft,
-            boolean allowAdditional,
-            String decatonVersion
+            boolean allowAdditional
     ) throws IOException {
         String fileName = String.format(
                 "decaton-processor-properties-central-dogma-schema-%s%s.json",
@@ -129,15 +126,14 @@ public final class ProcessorPropertiesSchemaGenerator {
         );
         Path file = dir.resolve(fileName);
 
-        JsonNode schema = buildSchema(draft, allowAdditional, decatonVersion);
+        JsonNode schema = buildSchema(draft, allowAdditional);
         Files.writeString(file, MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(schema) + "\n");
         log.info("wrote {}", file);
     }
 
     private static JsonNode buildSchema(
             SchemaVersion draft,
-            boolean allowAdditional,
-            String decatonVersion
+            boolean allowAdditional
     ) {
         Map<PropertyDefinition<?>, Type> typeTable = buildTypeTable();
         Map<PropertyDefinition<?>, String> docTable = buildDocTable();
@@ -151,8 +147,8 @@ public final class ProcessorPropertiesSchemaGenerator {
         root.put("$schema", draft.getIdentifier());
         root.put(
                 "title",
-                "Decaton ProcessorProperties for CentralDogma (decaton=%s, jsonschema=%s, strict=%s)"
-                        .formatted(decatonVersion, draft.name().toLowerCase(), !allowAdditional)
+                "Decaton ProcessorProperties for CentralDogma (jsonschema=%s, strict=%s)"
+                        .formatted(draft.name().toLowerCase(), !allowAdditional)
         );
         root.put("type", "object");
         root.put("additionalProperties", allowAdditional);
@@ -180,13 +176,12 @@ public final class ProcessorPropertiesSchemaGenerator {
     }
 
     private static void generateCentralDogmaJsonExample(
-            Path dir,
-            String decatonVersion
+            Path dir
     ) throws IOException {
         var root = MAPPER.createObjectNode();
         root.put("$schema",
-                "https://raw.githubusercontent.com/line/decaton/v%s/centraldogma/src/jsonschema/dist/decaton-processor-properties-central-dogma-schema-draft_7.json"
-                        .formatted(decatonVersion));
+                "https://raw.githubusercontent.com/line/decaton/{DECATON_VERSION}/centraldogma/src/jsonschema/dist/decaton-processor-properties-central-dogma-schema-draft_7.json"
+        );
 
         for (PropertyDefinition<?> def : ProcessorProperties.PROPERTY_DEFINITIONS) {
             if (def.defaultValue() != null) {
