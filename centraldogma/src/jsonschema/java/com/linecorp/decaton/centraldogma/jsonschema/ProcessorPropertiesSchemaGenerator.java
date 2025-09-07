@@ -58,10 +58,15 @@ public final class ProcessorPropertiesSchemaGenerator {
     private static Map<PropertyDefinition<?>, Type> buildTypeTable() {
         Map<PropertyDefinition<?>, Type> table = new HashMap<>();
         for (Field field : ProcessorProperties.class.getDeclaredFields()) {
-            if (!PropertyDefinition.class.isAssignableFrom(field.getType())) continue;
+            if (!PropertyDefinition.class.isAssignableFrom(field.getType())) {
+                continue;
+            }
 
             try {
                 PropertyDefinition<?> def = (PropertyDefinition<?>) field.get(null);
+                // PropertyDefinition#runtimeType just returns raw classes (e.g., List.class) and loses generic info,
+                // even if the actual type is parameterized (e.g., List<String>).
+                // So we need to inspect the field's generic type to restore it for this case.
                 Type valueType = switch (field.getGenericType()) {
                     case ParameterizedType pt -> pt.getActualTypeArguments()[0];  // List<String> etc
                     default -> def.runtimeType(); // Long.class etc
@@ -77,7 +82,9 @@ public final class ProcessorPropertiesSchemaGenerator {
     private static Map<PropertyDefinition<?>, String> buildDocTable() {
         Map<PropertyDefinition<?>, String> docs = new HashMap<>();
         for (Field field : ProcessorProperties.class.getDeclaredFields()) {
-            if (!PropertyDefinition.class.isAssignableFrom(field.getType())) continue;
+            if (!PropertyDefinition.class.isAssignableFrom(field.getType())) {
+                continue;
+            }
 
             try {
                 PropertyDefinition<?> def = (PropertyDefinition<?>) field.get(null);
