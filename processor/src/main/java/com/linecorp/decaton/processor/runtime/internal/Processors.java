@@ -137,7 +137,9 @@ public class Processors<T> implements AutoCloseable {
 
     private void closeExtractor(TaskExtractor<T> extractor) {
         try {
-            extractor.close();
+            if (extractor != null) {
+                extractor.close();
+            }
         } catch (Exception e) {
             log.error("Exception thrown while closing extractor", e);
         }
