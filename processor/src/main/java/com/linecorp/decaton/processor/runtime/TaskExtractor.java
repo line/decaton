@@ -20,7 +20,7 @@ package com.linecorp.decaton.processor.runtime;
  * An interface for classes extracting {@link DecatonTask} from given record.
  * @param <T> type of task.
  */
-public interface TaskExtractor<T> {
+public interface TaskExtractor<T> extends AutoCloseable {
     /**
      * Extract object of type {@link DecatonTask} from given bytes.
      * @param record {@link ConsumedRecord} to extract task from.
@@ -29,4 +29,13 @@ public interface TaskExtractor<T> {
      * If the method throws an exception, the task will be discarded and processor continues to process subsequent tasks.
      */
     DecatonTask<T> extract(ConsumedRecord record);
+
+    /**
+     * Clean up any resources associated with it.
+     * This method is invoked when {@link ProcessorSubscription} is being closed.
+     */
+    @Override
+    default void close() {
+        // no-op
+    }
 }

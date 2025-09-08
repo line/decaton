@@ -32,7 +32,6 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.serialization.Deserializer;
 
 import com.linecorp.decaton.processor.metrics.Metrics;
 import com.linecorp.decaton.processor.metrics.Metrics.SubscriptionMetrics;
@@ -68,7 +67,6 @@ public class ProcessorSubscription extends Thread implements AsyncClosable {
     private final AssignmentManager assignManager;
     private final ConsumeManager consumeManager;
     private final QuotaApplier quotaApplier;
-    private final Deserializer<?> userSuppliedDeserializer;
     private final CompletableFuture<Void> loopTerminateFuture;
     private volatile boolean started;
     private volatile boolean terminated;
@@ -139,7 +137,6 @@ public class ProcessorSubscription extends Thread implements AsyncClosable {
     ProcessorSubscription(SubscriptionScope scope,
                           Consumer<byte[], byte[]> consumer,
                           QuotaApplier quotaApplier,
-                          Deserializer<?> userSuppliedDeserializer,
                           Processors<?> processors,
                           ProcessorProperties props,
                           SubscriptionStateListener stateListener,
@@ -149,7 +146,6 @@ public class ProcessorSubscription extends Thread implements AsyncClosable {
         this.stateListener = stateListener;
         this.contexts = contexts;
         this.quotaApplier = quotaApplier;
-        this.userSuppliedDeserializer = userSuppliedDeserializer;
         metrics = Metrics.withTags("subscription", scope.subscriptionId()).new SubscriptionMetrics();
 
         if (props.get(CONFIG_BIND_CLIENT_METRICS).value()) {
@@ -170,11 +166,10 @@ public class ProcessorSubscription extends Thread implements AsyncClosable {
     public ProcessorSubscription(SubscriptionScope scope,
                                  Consumer<byte[], byte[]> consumer,
                                  QuotaApplier quotaApplier,
-                                 Deserializer<?> userSuppliedDeserializer,
                                  Processors<?> processors,
                                  ProcessorProperties props,
                                  SubscriptionStateListener stateListener) {
-        this(scope, consumer, quotaApplier, userSuppliedDeserializer, processors, props, stateListener,
+        this(scope, consumer, quotaApplier, processors, props, stateListener,
              new PartitionContexts(scope, processors));
     }
 
@@ -289,13 +284,7 @@ public class ProcessorSubscription extends Thread implements AsyncClosable {
         consumeManager.close();
         quotaApplier.close();
         metrics.close();
-        if (userSuppliedDeserializer != null) {
-            try {
-                userSuppliedDeserializer.close();
-            } catch (Exception e) {
-                log.warn("User supplied deserializer threw exception while closing", e);
-            }
-        }
+        processors.close();
         updateState(SubscriptionStateListener.State.TERMINATED);
     }
 

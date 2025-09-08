@@ -76,4 +76,9 @@ public class DefaultTaskExtractor<T> implements TaskExtractor<T> {
             }
         }
     }
+
+    @Override
+    public void close() {
+        taskDeserializer.close();
+    }
 }

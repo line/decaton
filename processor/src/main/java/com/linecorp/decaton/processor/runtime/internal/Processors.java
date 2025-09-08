@@ -29,7 +29,10 @@ import com.linecorp.decaton.processor.metrics.Metrics.TaskMetrics;
 import com.linecorp.decaton.processor.runtime.DecatonProcessorSupplier;
 import com.linecorp.decaton.processor.runtime.TaskExtractor;
 
-public class Processors<T> {
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
+public class Processors<T> implements AutoCloseable {
     private static final Logger logger = LoggerFactory.getLogger(Processors.class);
 
     private final List<DecatonProcessorSupplier<T>> suppliers;
@@ -123,6 +126,20 @@ public class Processors<T> {
         suppliers.forEach(supplier -> supplier.leaveThreadScope(subscriptionId, tp, threadId));
         if (retryProcessorSupplier != null) {
             retryProcessorSupplier.leaveThreadScope(subscriptionId, tp, threadId);
+        }
+    }
+
+    @Override
+    public void close() {
+        closeExtractor(taskExtractor);
+        closeExtractor(retryTaskExtractor);
+    }
+
+    private void closeExtractor(TaskExtractor<T> extractor) {
+        try {
+            extractor.close();
+        } catch (Exception e) {
+            log.error("Exception thrown while closing extractor", e);
         }
     }
 }

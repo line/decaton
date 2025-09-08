@@ -149,7 +149,6 @@ public class ProcessorSubscriptionTest {
                 scope,
                 consumer,
                 NoopQuotaApplier.INSTANCE,
-                builder.userSuppliedDeserializer(),
                 builder.build(null, scope.props()),
                 scope.props(),
                 listener);
@@ -273,17 +272,15 @@ public class ProcessorSubscriptionTest {
             asyncProcessingStarted.countDown();
         };
         SubscriptionScope scope = scope(tp.topic(), 9000L);
-        ProcessorsBuilder<String> processorsBuilder =
-                ProcessorsBuilder.consuming(scope.originTopic(),
-                                            (ConsumedRecord record) -> new DecatonTask<>(
-                                                    TaskMetadata.builder().build(), "dummy", record.value()))
-                                 .thenProcess(processor);
         final ProcessorSubscription subscription = new ProcessorSubscription(
                 scope,
                 consumer,
                 NoopQuotaApplier.INSTANCE,
-                processorsBuilder.userSuppliedDeserializer(),
-                processorsBuilder.build(null, scope.props()),
+                ProcessorsBuilder.consuming(scope.originTopic(),
+                                            (ConsumedRecord record) -> new DecatonTask<>(
+                                                    TaskMetadata.builder().build(), "dummy", record.value()))
+                                 .thenProcess(processor)
+                                 .build(null, scope.props()),
                 scope.props(),
                 newState -> {
                     if (newState == State.RUNNING) {
@@ -349,20 +346,18 @@ public class ProcessorSubscriptionTest {
                                                 Property.ofStatic(ProcessorProperties.CONFIG_COMMIT_INTERVAL_MS, Long.MAX_VALUE),
                                                 Property.ofStatic(ProcessorProperties.CONFIG_GROUP_REBALANCE_TIMEOUT_MS, Long.MAX_VALUE)
                                         ));
-        ProcessorsBuilder<DecatonTask<String>> processorsBuilder =
+        final ProcessorSubscription subscription = new ProcessorSubscription(
+                scope,
+                consumer,
+                NoopQuotaApplier.INSTANCE,
                 ProcessorsBuilder.consuming(scope.originTopic(),
                                             (byte[] bytes) -> new DecatonTask<>(
                                                     TaskMetadata.builder().build(), "dummy", bytes))
                                  .thenProcess((ctx, task) -> {
                                      ctx.deferCompletion().complete();
                                      taskCompleted.countDown();
-                                 });
-        final ProcessorSubscription subscription = new ProcessorSubscription(
-                scope,
-                consumer,
-                NoopQuotaApplier.INSTANCE,
-                processorsBuilder.userSuppliedDeserializer(),
-                processorsBuilder.build(null, scope.props()),
+                                 })
+                                 .build(null, scope.props()),
                 scope.props(),
                 null);
         subscription.start();

@@ -28,9 +28,9 @@ import com.linecorp.decaton.processor.runtime.internal.DecatonProcessorSupplierI
 import com.linecorp.decaton.processor.runtime.internal.DefaultTaskExtractor;
 import com.linecorp.decaton.processor.runtime.internal.Processors;
 
-import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.experimental.Accessors;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * A class defines processing pipeline for {@link ProcessorSubscription}.
@@ -41,7 +41,6 @@ import lombok.experimental.Accessors;
 public class ProcessorsBuilder<T> {
     @Getter
     private final String topic;
-    @Getter(AccessLevel.PACKAGE)
     private final org.apache.kafka.common.serialization.Deserializer<T> userSuppliedDeserializer;
     private final TaskExtractor<T> userSuppliedTaskExtractor;
 
@@ -161,6 +160,7 @@ public class ProcessorsBuilder<T> {
         return new Processors<>(suppliers, retryProcessorSupplier, taskExtractor, retryTaskExtractor);
     }
 
+    @Slf4j
     private static class RetryTaskExtractor<T> implements TaskExtractor<T> {
         private final DefaultTaskExtractor<byte[]> outerExtractor;
         private final TaskExtractor<T> innerExtractor;
@@ -192,6 +192,16 @@ public class ProcessorsBuilder<T> {
                     outerTask.metadata(),
                     extracted.taskData(),
                     extracted.taskDataBytes());
+        }
+
+        @Override
+        public void close() {
+            try {
+                innerExtractor.close();
+            } catch (Exception e) {
+                log.error("Failed to close innerExtractor", e);
+            }
+            outerExtractor.close();
         }
     }
 }
