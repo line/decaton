@@ -49,6 +49,7 @@ bump_version() {
     new_version=$1
 
     sed -i "" -e "s/^version=.*$/version=$new_version/" gradle.properties
+
     git add gradle.properties
     git commit -m "Release $new_version"
 
