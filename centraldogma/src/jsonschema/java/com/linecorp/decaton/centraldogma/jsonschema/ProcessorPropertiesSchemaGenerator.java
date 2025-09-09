@@ -187,7 +187,7 @@ public final class ProcessorPropertiesSchemaGenerator {
     ) throws IOException {
         var root = MAPPER.createObjectNode();
         root.put("$schema",
-                "https://raw.githubusercontent.com/line/decaton/{DECATON_VERSION}/centraldogma/src/jsonschema/dist/decaton-processor-properties-central-dogma-schema-draft_7.json"
+                "https://raw.githubusercontent.com/line/decaton/v{DECATON_VERSION}/centraldogma/src/jsonschema/dist/decaton-processor-properties-central-dogma-schema-draft_7.json"
         );
 
         for (PropertyDefinition<?> def : ProcessorProperties.PROPERTY_DEFINITIONS) {
