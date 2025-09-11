@@ -5,6 +5,21 @@ repositories {
 ext {
     centralDogmaVersion = "0.64.3"
     jacksonVersion = "2.17.0"
+    jsonSchemaGeneratorVersion = "4.38.0"
+    jsonSchemaSlf4jVersion = "2.0.12"
+}
+
+sourceSets {
+    jsonschema {
+        java.srcDir 'src/jsonschema/java'
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += output + compileClasspath
+    }
+}
+
+configurations {
+    jsonschemaImplementation
+    jsonschemaRuntimeOnly
 }
 
 dependencies {
@@ -19,4 +34,55 @@ dependencies {
     // Necessary to mock final class CentralDogmaRepository for simulating concurrent updates
     testImplementation "org.mockito:mockito-inline:4.11.0"
     testRuntimeOnly "ch.qos.logback:logback-classic:1.4.11"
+    testImplementation "com.networknt:json-schema-validator:1.5.8"
+
+    // For generating JSON Schemas for Decaton ProcessorProperties
+    jsonschemaImplementation project(":processor")
+    jsonschemaImplementation "org.slf4j:slf4j-api:$jsonSchemaSlf4jVersion"
+    jsonschemaImplementation "com.fasterxml.jackson.core:jackson-databind:$jacksonVersion"
+    jsonschemaImplementation "com.github.victools:jsonschema-generator:$jsonSchemaGeneratorVersion"
+    jsonschemaImplementation "com.github.therapi:therapi-runtime-javadoc:$javaDocExtractorVersion"
+    jsonschemaRuntimeOnly "org.slf4j:slf4j-simple:$jsonSchemaSlf4jVersion"
+}
+
+def schemaOutDir = file("$projectDir/src/jsonschema/dist")
+
+tasks.named("compileJsonschemaJava", JavaCompile).configure {
+    javaCompiler = javaToolchains.compilerFor {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+    options.release = 21
+}
+
+tasks.register('generateProcessorSchemas', JavaExec) {
+    group = 'generation'
+    description = 'Generate Decaton ProcessorProperties for Central Dogma JSON Schemas'
+
+    classpath = sourceSets.jsonschema.runtimeClasspath
+    mainClass.set('com.linecorp.decaton.centraldogma.jsonschema.ProcessorPropertiesSchemaGenerator')
+
+    javaLauncher = javaToolchains.launcherFor {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+
+    jvmArgs(
+            "-Dorg.slf4j.simpleLogger.logFile=System.out",
+            "-Dorg.slf4j.simpleLogger.defaultLogLevel=info"
+    )
+    logging.captureStandardOutput LogLevel.LIFECYCLE
+
+    args schemaOutDir.absolutePath
+
+    outputs.dir schemaOutDir
+}
+
+tasks.named('test', Test).configure {
+    dependsOn tasks.named('generateProcessorSchemas')
+    inputs.dir schemaOutDir
+
+    jvmArgs "-Dnet.bytebuddy.experimental=true"
+}
+
+tasks.named('clean') {
+    doFirst { delete schemaOutDir }
 }
