@@ -41,6 +41,7 @@ import java.util.stream.Stream;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
+import com.linecorp.decaton.processor.runtime.PropertyDefinition;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.extension.RegisterExtension;
@@ -220,6 +221,98 @@ public class CentralDogmaPropertySupplierIntegrationTest {
                     assertSame(l.get(), r.get());
                     return l;
                 }).get().get().value().intValue());
+    }
+
+    @Test
+    @Timeout(50)
+    public void testCDIntegrationDynamicPropertyJson() throws InterruptedException {
+        final String FILE = "/subscription.json";
+        CentralDogma client = extension.client();
+
+        client.createProject(PROJECT_NAME).join();
+        CentralDogmaRepository repo =
+                client.createRepository(PROJECT_NAME, REPOSITORY_NAME).join();
+
+        final String topic = "orders";
+        final String dynamicName =
+                "decaton.shaping.topic.processing.rate.per.partition." + topic;
+        assertFalse(ProcessorProperties.defaultProperties().stream()
+                .anyMatch(p -> p.definition().name().equals(dynamicName)));
+
+        final String ORIGINAL =
+                "{\n"
+                        + "  \"" + dynamicName + "\": 7,\n"
+                        + "  \"decaton.partition.concurrency\": 10\n"
+                        + "}\n";
+
+        repo.commit("init-json", Change.ofJsonUpsert(FILE, ORIGINAL)).push().join();
+
+        CentralDogmaPropertySupplier supplier = new CentralDogmaPropertySupplier(repo, FILE);
+
+        PropertyDefinition<Integer> DYNAMIC_INT =
+                PropertyDefinition.define(dynamicName, Integer.class, 0, v -> v instanceof Integer);
+
+        Property<Integer> prop = supplier.getProperty(DYNAMIC_INT).get();
+        assertEquals(7, prop.value().intValue());
+
+        final String UPDATED =
+                "{\n"
+                        + "  \"" + dynamicName + "\": 11,\n" // This is changed
+                        + "  \"decaton.partition.concurrency\": 10\n"
+                        + "}\n";
+
+        CountDownLatch latch = new CountDownLatch(2);
+        prop.listen((oldV, newV) -> latch.countDown());
+
+        repo.commit("patch-json", Change.ofJsonPatch(FILE, ORIGINAL, UPDATED)).push().join();
+
+        latch.await();
+        assertEquals(11, prop.value().intValue());
+    }
+
+    @Test
+    @Timeout(50)
+    public void testCDIntegrationDynamicPropertyYaml() throws Exception {
+        final String FILE = "/subscription.yaml";
+        CentralDogma client = extension.client();
+
+        client.createProject(PROJECT_NAME).join();
+        CentralDogmaRepository repo =
+                client.createRepository(PROJECT_NAME, REPOSITORY_NAME).join();
+
+        final String topic = "payments";
+        final String dynamicName =
+                "decaton.shaping.topic.processing.rate.per.partition." + topic;
+        assertFalse(ProcessorProperties.defaultProperties().stream()
+                .anyMatch(p -> p.definition().name().equals(dynamicName)));
+
+        final String ORIGINAL_YAML =
+                "decaton.partition.concurrency: 10\n"
+                        + dynamicName + ": 3\n";
+
+        repo.commit("init-yaml", Change.ofTextUpsert(FILE, ORIGINAL_YAML))
+                .push().join();
+
+        CentralDogmaPropertySupplier supplier = new CentralDogmaPropertySupplier(repo, FILE);
+
+        PropertyDefinition<Integer> DYNAMIC_INT =
+                PropertyDefinition.define(dynamicName, Integer.class, 0, v -> v instanceof Integer);
+
+        Property<Integer> prop = supplier.getProperty(DYNAMIC_INT).get();
+        assertEquals(3, prop.value().intValue());
+
+        final String UPDATED_YAML =
+                "decaton.partition.concurrency: 10\n"
+                        + dynamicName + ": 9\n"; // This is changed
+
+        CountDownLatch latch = new CountDownLatch(2);
+        prop.listen((o, n) -> latch.countDown());
+
+        repo.commit("patch-yaml", Change.ofTextPatch(FILE, ORIGINAL_YAML, UPDATED_YAML))
+                .push().join();
+
+        latch.await();
+        assertEquals(9, prop.value().intValue());
     }
 
     @Test
@@ -414,7 +507,7 @@ public class CentralDogmaPropertySupplierIntegrationTest {
         return Stream.of(JSON, YAML);
     }
 
-    @ParameterizedTest(name = "registerTimeout‑{0}")
+    @ParameterizedTest()
     @MethodSource("formats")
     @Timeout(15)
     void testCDRegisterTimeout(FormatCase testCase) {
@@ -433,7 +526,7 @@ public class CentralDogmaPropertySupplierIntegrationTest {
         });
     }
 
-    @ParameterizedTest(name = "registerNonExistentProject‑{0}")
+    @ParameterizedTest()
     @MethodSource("formats")
     void testCDRegisterNonExistentProject(FormatCase testCase) {
         assertThrows(RuntimeException.class, () -> {
@@ -442,7 +535,7 @@ public class CentralDogmaPropertySupplierIntegrationTest {
         });
     }
 
-    @ParameterizedTest(name = "fileExists‑{0}")
+    @ParameterizedTest()
     @MethodSource("formats")
     void testFileExist(FormatCase testCase) {
         CentralDogma client = extension.client();
@@ -457,7 +550,7 @@ public class CentralDogmaPropertySupplierIntegrationTest {
                 .fileExists(centralDogmaRepository, testCase.file(), Revision.HEAD));
     }
 
-    @ParameterizedTest(name = "fileNonExistent‑{0}")
+    @ParameterizedTest()
     @MethodSource("formats")
     void testFileNonExistent(FormatCase testCase) {
         CentralDogma client = extension.client();

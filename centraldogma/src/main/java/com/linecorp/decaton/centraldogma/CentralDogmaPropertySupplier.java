@@ -121,15 +121,14 @@ public class CentralDogmaPropertySupplier implements PropertySupplier, AutoClose
         }
 
         rootWatcher.watch(node -> {
-            for (PropertyDefinition<?> definition : PROPERTY_DEFINITIONS) {
-                DynamicProperty<?> p = cachedProperties.get(definition.name());
-                if (p != null && node.has(definition.name())) {
+            for(ConcurrentHashMap.Entry<String, DynamicProperty<?>> cachedProperty : cachedProperties.entrySet()) {
+                if (node.has(cachedProperty.getKey())) {
                     try {
-                        setValue(p, node.get(definition.name()));
+                        setValue(cachedProperty.getValue(), node.get(cachedProperty.getKey()));
                     } catch (Exception e) {
                         // Catching Exception instead of RuntimeException, since
                         // Kotlin-implemented DynamicProperty would throw checked exceptions
-                        logger.warn("Failed to set value from CentralDogma for {}", definition.name(), e);
+                        logger.warn("Failed to set value updatedfrom CentralDogma for {}", cachedProperty.getKey(), e);
                     }
                 }
             }
@@ -165,7 +164,7 @@ public class CentralDogmaPropertySupplier implements PropertySupplier, AutoClose
             } catch (Exception e) {
                 // Catching Exception instead of RuntimeException, since
                 // Kotlin-implemented DynamicProperty would throw checked exceptions
-                logger.warn("Failed to set value from CentralDogma for {}", definition.name(), e);
+                logger.warn("Failed to set initial value from CentralDogma for {}", definition.name(), e);
             }
             return prop;
         });
