@@ -67,7 +67,7 @@ public class ProcessorUnitTest {
 
         unit = spy(new ProcessorUnit(scope, pipeline, Executors.newSingleThreadExecutor()));
 
-        taskRequest = new TaskRequest(1723687072569L, topicPartition, 1, new OffsetState(1234), null, null, null, HelloTask.getDefaultInstance().toByteArray(), null);
+        taskRequest = new TaskRequest(1723687072569L, topicPartition, 1, new OffsetState(1234), null, null, null, HelloTask.getDefaultInstance().toByteArray());
     }
 
     @Test

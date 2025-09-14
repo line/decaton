@@ -19,7 +19,6 @@ package com.linecorp.decaton.processor.runtime.internal;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Headers;
 
-import com.linecorp.decaton.processor.runtime.internal.PerKeyQuotaManager.QuotaUsage;
 import com.linecorp.decaton.processor.tracing.TracingProvider.RecordTraceHandle;
 
 import lombok.AllArgsConstructor;
@@ -44,8 +43,6 @@ public class TaskRequest {
     private final RecordTraceHandle trace;
     @ToString.Exclude
     private byte[] rawRequestBytes;
-    @ToString.Exclude
-    private final QuotaUsage quotaUsage;
 
     public String id() {
         // TaskRequest object is held alive through associated ProcessingContext's lifetime, hence holding

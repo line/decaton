@@ -29,6 +29,7 @@ import java.util.function.Supplier;
 import org.apache.kafka.clients.consumer.Consumer;
 
 import com.linecorp.decaton.processor.metrics.internal.AvailableTags;
+import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.DistributionSummary;
@@ -269,6 +270,36 @@ public class Metrics {
                                                     .tags(availableTags.partitionScope())
                                                     .register(registry()));
         }
+    }
+
+    /**
+     * In contrast to {@link TaskMetrics}, this class is used to track metrics related
+     * to the raw consumer records before extracted as tasks.
+     */
+    public class RecordMetrics extends AbstractMetrics {
+        /**
+         * You can use this metric to decide whether if you can disable {@link ProcessorProperties#CONFIG_LEGACY_PARSE_FALLBACK_ENABLED}
+         * when you use Decaton client for the task producer.
+         * <p>
+         * TODO: This metric will be removed in the future major version, along with the legacy format support.
+         */
+        public final Counter decatonClientV9Records = meter(() -> Counter
+                .builder("records.consumed")
+                .description("The number of records consumed from the topic")
+                .tags(availableTags.partitionScope().and("format", "decaton.client.v9"))
+                .register(registry));
+
+        /**
+         * You can use this metric to decide whether if you can disable {@link ProcessorProperties#CONFIG_LEGACY_PARSE_FALLBACK_ENABLED}
+         * when you use Decaton client for the task producer.
+         * <p>
+         * TODO: This metric will be removed in the future major version, along with the legacy format support.
+         */
+        public final Counter otherRecords = meter(() -> Counter
+                .builder("records.consumed")
+                .description("The number of records consumed from the topic")
+                .tags(availableTags.partitionScope().and("format", "other"))
+                .register(registry));
     }
 
     public class SchedulerMetrics extends AbstractMetrics {

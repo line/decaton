@@ -23,7 +23,6 @@ import java.util.Collection;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionStage;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -125,6 +124,7 @@ public class ProcessorSubscription extends Thread implements AsyncClosable {
                     log.error("Exception from tracing", e);
                 }
             });
+            context.updateRecordMetrics(record);
 
             if (blacklistedKeysFilter.shouldTake(record)) {
                 context.addRecord(record, offsetState, trace, quotaApplier);
