@@ -19,15 +19,20 @@ package com.linecorp.decaton.processor.runtime.internal;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import java.io.UncheckedIOException;
+
 import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.serialization.Deserializer;
 import org.junit.jupiter.api.Test;
+
+import com.google.protobuf.InvalidProtocolBufferException;
+import com.google.protobuf.Parser;
 
 import com.linecorp.decaton.processor.TaskMetadata;
 import com.linecorp.decaton.processor.runtime.ConsumedRecord;
 import com.linecorp.decaton.processor.runtime.DecatonTask;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.Property;
-import com.linecorp.decaton.protobuf.ProtocolBuffersDeserializer;
 import com.linecorp.decaton.protocol.internal.DecatonInternal.DecatonTaskRequest;
 import com.linecorp.decaton.protocol.Decaton.TaskMetadataProto;
 import com.linecorp.decaton.protocol.Sample.HelloTask;
@@ -43,11 +48,12 @@ public class DefaultTaskExtractorTest {
     @Test
     public void testExtract() {
         DefaultTaskExtractor<HelloTask> extractor = new DefaultTaskExtractor<>(
-                new ProtocolBuffersDeserializer<>(HelloTask.parser()),
+                deserializer(HelloTask.parser()),
                 Property.ofStatic(ProcessorProperties.CONFIG_LEGACY_PARSE_FALLBACK_ENABLED, true));
 
         ConsumedRecord record = ConsumedRecord
                 .builder()
+                .topic("topic")
                 .recordTimestampMillis(1561709151628L)
                 .headers(new RecordHeaders())
                 .value(LEGACY_REQUEST.toByteArray())
@@ -64,11 +70,12 @@ public class DefaultTaskExtractorTest {
     @Test
     public void testExtractBypassLegacyFormatWhenHeaderMissing() {
         DefaultTaskExtractor<HelloTask> extractor = new DefaultTaskExtractor<>(
-                new ProtocolBuffersDeserializer<>(HelloTask.parser()),
+                deserializer(HelloTask.parser()),
                 Property.ofStatic(ProcessorProperties.CONFIG_LEGACY_PARSE_FALLBACK_ENABLED, false));
 
         ConsumedRecord record = ConsumedRecord
                 .builder()
+                .topic("topic")
                 .recordTimestampMillis(1561709151628L)
                 .headers(new RecordHeaders())
                 .value(TASK.toByteArray())
@@ -83,5 +90,15 @@ public class DefaultTaskExtractorTest {
         assertEquals(TASK, extracted.taskData());
 
         assertArrayEquals(TASK.toByteArray(), extracted.taskDataBytes());
+    }
+
+    private static <T> Deserializer<T> deserializer(Parser<T> parser) {
+        return (topic, data) -> {
+            try {
+                return parser.parseFrom(data);
+            } catch (InvalidProtocolBufferException e) {
+                throw new UncheckedIOException(e);
+            }
+        };
     }
 }

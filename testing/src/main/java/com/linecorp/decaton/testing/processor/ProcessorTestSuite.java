@@ -48,6 +48,7 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
+import org.apache.kafka.common.serialization.Deserializer;
 
 import com.google.protobuf.ByteString;
 
@@ -112,6 +113,7 @@ public class ProcessorTestSuite {
     private final TracingProvider tracingProvider;
     private final Function<String, Producer<byte[], byte[]>> producerSupplier;
     private final TaskExtractor<TestTask> customTaskExtractor;
+    private final Deserializer<TestTask> customDeserializer;
     private final boolean produceTasksInLegacyFormat;
 
     private static final int DEFAULT_NUM_TASKS = 10000;
@@ -184,8 +186,14 @@ public class ProcessorTestSuite {
         private Function<String, Producer<byte[], byte[]>> producerSupplier = TestUtils::producer;
         /**
          * Supply custom {@link TaskExtractor} to be used to extract a task.
+         * Exclusive with {@link #customDeserializer}
          */
         private TaskExtractor<TestTask> customTaskExtractor;
+        /**
+         * Supply custom {@link Deserializer} to be used to deserialize a task.
+         * Exclusive with {@link #customTaskExtractor}
+         */
+        private Deserializer<TestTask> customDeserializer;
         /**
          * Specify whether to produce tasks in legacy DecatonTaskRequest format instead of header metadata
          */
@@ -215,6 +223,10 @@ public class ProcessorTestSuite {
         }
 
         public ProcessorTestSuite build() {
+            if (customDeserializer != null && customTaskExtractor != null) {
+                throw new IllegalArgumentException("customDeserializer and customTaskExtractor are exclusive");
+            }
+
             Set<ProcessingGuarantee> semantics = new HashSet<>();
             for (GuaranteeType guaranteeType : defaultSemantics) {
                 semantics.add(guaranteeType.get());
@@ -238,6 +250,7 @@ public class ProcessorTestSuite {
                                           tracingProvider,
                                           producerSupplier,
                                           customTaskExtractor,
+                                          customDeserializer,
                                           produceTasksInLegacyFormat);
         }
     }
@@ -318,10 +331,12 @@ public class ProcessorTestSuite {
         };
 
         final ProcessorsBuilder<TestTask> sourceBuilder;
-        if (customTaskExtractor == null) {
-            sourceBuilder = ProcessorsBuilder.consuming(topic, new TestTaskDeserializer());
-        } else {
+        if (customTaskExtractor != null) {
             sourceBuilder = ProcessorsBuilder.consuming(topic, customTaskExtractor);
+        } else if (customDeserializer != null) {
+            sourceBuilder = ProcessorsBuilder.consuming(topic, customDeserializer);
+        } else {
+            sourceBuilder = ProcessorsBuilder.consuming(topic, new TestTaskDeserializer());
         }
         ProcessorsBuilder<TestTask> processorsBuilder =
                 configureProcessorsBuilder.apply(sourceBuilder.thenProcess(preprocessor));

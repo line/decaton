@@ -16,9 +16,10 @@
 
 package com.linecorp.decaton.processor.runtime.internal;
 
+import org.apache.kafka.common.serialization.Deserializer;
+
 import com.google.protobuf.InvalidProtocolBufferException;
 
-import com.linecorp.decaton.common.Deserializer;
 import com.linecorp.decaton.client.internal.TaskMetadataUtil;
 import com.linecorp.decaton.processor.runtime.ConsumedRecord;
 import com.linecorp.decaton.processor.runtime.DecatonTask;
@@ -42,7 +43,7 @@ public class DefaultTaskExtractor<T> implements TaskExtractor<T> {
             byte[] taskDataBytes = record.value();
             return new DecatonTask<>(
                     TaskMetadata.fromProto(headerMeta),
-                    taskDeserializer.deserialize(taskDataBytes),
+                    taskDeserializer.deserialize(record.topic(), record.headers(), taskDataBytes),
                     taskDataBytes);
         } else {
             // There are two cases where task metadata header is missing:
@@ -59,13 +60,13 @@ public class DefaultTaskExtractor<T> implements TaskExtractor<T> {
 
                     return new DecatonTask<>(
                             metadata,
-                            taskDeserializer.deserialize(taskDataBytes),
+                            taskDeserializer.deserialize(record.topic(), record.headers(), taskDataBytes),
                             taskDataBytes);
                 } catch (InvalidProtocolBufferException e) {
                     throw new IllegalArgumentException(e);
                 }
             } else {
-                T task = taskDeserializer.deserialize(record.value());
+                T task = taskDeserializer.deserialize(record.topic(), record.headers(), record.value());
                 return new DecatonTask<>(
                         TaskMetadata.builder()
                                     .timestampMillis(record.recordTimestampMillis())
@@ -74,5 +75,10 @@ public class DefaultTaskExtractor<T> implements TaskExtractor<T> {
                         record.value());
             }
         }
+    }
+
+    @Override
+    public void close() {
+        taskDeserializer.close();
     }
 }
