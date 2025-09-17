@@ -280,11 +280,11 @@ public class ProcessorSubscription extends Thread implements AsyncClosable {
     }
 
     private void cleanUp() {
-        contexts.close();
-        consumeManager.close();
-        quotaApplier.close();
-        metrics.close();
-        processors.close();
+        safeClose(contexts);
+        safeClose(consumeManager);
+        safeClose(quotaApplier);
+        safeClose(metrics);
+        safeClose(processors);
         updateState(SubscriptionStateListener.State.TERMINATED);
     }
 
@@ -296,5 +296,13 @@ public class ProcessorSubscription extends Thread implements AsyncClosable {
             loopTerminateFuture.complete(null);
         }
         return loopTerminateFuture.whenComplete((unused, throwable) -> cleanUp());
+    }
+
+    private static void safeClose(AutoCloseable closeable) {
+        try {
+            closeable.close();
+        } catch (Exception e) {
+            log.error("Exception thrown while closing {}", closeable.getClass().getSimpleName(), e);
+        }
     }
 }
