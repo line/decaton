@@ -4,7 +4,7 @@
  * Licensed under the Apache License, Version 2.0 …
  */
 
-package com.linecorp.decaton.centraldogma;
+package com.linecorp.decaton.centraldogma.internal;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;

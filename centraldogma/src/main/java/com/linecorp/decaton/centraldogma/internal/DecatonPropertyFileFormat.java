@@ -4,7 +4,7 @@
  * Licensed under the Apache License, Version 2.0 …
  */
 
-package com.linecorp.decaton.centraldogma;
+package com.linecorp.decaton.centraldogma.internal;
 
 import java.io.IOException;
 import java.util.Locale;
@@ -13,6 +13,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.linecorp.centraldogma.client.CentralDogmaRepository;
 import com.linecorp.centraldogma.client.Watcher;
 import com.linecorp.centraldogma.common.Change;
+import com.linecorp.decaton.centraldogma.CentralDogmaPropertySupplier;
 
 /**
  * Encapsulates Central Dogma–specific concerns for reading and writing

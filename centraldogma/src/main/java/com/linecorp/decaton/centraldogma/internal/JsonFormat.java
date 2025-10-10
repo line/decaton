@@ -2,7 +2,7 @@
  * Copyright 2025 LINE Corporation
  */
 
-package com.linecorp.decaton.centraldogma;
+package com.linecorp.decaton.centraldogma.internal;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.linecorp.centraldogma.client.CentralDogmaRepository;
