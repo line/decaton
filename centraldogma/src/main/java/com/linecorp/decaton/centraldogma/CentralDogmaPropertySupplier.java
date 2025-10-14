@@ -16,6 +16,8 @@
 
 package com.linecorp.decaton.centraldogma;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -38,8 +40,8 @@ import com.linecorp.centraldogma.client.Watcher;
 import com.linecorp.centraldogma.common.Change;
 import com.linecorp.centraldogma.common.ChangeConflictException;
 import com.linecorp.centraldogma.common.PathPattern;
-import com.linecorp.centraldogma.common.Query;
 import com.linecorp.centraldogma.common.Revision;
+import com.linecorp.decaton.centraldogma.internal.DecatonPropertyFileFormat;
 import com.linecorp.decaton.processor.runtime.DynamicProperty;
 import com.linecorp.decaton.processor.runtime.ProcessorProperties;
 import com.linecorp.decaton.processor.runtime.Property;
@@ -48,12 +50,15 @@ import com.linecorp.decaton.processor.runtime.PropertySupplier;
 
 /**
  * A {@link PropertySupplier} implementation with Central Dogma backend.
- *
+ * <p>
  * This implementation maps property's {@link PropertyDefinition#name()} as the absolute field name in the file
  * on Central Dogma.
- *
+ * <p>
+ * You can use json or yaml format for the property file.
+ * You cannot nest keys in both formats. Keys must be top-level fields.
+ * <p>
  * An example JSON format would be look like:
- * {@code
+ * <pre>{@code
  * {
  *     "decaton.partition.concurrency": 10,
  *     "decaton.ignore.keys": [
@@ -62,7 +67,16 @@ import com.linecorp.decaton.processor.runtime.PropertySupplier;
  *     ],
  *     "decaton.processing.rate.per.partition": 50
  * }
- * }
+ * }</pre>
+ *
+ * An example YAML format would be look like:
+ * <pre>{@code
+ * decaton.partition.concurrency: 10
+ * decaton.ignore.keys:
+ *  - "123456"
+ *  - "79797979"
+ * decaton.processing.rate.per.partition: 50
+ * }</pre>
  */
 public class CentralDogmaPropertySupplier implements PropertySupplier, AutoCloseable {
     private static final Logger logger = LoggerFactory.getLogger(CentralDogmaPropertySupplier.class);
@@ -73,7 +87,6 @@ public class CentralDogmaPropertySupplier implements PropertySupplier, AutoClose
     private static final ObjectMapper objectMapper = new ObjectMapper();
 
     private final Watcher<JsonNode> rootWatcher;
-
     private final ConcurrentMap<String, DynamicProperty<?>> cachedProperties = new ConcurrentHashMap<>();
 
     /**
@@ -94,7 +107,9 @@ public class CentralDogmaPropertySupplier implements PropertySupplier, AutoClose
      * @param fileName the name of the file containing properties as top-level fields.
      */
     public CentralDogmaPropertySupplier(CentralDogmaRepository centralDogmaRepository, String fileName) {
-        rootWatcher = centralDogmaRepository.watcher(Query.ofJsonPath(fileName)).start();
+        DecatonPropertyFileFormat configFile = DecatonPropertyFileFormat.of(fileName);
+        this.rootWatcher = configFile.createWatcher(centralDogmaRepository, fileName);
+
         try {
             rootWatcher.awaitInitialValue(INITIAL_VALUE_TIMEOUT_SECS, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
@@ -103,6 +118,20 @@ public class CentralDogmaPropertySupplier implements PropertySupplier, AutoClose
         } catch (TimeoutException e) {
             throw new RuntimeException(e);
         }
+
+        rootWatcher.watch(node -> {
+            for(ConcurrentHashMap.Entry<String, DynamicProperty<?>> cachedProperty : cachedProperties.entrySet()) {
+                if (node.has(cachedProperty.getKey())) {
+                    try {
+                        setValue(cachedProperty.getValue(), node.get(cachedProperty.getKey()));
+                    } catch (Exception e) {
+                        // Catching Exception instead of RuntimeException, since
+                        // Kotlin-implemented DynamicProperty would throw checked exceptions
+                        logger.warn("Failed to set value updatedfrom CentralDogma for {}", cachedProperty.getKey(), e);
+                    }
+                }
+            }
+        });
     }
 
     // visible for testing
@@ -129,25 +158,13 @@ public class CentralDogmaPropertySupplier implements PropertySupplier, AutoClose
         // for most use cases though, this cache is only filled/read once.
         final DynamicProperty<?> cachedProp = cachedProperties.computeIfAbsent(definition.name(), name -> {
             DynamicProperty<T> prop = new DynamicProperty<>(definition);
-            Watcher<JsonNode> child = rootWatcher.newChild(jsonNode -> jsonNode.path(definition.name()));
-            child.watch(node -> {
-                try {
-                    setValue(prop, node);
-                } catch (Exception e) {
-                    // Catching Exception instead of RuntimeException, since
-                    // Kotlin-implemented DynamicProperty would throw checked exceptions
-                    logger.warn("Failed to set value updated from CentralDogma for {}", definition.name(), e);
-                }
-            });
             try {
-                JsonNode node = child.initialValueFuture().join().value(); //doesn't fail since it's a child watcher
-                setValue(prop, node);
+                setValue(prop, rootWatcher.latestValue().get(definition.name()));
             } catch (Exception e) {
                 // Catching Exception instead of RuntimeException, since
                 // Kotlin-implemented DynamicProperty would throw checked exceptions
                 logger.warn("Failed to set initial value from CentralDogma for {}", definition.name(), e);
             }
-
             return prop;
         });
 
@@ -175,8 +192,7 @@ public class CentralDogmaPropertySupplier implements PropertySupplier, AutoClose
     public static CentralDogmaPropertySupplier register(CentralDogma centralDogma, String project,
                                                         String repository, String filename) {
         final CentralDogmaRepository centralDogmaRepository = centralDogma.forRepo(project, repository);
-        createPropertyFile(centralDogmaRepository, filename, ProcessorProperties.defaultProperties());
-        return new CentralDogmaPropertySupplier(centralDogmaRepository, filename);
+        return register(centralDogmaRepository, filename);
     }
 
     /**
@@ -215,6 +231,7 @@ public class CentralDogmaPropertySupplier implements PropertySupplier, AutoClose
     public static CentralDogmaPropertySupplier register(CentralDogmaRepository centralDogmaRepository,
                                                         String filename,
                                                         PropertySupplier supplier) {
+
         List<Property<?>> properties = ProcessorProperties.defaultProperties().stream().map(defaultProperty -> {
             Optional<? extends Property<?>> prop = supplier.getProperty(defaultProperty.definition());
             if (prop.isPresent()) {
@@ -236,12 +253,18 @@ public class CentralDogmaPropertySupplier implements PropertySupplier, AutoClose
         long remainingTime = remainingTime(PROPERTY_CREATION_TIMEOUT_MILLIS, startedTime);
 
         JsonNode jsonNodeProperties = convertPropertyListToJsonNode(properties);
+        Change<?> upsert;
+        try {
+            upsert = DecatonPropertyFileFormat.of(fileName).createUpsertChange(fileName, jsonNodeProperties);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
 
         while (!fileExists && remainingTime > 0) {
             try {
                 centralDogmaRepository
                         .commit(String.format("[CentralDogmaPropertySupplier] Property file created: %s", fileName),
-                                Change.ofJsonUpsert(fileName, jsonNodeProperties))
+                                upsert)
                         .push(baseRevision)
                         .get(remainingTime, TimeUnit.MILLISECONDS);
                 logger.info("New property file {} registered on Central Dogma", fileName);
