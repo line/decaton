@@ -22,6 +22,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Supplier;
 
 import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.DeferredCompletion;
@@ -42,8 +43,8 @@ public abstract class BatchingProcessor<T> implements DecatonProcessor<T> {
 
     private final ScheduledExecutorService executor;
     private List<BatchingTask<T>> currentBatch = new ArrayList<>();
-    private final long lingerMillis;
-    private final int capacity;
+    private final Supplier<Long> lingerMillisSupplier;
+    private final Supplier<Integer> capacitySupplier;
     private final ReentrantLock rollingLock;
 
     @Value
@@ -56,14 +57,14 @@ public abstract class BatchingProcessor<T> implements DecatonProcessor<T> {
 
     /**
      * Instantiate {@link BatchingProcessor}.
-     * @param lingerMillis time limit for this processor. On every lingerMillis milliseconds,
+     * @param lingerMillisSupplier time limit for this processor. On every lingerMillis milliseconds,
      * tasks in past lingerMillis milliseconds are pushed to {@link BatchingTask#processBatchingTasks(List)}.
-     * @param capacity size limit for this processor. Every time tasks’size reaches capacity,
+     * @param lingerMillisSupplier size limit for this processor. Every time tasks’size reaches capacity,
      * tasks in past before reaching capacity are pushed to {@link BatchingTask#processBatchingTasks(List)}.
      */
-    protected BatchingProcessor(long lingerMillis, int capacity) {
-        this.lingerMillis = lingerMillis;
-        this.capacity = capacity;
+    protected BatchingProcessor(Supplier<Long> lingerMillisSupplier, Supplier<Integer> capacitySupplier) {
+        this.lingerMillisSupplier = lingerMillisSupplier;
+        this.capacitySupplier = capacitySupplier;
 
         ScheduledThreadPoolExecutor scheduledExecutor = new ScheduledThreadPoolExecutor(
             1,
@@ -108,14 +109,16 @@ public abstract class BatchingProcessor<T> implements DecatonProcessor<T> {
     }
 
     private void scheduleFlush() {
-        executor.schedule(this::periodicallyFlushTask, lingerMillis, TimeUnit.MILLISECONDS);
+        long lingerMs = this.lingerMillisSupplier.get();
+        executor.schedule(this::periodicallyFlushTask, lingerMs, TimeUnit.MILLISECONDS);
     }
 
     @Override
     public void process(ProcessingContext<T> context, T task) throws InterruptedException {
         rollingLock.lock();
         try {
-            if (currentBatch.size() >= this.capacity) {
+            int cap = this.capacitySupplier.get();
+            if (currentBatch.size() >= cap) {
                 final List<BatchingTask<T>> batch = currentBatch;
                 executor.submit(() -> processBatchingTasks(batch));
                 currentBatch = new ArrayList<>();

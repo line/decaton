@@ -45,7 +45,7 @@ public class BatchingProcessorTest {
         ProcessorTestSuite
             .builder(rule)
             .configureProcessorsBuilder(builder -> builder.thenProcess(
-                new BatchingProcessor<TestTask>(1000, 100) {
+                new BatchingProcessor<TestTask>(() -> 1000L, () -> 100) {
                     @Override
                     protected void processBatchingTasks(List<BatchingTask<TestTask>> batchingTasks) {
                         // adding some random delay to simulate realistic usage

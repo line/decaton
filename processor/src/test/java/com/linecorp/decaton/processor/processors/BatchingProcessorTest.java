@@ -60,7 +60,7 @@ public class BatchingProcessorTest {
     }
 
     private BatchingProcessor<HelloTask> buildProcessor(CountDownLatch processLatch, long lingerMs, int capacity) {
-        return new BatchingProcessor<HelloTask>(lingerMs, capacity) {
+        return new BatchingProcessor<HelloTask>(() -> lingerMs, () -> capacity) {
             @Override
             protected void processBatchingTasks(List<BatchingTask<HelloTask>> batchingTasks) {
                 List<HelloTask> helloTasks =
