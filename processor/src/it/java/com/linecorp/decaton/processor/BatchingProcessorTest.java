@@ -72,10 +72,8 @@ public class BatchingProcessorTest {
     @Test
     @Timeout(30)
     public void testDynamicConfiguration() throws Exception {
-        // Test with dynamic linger milliseconds but static capacity
         Random rand = randomExtension.random();
         
-        // Track the value of lingerMs for testing purposes
         final long[] lingerMsValues = {1000L, 2000L, 3000L};
         AtomicInteger lingerMsCallTimes = new AtomicInteger(0);
         final int[] capacityValues = {100, 200, 300};
@@ -90,7 +88,6 @@ public class BatchingProcessorTest {
                         ) {
                             @Override
                             protected void processBatchingTasks(List<BatchingTask<TestTask>> batchingTasks) {
-                                // adding some random delay to simulate realistic usage
                                 try {
                                     Thread.sleep(rand.nextInt(10));
                                 } catch (InterruptedException e) {
