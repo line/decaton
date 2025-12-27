@@ -55,6 +55,10 @@ public abstract class BatchingProcessor<T> implements DecatonProcessor<T> {
         T task;
     }
 
+    protected BatchingProcessor(long lingerMillis, int capacity) {
+        this(() -> lingerMillis, () -> capacity);
+    }
+
     /**
      * Instantiate {@link BatchingProcessor}.
      * @param lingerMillisSupplier time limit for this processor. On every lingerMillis milliseconds,
