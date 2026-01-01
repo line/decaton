@@ -89,15 +89,12 @@ public abstract class BatchingProcessor<T> implements DecatonProcessor<T> {
         this.lingerMillisSupplier = validatedAndLKGWrappedSupplier(
                 "lingerMillisSupplier",
                 lingerMillisSupplier,
-                v -> v > 0,
-                new AtomicReference<>());
+                v -> v > 0);
 
         this.capacitySupplier = validatedAndLKGWrappedSupplier(
                 "capacitySupplier",
                 capacitySupplier,
-                v -> v > 0,
-                new AtomicReference<>()
-        );
+                v -> v > 0);
 
         // initialize last-known-good values or fail fast at constructor time
         this.lingerMillisSupplier.get();
@@ -171,17 +168,17 @@ public abstract class BatchingProcessor<T> implements DecatonProcessor<T> {
         executor.awaitTermination(Long.MAX_VALUE, TimeUnit.SECONDS);
     }
 
-    private <V> Supplier<V> validatedAndLKGWrappedSupplier(
+    private static <V> Supplier<V> validatedAndLKGWrappedSupplier(
             String name,
             Supplier<V> delegate,
-            Predicate<V> validator,
-            AtomicReference<V> lkg) {
+            Predicate<V> validator) {
+        final AtomicReference<V> lkg = new AtomicReference<>();
         return () -> {
             final V value;
             try {
                 value = delegate.get();
             } catch (Exception e) {
-                if (lkg != null && lkg.get() != null) {
+                if (lkg.get() != null) {
                     V lkgValue = lkg.get();
                     logger.warn("{} threw exception from get(), using last-known-good value: {}.", name,
                                 lkgValue, e);
@@ -192,7 +189,7 @@ public abstract class BatchingProcessor<T> implements DecatonProcessor<T> {
             }
 
             if (!validator.test(value)) {
-                if (lkg != null && lkg.get() != null) {
+                if (lkg.get() != null) {
                     V lkgValue = lkg.get();
                     logger.warn("{} returned invalid value: {}, using last-known-good value: {}.",
                                 name,
