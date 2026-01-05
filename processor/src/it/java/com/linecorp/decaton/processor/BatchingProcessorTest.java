@@ -16,8 +16,11 @@
 
 package com.linecorp.decaton.processor;
 
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import java.util.List;
 import java.util.Random;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -45,7 +48,7 @@ public class BatchingProcessorTest {
         ProcessorTestSuite
             .builder(rule)
             .configureProcessorsBuilder(builder -> builder.thenProcess(
-                new BatchingProcessor<TestTask>(1000, 100) {
+                new BatchingProcessor<TestTask>(1000L, 100) {
                     @Override
                     protected void processBatchingTasks(List<BatchingTask<TestTask>> batchingTasks) {
                         // adding some random delay to simulate realistic usage
@@ -64,5 +67,44 @@ public class BatchingProcessorTest {
             ))
             .build()
             .run();
+    }
+
+    @Test
+    @Timeout(30)
+    public void testDynamicConfiguration() throws Exception {
+        Random rand = randomExtension.random();
+        
+        final long[] lingerMsValues = {1000L, 2000L, 3000L};
+        AtomicInteger lingerMsCallTimes = new AtomicInteger(0);
+        final int[] capacityValues = {100, 200, 300};
+        AtomicInteger capacityCallTimes = new AtomicInteger(0);
+        
+        ProcessorTestSuite
+                .builder(rule)
+                .configureProcessorsBuilder(builder -> builder.thenProcess(
+                        new BatchingProcessor<TestTask>(
+                                () -> lingerMsValues[lingerMsCallTimes.getAndIncrement() % lingerMsValues.length],
+                                () -> capacityValues[capacityCallTimes.getAndIncrement() % capacityValues.length]
+                        ) {
+                            @Override
+                            protected void processBatchingTasks(List<BatchingTask<TestTask>> batchingTasks) {
+                                try {
+                                    Thread.sleep(rand.nextInt(10));
+                                } catch (InterruptedException e) {
+                                    Thread.currentThread().interrupt();
+                                    throw new RuntimeException(e);
+                                }
+                                batchingTasks.forEach(batchingTask -> batchingTask.completion().complete());
+                            }
+                        }
+                ))
+                .propertySupplier(StaticPropertySupplier.of(
+                        Property.ofStatic(ProcessorProperties.CONFIG_PARTITION_CONCURRENCY, 16)
+                ))
+                .build()
+                .run();
+
+        assertTrue(lingerMsCallTimes.get() > 1);
+        assertTrue(capacityCallTimes.get() > 1);
     }
 }

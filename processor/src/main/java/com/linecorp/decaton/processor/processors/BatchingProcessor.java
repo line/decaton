@@ -18,10 +18,17 @@ package com.linecorp.decaton.processor.processors;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Predicate;
+import java.util.function.Supplier;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.linecorp.decaton.processor.DecatonProcessor;
 import com.linecorp.decaton.processor.DeferredCompletion;
@@ -39,11 +46,12 @@ import lombok.experimental.Accessors;
  * @param <T> type of task to batch
  */
 public abstract class BatchingProcessor<T> implements DecatonProcessor<T> {
+    private static final Logger logger = LoggerFactory.getLogger(BatchingProcessor.class);
 
     private final ScheduledExecutorService executor;
     private List<BatchingTask<T>> currentBatch = new ArrayList<>();
-    private final long lingerMillis;
-    private final int capacity;
+    private final Supplier<Long> lingerMillisSupplier;
+    private final Supplier<Integer> capacitySupplier;
     private final ReentrantLock rollingLock;
 
     @Value
@@ -62,8 +70,35 @@ public abstract class BatchingProcessor<T> implements DecatonProcessor<T> {
      * tasks in past before reaching capacity are pushed to {@link BatchingTask#processBatchingTasks(List)}.
      */
     protected BatchingProcessor(long lingerMillis, int capacity) {
-        this.lingerMillis = lingerMillis;
-        this.capacity = capacity;
+        this(() -> lingerMillis, () -> capacity);
+    }
+
+    /**
+     * Instantiate {@link BatchingProcessor} with dynamic lingerMillis and capacity config.
+     * <p>
+     * The suppliers are verified capable of returning positive numbers during instantiation.
+     * If not, this constructor will fail to instantiate the BatchingProcessor instance.
+     * <br>
+     * If the suppliers return non-positive numbers in processing time, lask-known-good value is used as fallback.
+     * </p>
+     */
+    protected BatchingProcessor(Supplier<Long> lingerMillisSupplier, Supplier<Integer> capacitySupplier) {
+        Objects.requireNonNull(lingerMillisSupplier, "lingerMillisSupplier must not be null.");
+        Objects.requireNonNull(capacitySupplier, "capacitySupplier must not be null.");
+
+        this.lingerMillisSupplier = validatedAndLKGWrappedSupplier(
+                "lingerMillisSupplier",
+                lingerMillisSupplier,
+                v -> v > 0);
+
+        this.capacitySupplier = validatedAndLKGWrappedSupplier(
+                "capacitySupplier",
+                capacitySupplier,
+                v -> v > 0);
+
+        // initialize last-known-good values or fail fast at constructor time
+        this.lingerMillisSupplier.get();
+        this.capacitySupplier.get();
 
         ScheduledThreadPoolExecutor scheduledExecutor = new ScheduledThreadPoolExecutor(
             1,
@@ -108,14 +143,14 @@ public abstract class BatchingProcessor<T> implements DecatonProcessor<T> {
     }
 
     private void scheduleFlush() {
-        executor.schedule(this::periodicallyFlushTask, lingerMillis, TimeUnit.MILLISECONDS);
+        executor.schedule(this::periodicallyFlushTask, this.lingerMillisSupplier.get(), TimeUnit.MILLISECONDS);
     }
 
     @Override
     public void process(ProcessingContext<T> context, T task) throws InterruptedException {
         rollingLock.lock();
         try {
-            if (currentBatch.size() >= this.capacity) {
+            if (currentBatch.size() >= this.capacitySupplier.get()) {
                 final List<BatchingTask<T>> batch = currentBatch;
                 executor.submit(() -> processBatchingTasks(batch));
                 currentBatch = new ArrayList<>();
@@ -131,6 +166,46 @@ public abstract class BatchingProcessor<T> implements DecatonProcessor<T> {
     public void close() throws Exception {
         executor.shutdown();
         executor.awaitTermination(Long.MAX_VALUE, TimeUnit.SECONDS);
+    }
+
+    private static <V> Supplier<V> validatedAndLKGWrappedSupplier(
+            String name,
+            Supplier<V> delegate,
+            Predicate<V> validator) {
+        final AtomicReference<V> lkg = new AtomicReference<>();
+        return () -> {
+            final V value;
+            try {
+                value = delegate.get();
+            } catch (Exception e) {
+                if (lkg.get() != null) {
+                    V lkgValue = lkg.get();
+                    logger.warn("{} threw exception from get(), using last-known-good value: {}.", name,
+                                lkgValue, e);
+                    return lkgValue;
+                }
+                logger.error("{} threw exception from get(). No last-known-good value is available.", name);
+                throw new IllegalArgumentException(name + " threw exception from get().", e);
+            }
+
+            if (!validator.test(value)) {
+                if (lkg.get() != null) {
+                    V lkgValue = lkg.get();
+                    logger.warn("{} returned invalid value: {}, using last-known-good value: {}.",
+                                name,
+                                value,
+                                lkgValue);
+                    return lkgValue;
+                }
+                logger.error("{} returned invalid value: {}. No last-known-good value is available.",
+                             name,
+                             value);
+                throw new IllegalArgumentException(name + " returned invalid value: " + value);
+            }
+
+            lkg.set(value);
+            return value;
+        };
     }
 
     /**

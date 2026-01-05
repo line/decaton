@@ -17,6 +17,7 @@
 package com.linecorp.decaton.processor.processors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.verify;
 import static org.mockito.internal.verification.VerificationModeFactory.times;
@@ -26,6 +27,8 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -51,7 +54,6 @@ public class BatchingProcessorTest {
 
     @BeforeEach
     public void before() {
-        doReturn(completion).when(context).deferCompletion();
         processedTasks.clear();
     }
 
@@ -59,7 +61,9 @@ public class BatchingProcessorTest {
         return HelloTask.newBuilder().setName(name).setAge(age).build();
     }
 
-    private BatchingProcessor<HelloTask> buildProcessor(CountDownLatch processLatch, long lingerMs, int capacity) {
+    private BatchingProcessor<HelloTask> buildProcessor(CountDownLatch processLatch,
+                                                        Supplier<Long> lingerMs,
+                                                        Supplier<Integer> capacity) {
         return new BatchingProcessor<HelloTask>(lingerMs, capacity) {
             @Override
             protected void processBatchingTasks(List<BatchingTask<HelloTask>> batchingTasks) {
@@ -75,9 +79,11 @@ public class BatchingProcessorTest {
     @Test
     @Timeout(5)
     public void testLingerLimit() throws InterruptedException {
+        doReturn(completion).when(context).deferCompletion();
+
         long lingerMs = 1000;
         CountDownLatch processLatch = new CountDownLatch(1);
-        BatchingProcessor<HelloTask> processor = buildProcessor(processLatch, lingerMs, Integer.MAX_VALUE);
+        BatchingProcessor<HelloTask> processor = buildProcessor(processLatch, () -> lingerMs, () -> Integer.MAX_VALUE);
 
         HelloTask task1 = buildHelloTask("one", 1);
         processor.process(context, task1);
@@ -91,8 +97,10 @@ public class BatchingProcessorTest {
 
     @Test
     public void testCapacityLimit() throws InterruptedException {
+        doReturn(completion).when(context).deferCompletion();
+
         CountDownLatch processLatch = new CountDownLatch(1);
-        BatchingProcessor<HelloTask> processor = buildProcessor(processLatch, Long.MAX_VALUE, 2);
+        BatchingProcessor<HelloTask> processor = buildProcessor(processLatch, () -> Long.MAX_VALUE, () -> 2);
 
         HelloTask task1 = buildHelloTask("one", 1);
         HelloTask task2 = buildHelloTask("two", 2);
@@ -108,5 +116,47 @@ public class BatchingProcessorTest {
         assertEquals(new ArrayList<>(Arrays.asList(task1, task2)), processedTasks);
         verify(context, times(3)).deferCompletion();
         verify(completion, times(processedTasks.size())).complete();
+    }
+
+    @Test
+    public void failFastDuringInstantiation() {
+        assertThrows(NullPointerException.class,
+                     () -> buildProcessor(new CountDownLatch(1), null, null));
+        assertThrows(IllegalArgumentException.class,
+                     () -> buildProcessor(new CountDownLatch(1), () -> 0L, () -> 1));
+        assertThrows(IllegalArgumentException.class,
+                     () -> buildProcessor(new CountDownLatch(1), () -> 100L, () -> 0));
+        assertThrows(IllegalArgumentException.class,
+                     () -> buildProcessor(new CountDownLatch(1), () -> 100L / 0, () -> -1));
+    }
+
+    @Test
+    public void fallbackToLKG() throws InterruptedException {
+        doReturn(completion).when(context).deferCompletion();
+
+        // only 2 is a legal value, and used as lask-known-good fallback.
+        final int[] capacityValues = {2, 0, -1};
+        AtomicInteger count = new AtomicInteger(0);
+        CountDownLatch processLatch = new CountDownLatch(1);
+        BatchingProcessor<HelloTask> processor =
+                buildProcessor(processLatch,
+                               () -> Long.MAX_VALUE,
+                               () -> capacityValues[count.getAndIncrement()
+                                                    % capacityValues.length]);
+
+        HelloTask task1 = buildHelloTask("one", 1);
+        HelloTask task2 = buildHelloTask("two", 2);
+        HelloTask task3 = buildHelloTask("three", 3);
+
+        processor.process(context, task1);
+        processor.process(context, task2);
+        processor.process(context, task3);
+
+        processLatch.await();
+
+        assertEquals(new ArrayList<>(Arrays.asList(task1, task2)), processedTasks);
+        verify(context, times(3)).deferCompletion();
+        verify(completion, times(processedTasks.size())).complete();
+        assertEquals(4, count.get());
     }
 }
