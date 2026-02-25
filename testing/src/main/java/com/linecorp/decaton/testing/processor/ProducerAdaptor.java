@@ -31,6 +31,7 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ProducerFencedException;
 
 public abstract class ProducerAdaptor<K, V> implements Producer<K, V> {
@@ -95,6 +96,11 @@ public abstract class ProducerAdaptor<K, V> implements Producer<K, V> {
     @Override
     public Map<MetricName, ? extends Metric> metrics() {
         return delegate.metrics();
+    }
+
+    @Override
+    public Uuid clientInstanceId(Duration timeout) {
+        return delegate.clientInstanceId(timeout);
     }
 
     @Override

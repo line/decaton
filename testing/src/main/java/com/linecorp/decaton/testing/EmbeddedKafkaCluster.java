@@ -89,7 +89,8 @@ public class EmbeddedKafkaCluster implements AutoCloseable {
                                             1, // logDir count
                                             false, // disable delegation token
                                             1, // num partitions
-                                            (short) 1 // default replication factor
+                                            (short) 1, // default replication factor
+                                            false // disable fetch from follower
         );
     }
 
