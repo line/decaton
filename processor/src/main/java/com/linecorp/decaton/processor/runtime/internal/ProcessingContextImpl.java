@@ -127,27 +127,27 @@ public class ProcessingContextImpl<T> implements ProcessingContext<T> {
                 log.error("Exception from tracing", e);
             }
             nextProcessor.process(nextContext, taskData);
+        } finally {
             try {
                 traceHandle.processingReturn();
             } catch (Exception e) {
                 log.error("Exception from tracing", e);
             }
-        } finally {
             completion = nextContext.deferredCompletion.get();
             if (completion == null) {
                 // If process didn't requested for deferred completion, we understand it as process
                 // completed synchronously.
                 completion = CompletionImpl.completedCompletion();
             }
-        }
 
-        completion.asFuture().whenComplete((unused, throwable) -> {
-            try {
-                traceHandle.processingCompletion();
-            } catch (Exception e) {
-                log.error("Exception from tracing", e);
-            }
-        });
+            completion.asFuture().whenComplete((unused, throwable) -> {
+                try {
+                    traceHandle.processingCompletion();
+                } catch (Exception e) {
+                    log.error("Exception from tracing", e);
+                }
+            });
+        }
         return completion;
     }
 
