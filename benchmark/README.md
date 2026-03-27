@@ -76,7 +76,7 @@ public class CustomRunner implements Runner {
 
 #### Build a shadowJar of the custom runner:
 
-Build one using https://github.com/johnrengelman/shadow
+Build one using https://github.com/GradleUp/shadow
 
 ### Run benchmark:
 
