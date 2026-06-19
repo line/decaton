@@ -1,6 +1,8 @@
 = Monitoring Decaton
-:base_version: 9.0.0
+:base_version: 9.5.1
 :modules: processor
+:sectnums:
+:sectnumlevels: 3
 
 This document guides you how to monitor your Decaton processor applications.
 Decaton processor collects and provides its metrics through link:https://micrometer.io/[Micrometer].
@@ -22,44 +24,235 @@ Metrics.register(registry);
 
 === Metric Definitions
 
-See link:../processor/src/main/java/com/linecorp/decaton/processor/metrics/Metrics.java[Metrics.java] for the full list of metric definitions.
+All Decaton metrics are prefixed with `decaton.`.
+The following table is the full metric catalog and is checked by CI.
 
-In this section, we pick up some important metrics.
-We recommend you to monitor at least these metrics in a production environment.
+// metrics-doc-check:start
+==== Throughput and Outcome
 
 |===
-|Name|Description
+|Name|Type|Tags|Description
 
 |decaton.tasks.processed
-|The total number of tasks processed. This metric shows the throughput of your application.
+|Counter
+|`subscription`, `topic`, `partition`
+|The number of tasks processed.
 
 |decaton.tasks.discarded
-|The number of tasks discarded. This metric shows how many tasks are dropped during task extraction.
-Droppings are often caused by invalid messages in a topic.
+|Counter
+|`subscription`, `topic`, `partition`
+|The number of tasks discarded before processing (for example extraction or validation failure).
 
 |decaton.tasks.error
-|The number of tasks thrown exception by process.
-Note that only synchronous failures during executing `DecatonProcessor#process()` are reported by this metric.
+|Counter
+|`subscription`, `topic`, `partition`
+|The number of tasks failed synchronously during processing.
+|===
+
+==== Task Latency and Scheduling
+
+|===
+|Name|Type|Tags|Description
 
 |decaton.tasks.process.duration
-|The quantile summary of the time of a task taken to be processed.
-This metric denotes the process latency summary.
-High latency divergence between 50th and 99th implies that few heavy tasks can block other tasks.
-In such situation, extending partition concurrency might help to improve the throughput.
+|Timer
+|`subscription`, `topic`, `partition`
+|Time spent executing processor logic for each task.
 
 |decaton.tasks.complete.duration
-|The quantile summary of the time of a task taken to be completed.
-This metric is basically same as `tasks.process.duration` unless you use asynchronous processing completion.
+|Timer
+|`subscription`, `topic`, `partition`
+|The time from processing start to task completion.
+When deferred completion is used, this includes asynchronous completion wait and can be larger than `decaton.tasks.process.duration`.
+
+|decaton.tasks.delivery.latency
+|Timer
+|`subscription`, `topic`, `partition`
+|Delay from task creation time to processing start.
+Task creation time is the timestamp set when the task is produced by Decaton client.
+Use this metric to monitor end-to-end freshness of incoming tasks.
+
+|decaton.tasks.scheduling.delay
+|Timer
+|`subscription`, `topic`, `partition`
+|Planned wait time before a scheduled task becomes ready to run.
+Example: with retry backoff of 30s, this metric is about 30s if consumed immediately, and about 20s if consumed 10s later.
+
+|decaton.tasks.scheduled.process.delay
+|Timer
+|`subscription`, `topic`, `partition`
+|How late processing starts compared with the scheduled execution time.
+Use this metric to detect schedule misses caused by backlog or throttling.
+Example: with retry backoff of 30s, this metric is near 0 when processing starts on time, and about 5s when start is 5s late.
+
+|decaton.tasks.timeout
+|Counter
+|`subscription`, `topic`, `partition`
+|The number of tasks that timed out by deferred completion timeout.
+|===
+
+==== Partition and Queue Health
+
+|===
+|Name|Type|Tags|Description
+
+|decaton.tasks.pending
+|Gauge
+|`subscription`, `topic`, `partition`
+|The number of pending tasks.
+
+|decaton.tasks.queued
+|Counter
+|`subscription`, `topic`, `partition`, `subpartition`
+|The number of tasks queued per subpartition.
 
 |decaton.partition.paused
-|Indicate whether the partition (identified by `partition` label) is currently paused by back pressure or not by 1 or 0 value.
-You can compute sum of all partitions on your monitoring system to tell how many partitions on an instance is currently paused.
-If your consumer experiences many pauses, it might be indicating that your processor's throughput is not sufficient compared to tasks inflow.
+|Gauge
+|`subscription`, `topic`, `partition`
+|Whether the partition is paused right now (`1`) or not (`0`).
+Use this for real-time pause detection.
+
+|decaton.partition.paused.time
+|Timer
+|`subscription`, `topic`, `partition`
+|Pause duration recorded when a paused partition resumes.
+Use this to analyze pause-duration distribution, not current pause state.
+
+|decaton.partition.queue.starved.time
+|Timer
+|`subscription`, `topic`, `partition`
+|The accumulated time when a partition queue was starving.
+
+|decaton.partition.throttled.time
+|Timer
+|`subscription`, `topic`, `partition`
+|The accumulated time when a partition was throttled by a rate limiter.
+
+|decaton.processor.processed.time
+|Timer
+|`subscription`, `topic`, `partition`, `subpartition`
+|The accumulated time processors spent handling tasks.
 |===
+
+==== Consumer Loop and Record Intake
+
+|===
+|Name|Type|Tags|Description
+
+|decaton.subscription.process.durations
+|Timer
+|`subscription`, `section` (`poll`, `records`, `reload`, `pause`, `commit`)
+|Time spent for each section in Decaton consuming loop.
+
+|decaton.offset.last.committed
+|Gauge
+|`subscription`, `topic`, `partition`
+|The last committed Kafka offset.
+
+|decaton.offset.latest.consumed
+|Gauge
+|`subscription`, `topic`, `partition`
+|The latest consumed Kafka offset.
+
+|decaton.records.consumed
+|Counter
+|`subscription`, `topic`, `partition`, `format` (`decaton.client.v9`, `other`)
+|The number of consumed records.
+|===
+
+==== Retry and Shaping
+
+|===
+|Name|Type|Tags|Description
+
+|decaton.retry.queued.tasks
+|Counter
+|`subscription`
+|The number of tasks enqueued into retry topic.
+
+|decaton.retry.queueing.failed
+|Counter
+|`subscription`
+|The number of failures while enqueuing tasks into retry topic.
+
+|decaton.retry.task.retries
+|DistributionSummary
+|`subscription`
+|The distribution of retry counts per task.
+
+|decaton.shaping.queued.tasks
+|Counter
+|`subscription`
+|The number of tasks enqueued into shaping topic.
+
+|decaton.shaping.queueing.failed
+|Counter
+|`subscription`
+|The number of failures while enqueuing tasks into shaping topic.
+|===
+// metrics-doc-check:end
+
+=== Recommended Monitoring Targets
+
+This section focuses on practical questions users usually ask in production.
+
+==== Are We Keeping Up With Incoming Traffic?
+
+Watch `decaton.tasks.processed` with `decaton.tasks.pending` and `decaton.partition.paused`.
+If `tasks.pending` keeps growing and many partitions stay paused, your current processing capacity is not keeping up.
+Check `decaton.partition.throttled.time` at the same time to see whether rate limiting is intentionally reducing throughput.
+For current pause status, use `decaton.partition.paused` (gauge), not `decaton.partition.paused.time`.
+
+==== Are Pause Durations Getting Longer?
+
+Watch `decaton.partition.paused.time` to track pause-duration trends and long-tail pauses over time.
+Use this metric for historical duration analysis, and use `decaton.partition.paused` for current pause state.
+
+==== Is Key Skew Causing Subpartition Bottlenecks?
+
+Watch `decaton.tasks.queued` and `decaton.processor.processed.time` by `subpartition` tag.
+If only specific subpartitions keep high queue growth while others are healthy, hot keys (key skew) are likely concentrating load.
+In that case, consider enabling Per-Key Quota (PKQ) via `SubscriptionBuilder#enablePerKeyQuota` so bursting keys are shaped.
+Note that enabling PKQ changes processing behavior for bursting keys (per-key strict serial processing is no longer guaranteed).
+After enabling PKQ, monitor `decaton.shaping.queued.tasks` and `decaton.shaping.queueing.failed` to confirm shaping is working.
+
+==== Are We Dropping Tasks Or Failing Processing?
+
+Treat `decaton.tasks.discarded` and `decaton.tasks.error` as anomaly signals.
+In healthy steady state, both should stay at 0 (or very close to 0), and any increase should be investigated.
+`tasks.discarded` usually indicates extraction or input-format issues.
+`tasks.error` indicates synchronous processing failures.
+Failed tasks are still committed, so they are not retried automatically.
+If you need recovery on failures, consider introducing retry handling and a retry topic (link:./retry-queueing.adoc[Retry Queueing]).
+
+==== Is User-Visible Latency Getting Worse?
+
+Watch `decaton.tasks.delivery.latency`, `decaton.tasks.process.duration`, and `decaton.tasks.complete.duration`.
+If `delivery.latency` increases but processing durations stay stable, tasks are waiting before execution (queueing/backpressure side).
+If `complete.duration` is much larger than `process.duration`, deferred completion or downstream async completion is the main source of delay.
+
+==== Are Scheduled Tasks Starting On Time?
+
+Watch `decaton.tasks.scheduling.delay` and `decaton.tasks.scheduled.process.delay` together.
+`tasks.scheduling.delay` is expected wait (for example retry backoff), while `tasks.scheduled.process.delay` is unexpected lateness at start.
+If `tasks.scheduled.process.delay` grows, check whether throughput is sufficient.
+
+==== Is Deferred Completion Healthy?
+
+Watch `decaton.tasks.timeout` together with the gap between `decaton.tasks.complete.duration` and `decaton.tasks.process.duration`.
+Non-zero `tasks.timeout` means deferred completions exceeded timeout and were force-completed.
+This is a strong signal to review async completion flow and timeout configuration.
+
+==== Are Retry And Shaping Pipelines Working?
+
+Watch `decaton.retry.queued.tasks`, `decaton.retry.queueing.failed`, and `decaton.retry.task.retries`.
+Watch `decaton.shaping.queued.tasks` and `decaton.shaping.queueing.failed`.
+`*.queueing.failed` should remain near zero. Increases indicate that reroute-to-retry/shaping is failing.
+`retry.task.retries` growth indicates instability in downstream dependencies, while `shaping.queued.tasks` indicates quota-based shaping is active.
 
 == Kafka Client Metrics
 
 Since Decaton uses standard Kafka Java client (consumer/producer) internally, it's also a good idea to monitor Kafka client metrics.
 
-Kafka clients provides a way to customize metric-reporting configuration via `metric.reporters` property.
+Kafka clients provide a way to customize metric-reporting configuration via `metric.reporters` property.
 If necessary, you can set `metric.reporters` property through `SubscriptionBuilder#consumerConfig` as usual Kafka consumer construction.
