@@ -185,7 +185,7 @@ public class TestUtils {
         props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         props.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, "test-" + subscriptionId);
         props.setProperty(ConsumerConfig.GROUP_ID_CONFIG, DEFAULT_GROUP_ID);
-        props.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        // Don't set auto.offset.reset here so that tests run with Decaton's default
 
         if (additionalConsumerConfig != null) {
             props.putAll(additionalConsumerConfig);

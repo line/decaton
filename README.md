@@ -47,6 +47,7 @@ Below are some examples. See [Index](./docs/index.adoc) for the full list.
 * Retry Queuing - Retry a failed task with back-off without blocking other tasks flow
 * Dynamic Rate Limiting - Apply and update processing rate quota dynamically
 * Task Compaction - Crush preceding tasks which its processing results will be overwritten by following task
+* Per-Key Quota - Detect bursting keys and isolate their tasks into shaping topics so that they don't dominate processing of other keys
 
 # Performance
 

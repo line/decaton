@@ -1,0 +1,112 @@
+= Where to Start Consuming (`auto.offset.reset`)
+:base_version: 10.0.0
+:modules: processor
+
+== Introduction
+
+Since Decaton 10.0.0, Decaton sets `auto.offset.reset` to `earliest` by default.
+Kafka's default is `latest` as of Apache Kafka 4.3.
+
+`auto.offset.reset` decides where a processor starts consuming a partition when the partition has no committed offset, or when the offset to resume from no longer exists in the partition (e.g. deleted by retention before being processed).
+See https://kafka.apache.org/39/configuration/consumer-configs/#consumerconfigs_auto.offset.reset[Kafka documentation] for details.
+
+Kafka consumers with `latest` can skip tasks silently in the scenarios below.
+Decaton uses `earliest` by default because it is safer for at-least-once delivery.
+
+== Why `earliest`
+
+=== Adding partitions
+
+Producers can start producing tasks to new partitions before processors get them assigned.
+With `latest`, tasks produced in between are skipped.
+
+To understand this in detail, you can read https://cwiki.apache.org/confluence/spaces/KAFKA/pages/406619800/KIP-1282+Prevent+data+loss+during+partition+expansion+for+dynamically+added+partitions[KIP-1282: Prevent data loss during partition expansion for dynamically added partitions].
+
+=== Starting to use a topic
+
+When you deploy a producer and a processor of a new consumer group (or change `group.id`), tasks produced before the processor starts are skipped with `latest`.
+
+=== Restarting after committed offsets expired
+
+If all processors of a consumer group are stopped longer than the offset retention of your Kafka cluster (`offsets.retention.minutes`, 7 days by default as of Apache Kafka 4.3), the committed offsets expire.
+With `latest`, tasks produced while the processors were stopped are skipped after restarting.
+
+=== Retry and per-key quota
+
+With link:./retry-queueing.adoc[retry queueing] or per-key quota, Decaton produces tasks to the retry topic or shaping topics.
+These topics receive tasks only when tasks are retried or shaped, and Decaton commits offsets only for processed tasks, so their partitions can stay without committed offsets for a long time.
+For example, a partition of the retry topic has no committed offset until a retried task on it is processed for the first time.
+
+With `latest`, a retried or shaped task on such a partition is skipped if a rebalance happens before the task is processed.
+Tasks are often retried during a rebalance because processing can become unstable temporarily (e.g. during a deployment).
+A retried task also waits for its backoff before being processed, so this can lead to subtle delivery loss.
+
+== Trade-off
+
+With `earliest`, tasks in all of the scenarios above are processed.
+In exchange, processors may process old tasks:
+
+* A processor of a new consumer group processes all tasks remaining in the topic.
+* After committed offsets expired, tasks remaining in the topic are processed again.
+* When processors lag behind or are stopped longer than the retention of the topic, they process the remaining old tasks instead of jumping to the end of the partition.
+
+[#options]
+== Options if `earliest` doesn't fit
+
+If your processor shouldn't process old tasks (e.g. it sends notifications), you can use options such as the following.
+Each has its own risk.
+
+=== Use `latest` or other options
+
+Set `auto.offset.reset` in `consumerConfig`:
+
+[source,java]
+----
+Properties consumerConfig = new Properties();
+...
+consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
+
+ProcessorSubscription subscription =
+        SubscriptionBuilder.newBuilder("my-decaton-processor")
+                           ...
+                           .consumerConfig(consumerConfig)
+                           .buildAndStart();
+----
+
+The risk is that tasks are skipped silently in the scenarios above.
+
+If you use `latest` only temporarily (e.g. for the first deployment), partitions on which no task has been processed in the meantime still have no committed offsets after you remove it, and are consumed from the beginning.
+
+=== Prepare committed offsets before starting processors
+
+Keep `earliest`, and create committed offsets for the new consumer group with `kafka-consumer-groups.sh` (the CLI tool of Apache Kafka) before starting processors.
+For example:
+
+[source,sh]
+----
+kafka-consumer-groups.sh \
+    --bootstrap-server $BOOTSTRAP_SERVERS \
+    --group $GROUP_ID \
+    --topic $TOPIC \
+    --reset-offsets \
+    --to-latest \
+    --execute
+----
+
+Specify only the origin topic, so that the retry topic and shaping topics are consumed from the beginning.
+See https://kafka.apache.org/39/operations/basic-kafka-operations/#managing-consumer-groups[Kafka documentation] for details of `kafka-consumer-groups.sh`.
+
+=== Discard old tasks in the processor
+
+Keep `earliest`, and discard old tasks in your processor based on the timestamp of the task.
+
+`context.metadata().timestampMillis()` is:
+
+* the time when the task was produced, if it was produced by DecatonClient (unless you set it explicitly)
+* the timestamp of the Kafka record, if it wasn't produced by DecatonClient
+* the value set by the extractor, if you use a custom `TaskExtractor` (0 if not set)
+
+You can also use a timestamp in the headers or the body of the task, if any.
+
+A retried task keeps the timestamp of its original task, so the threshold should be longer than the total period of retries.
+A task that wasn't produced by DecatonClient gets a new timestamp when it's shaped (the time when it was produced to the shaping topic).

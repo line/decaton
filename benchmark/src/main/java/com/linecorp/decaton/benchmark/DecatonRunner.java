@@ -78,7 +78,7 @@ public class DecatonRunner implements Runner {
         // at that time the offset might not have initialized (reset) to 0. If we start producing tasks before
         // it completes fetching the current offset from the broker (which is zero), the offset counter might
         // increments before it obtains offset information and consequences to reset the offset to a larger
-        // value than zero with the default "latest" reset policy.
+        // value than zero with "latest" reset policy.
         props.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
         subPartitionRuntime = SubPartitionRuntime.THREAD_POOL;

@@ -45,7 +45,8 @@ public class ConsumerSupplier implements Supplier<Consumer<byte[], byte[]>> {
         return new KafkaConsumer<>(mergedProps(), new ByteArrayDeserializer(), new ByteArrayDeserializer());
     }
 
-    private Properties mergedProps() {
+    // visible for testing
+    Properties mergedProps() {
         Properties props = new Properties();
         for (String key : config.stringPropertyNames()) {
             props.setProperty(key, config.getProperty(key));
@@ -58,6 +59,16 @@ public class ConsumerSupplier implements Supplier<Consumer<byte[], byte[]>> {
         if (props.getProperty(ConsumerConfig.MAX_POLL_RECORDS_CONFIG) == null) {
             props.setProperty(ConsumerConfig.MAX_POLL_RECORDS_CONFIG,
                               String.valueOf(DEFAULT_MAX_POLL_RECORDS));
+        }
+
+        // auto.offset.reset handling to avoid skipping records silently.
+        // Decaton commits offsets only for completed records, so a partition where no record has completed yet has no
+        // committed offset (e.g. newly added partitions, retry/shaping topic partitions which rarely receive records).
+        // With "latest", records produced to such a partition before the consumer determines its position
+        // (e.g. before the partition gets assigned, initially or by a rebalance) are skipped.
+        // See https://github.com/line/decaton/blob/master/docs/auto-offset-reset.adoc for details.
+        if (props.getProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG) == null) {
+            props.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         }
 
         return props;

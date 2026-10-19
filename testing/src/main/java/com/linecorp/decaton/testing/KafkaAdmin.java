@@ -24,6 +24,7 @@ import java.util.UUID;
 
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.NewPartitions;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
@@ -60,6 +61,20 @@ public class KafkaAdmin implements AutoCloseable {
 
         try {
             adminClient.createTopics(Collections.singleton(newTopic)).all().get();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    /**
+     * Increase the number of partitions of the topic
+     * @param topicName topic to add partitions
+     * @param totalCount total number of partitions after the increase
+     */
+    public void increasePartitions(String topicName, int totalCount) {
+        try {
+            adminClient.createPartitions(Collections.singletonMap(topicName, NewPartitions.increaseTo(totalCount)))
+                       .all().get();
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
