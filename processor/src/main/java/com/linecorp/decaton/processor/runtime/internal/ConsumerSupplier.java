@@ -65,7 +65,7 @@ public class ConsumerSupplier implements Supplier<Consumer<byte[], byte[]>> {
         // Decaton commits offsets only for completed records, so a partition where no record has completed yet has no
         // committed offset (e.g. newly added partitions, retry/shaping topic partitions which rarely receive records).
         // With "latest", records produced to such a partition before the consumer determines its position
-        // (e.g. before the partition gets assigned or reassigned) are skipped.
+        // (e.g. before the partition gets assigned, initially or by a rebalance) are skipped.
         // See https://github.com/line/decaton/blob/master/docs/auto-offset-reset.adoc for details.
         if (props.getProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG) == null) {
             props.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");

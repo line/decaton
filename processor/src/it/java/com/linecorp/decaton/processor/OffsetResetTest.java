@@ -158,9 +158,9 @@ public class OffsetResetTest {
     @ParameterizedTest
     @EnumSource(OffsetReset.class)
     @Timeout(60)
-    public void testRetryTaskInFlightOnReassignment(OffsetReset offsetReset) throws Exception {
+    public void testRetryTaskInFlightOnRebalance(OffsetReset offsetReset) throws Exception {
         // scenario:
-        //   * a task is retried, and the retry topic partition gets reassigned before the retried task completes
+        //   * a task is retried, and a rebalance happens before the retried task completes
         //     (e.g. awaiting backoff during shutdown)
         //   * the retry topic partition has no committed offset since no retried task has completed on it
         String retryTopic = createTopic(topic + RetryConfig.DEFAULT_RETRY_TOPIC_SUFFIX);
@@ -210,10 +210,9 @@ public class OffsetResetTest {
     @ParameterizedTest
     @EnumSource(OffsetReset.class)
     @Timeout(60)
-    public void testShapedTaskInFlightOnReassignment(OffsetReset offsetReset) throws Exception {
+    public void testShapedTaskInFlightOnRebalance(OffsetReset offsetReset) throws Exception {
         // scenario:
-        //   * tasks of a bursting key are shaped, and the shaping topic partition gets reassigned
-        //     before the shaped tasks complete
+        //   * tasks of a bursting key are shaped, and a rebalance happens before the shaped tasks complete
         //   * the shaping topic partition has no committed offset since no shaped task has completed on it
         String shapingTopic = createTopic(topic + PerKeyQuotaConfig.DEFAULT_SHAPING_TOPIC_SUFFIX);
         TopicPartition originPartition = new TopicPartition(topic, 0);
